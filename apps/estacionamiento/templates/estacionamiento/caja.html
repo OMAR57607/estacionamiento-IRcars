@@ -131,8 +131,8 @@
             <td>{{ fila.entrada_en|date:"d/m H:i" }}</td>
             <td class="numero">{{ fila.minutos|duracion }}</td>
             <td>
-              {# Formulario en lugar de enlace: cotizar es idempotente, pero
-                 el POST mantiene una sola vía de entrada a la lógica. #}
+              {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero
+                 el POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
               <form method="post" style="margin:0">
                 {% csrf_token %}
                 <input type="hidden" name="accion" value="cotizar">

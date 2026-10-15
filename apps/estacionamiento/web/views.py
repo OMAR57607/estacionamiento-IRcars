@@ -13,8 +13,11 @@ tarificación o en el control de caja se aplica una vez, en `services.py` o en
 from __future__ import annotations
 
 import csv
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
+from decimal import Decimal
+
 from django.contrib import messages
+from django.contrib.auth import authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -23,7 +26,7 @@ from django.views.decorators.http import require_http_methods
 
 from .. import services, services_caja
 from ..domain.exceptions import ErrorDominio
-from ..domain.tarifas import ParametrosTarifa
+from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
 from .forms import (
     AbrirTurnoForm,
@@ -31,6 +34,7 @@ from .forms import (
     CancelarFolioForm,
     CerrarTurnoForm,
     CobroForm,
+    DesbloqueoPrecioForm,
     EntradaForm,
     RangoFechasForm,
     TarifaForm,
@@ -431,38 +435,223 @@ def _exportar_csv(folios) -> HttpResponse:
     return respuesta
 
 
-# ------------------------------------------------------------------- Tarifa
+# -------------------------------------------------------------------- Precio
+#
+# El precio es un dato que se configura una vez y se deja quieto. Esta sección
+# está construida sobre esa idea, que antes no cumplía: la pantalla era un
+# formulario de seis campos siempre abiertos con un botón de guardar, de modo
+# que cada visita invitaba a cambiar la tarifa, y los campos arrancaban con
+# valores fijos de ejemplo —no con los vigentes—, así que «subir un peso la
+# hora» reescribía en silencio la cortesía, la fracción y el tope.
+#
+# Ahora el precio está bloqueado: `tarifa` lo muestra en solo lectura y
+# `tarifa_cambiar` exige confirmar la contraseña antes de abrir el formulario.
+# Es el mismo recorrido que el ejecutable de escritorio, y por el mismo motivo:
+# tres pasos para una operación que se hace una vez al año, y ninguno para la
+# que se hace cien veces al día.
+
+# Permanencias de muestra para la tabla de ejemplos. Cubren el rango real de
+# una caseta: la maniobra, la gestión corta, la jornada y el día completo. Los
+# cinco parámetros del cuadro tarifario no se entienden leyéndolos —«fracción
+# de cobro 1 min» no le dice nada a nadie—; ver que una hora cuesta $30 y que
+# media cuesta $15 sí, y permite comprobar el precio sin hacer cuentas a mano.
+EJEMPLOS_PERMANENCIA = (
+    (15, "15 minutos"),
+    (30, "Media hora"),
+    (60, "1 hora"),
+    (120, "2 horas"),
+    (480, "8 horas"),
+    (1440, "24 horas"),
+)
+
+# Vigencia del desbloqueo, en minutos. Alcanza para repasar los ejemplos y
+# guardar, y no tanto como para que una pestaña quede abierta y desbloqueada
+# media jornada en el monitor de la caseta.
+MINUTOS_DESBLOQUEO = 5
+
+CLAVE_DESBLOQUEO = "precio_desbloqueado_en"
+
+# Punto de partida de la primera configuración, cuando todavía no existe
+# ningún precio que respetar. Fuera de ese caso, los valores iniciales del
+# formulario salen siempre del precio vigente.
+PRECIO_DE_ARRANQUE = {
+    "cuota_hora": Decimal("30.00"),
+    "minutos_cortesia": 15,
+    "fraccion_minutos": 1,
+    "cobro_minimo": Decimal("0.00"),
+    "tope_diario": Decimal("250.00"),
+}
+
+
+def _tarifa_vigente_o_nada() -> Tarifa | None:
+    """
+    El precio vigente, o `None` si la caseta todavía no tiene ninguno.
+
+    La ausencia de precio no es un error que deba interrumpir esta pantalla:
+    es precisamente el estado que hay que mostrar y resolver aquí.
+    """
+    try:
+        return services.obtener_tarifa_vigente()
+    except ErrorDominio:
+        return None
+
+
+def _parametros_de(tarifa: Tarifa) -> ParametrosTarifa:
+    return ParametrosTarifa(
+        cuota_hora=tarifa.cuota_hora,
+        minutos_cortesia=tarifa.minutos_cortesia,
+        fraccion_minutos=tarifa.fraccion_minutos,
+        cobro_minimo=tarifa.cobro_minimo,
+        tope_diario=tarifa.tope_diario,
+    )
+
+
+def _ejemplos(parametros: ParametrosTarifa | None) -> list[dict]:
+    """
+    Lo que pagaría un vehículo según el tiempo que se quede.
+
+    El cálculo lo hace el motor de tarifas, el mismo que cobra: una tabla de
+    ejemplos obtenida de otra forma podría mostrar un importe que la caja no
+    cobra, y entonces no serviría para comprobar nada.
+    """
+    if parametros is None:
+        return []
+    filas = []
+    for minutos, etiqueta in EJEMPLOS_PERMANENCIA:
+        cotizacion = cotizar(minutos, parametros)
+        filas.append(
+            {
+                "etiqueta": etiqueta,
+                "importe": cotizacion.importe,
+                "es_cortesia": cotizacion.es_cortesia,
+            }
+        )
+    return filas
+
+
+def _valores_vigentes(vigente: Tarifa | None) -> dict:
+    """
+    Valores con que llega el formulario de cambio: los que están en uso.
+
+    Es la mitad del arreglo. Lo que no se toca, no cambia.
+    """
+    if vigente is None:
+        return dict(PRECIO_DE_ARRANQUE)
+    return {
+        "cuota_hora": vigente.cuota_hora,
+        "minutos_cortesia": vigente.minutos_cortesia,
+        "fraccion_minutos": vigente.fraccion_minutos,
+        "cobro_minimo": vigente.cobro_minimo,
+        "tope_diario": vigente.tope_diario,
+    }
+
+
+def _autorizar_cambio(request) -> None:
+    request.session[CLAVE_DESBLOQUEO] = timezone.now().isoformat()
+
+
+def _olvidar_autorizacion(request) -> None:
+    request.session.pop(CLAVE_DESBLOQUEO, None)
+
+
+def _cambio_autorizado(request) -> bool:
+    """
+    ¿Se confirmó la contraseña hace poco?
+
+    El desbloqueo se guarda en la sesión del servidor y no en el propio
+    formulario: así no viaja al navegador nada que permita reabrirlo, y caduca
+    por sí solo.
+    """
+    marca = request.session.get(CLAVE_DESBLOQUEO)
+    if not marca:
+        return False
+    try:
+        desbloqueado_en = datetime.fromisoformat(marca)
+    except (TypeError, ValueError):
+        return False
+    return timezone.now() - desbloqueado_en <= timedelta(minutes=MINUTOS_DESBLOQUEO)
+
+
+@login_required
+@require_http_methods(["GET"])
+def tarifa(request):
+    """
+    El precio vigente, en solo lectura.
+
+    La consulta está abierta a cualquier operador —necesita saber qué cobra—, y
+    aquí no hay ningún campo que se pueda teclear por descuido: el cambio vive
+    en `tarifa_cambiar`, detrás de la contraseña.
+    """
+    vigente = _tarifa_vigente_o_nada()
+
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "tarifa"
+    contexto["vigente"] = vigente
+    contexto["ejemplos"] = _ejemplos(_parametros_de(vigente) if vigente else None)
+    contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
+    return render(request, "estacionamiento/tarifa.html", contexto)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def tarifa(request):
+def tarifa_cambiar(request):
     """
-    Consulta del cuadro tarifario y alta de tarifas nuevas.
+    Cambio del precio: confirmar la contraseña y, recién entonces, el formulario.
 
-    La consulta está abierta a cualquier operador —necesita saber qué cobra—,
-    pero el alta exige perfil administrativo: el precio es el parámetro más
-    sensible del sistema y modificarlo desde una caja sería la vía más simple
-    de cobrar de menos y quedarse con la diferencia.
+    El alta exige perfil administrativo —el precio es el parámetro más sensible
+    del sistema y modificarlo desde una caja sería la vía más simple de cobrar
+    de menos y quedarse con la diferencia— y, además, confirmar la contraseña
+    del propio operador. La contraseña no es un trámite: es lo que convierte un
+    clic de más en una decisión, y deja el cambio atribuido a quien lo hizo.
+
+    Se conserva el comportamiento de fondo: guardar crea un precio nuevo y
+    desactiva el anterior. Es lo que permite demostrar qué precio estaba
+    exhibido en una fecha determinada, y los folios ya cobrados mantienen el
+    suyo.
     """
+    if not _es_administrativo(request.user):
+        messages.error(
+            request,
+            "Solo el perfil administrativo puede cambiar el precio. Desde una "
+            "caja se consulta, no se modifica.",
+        )
+        return redirect("web:tarifa")
+
+    vigente = _tarifa_vigente_o_nada()
+
     contexto = _contexto_base(request)
     contexto["seccion"] = "tarifa"
+    contexto["vigente"] = vigente
+    contexto["ejemplos"] = _ejemplos(_parametros_de(vigente) if vigente else None)
 
-    if request.method == "POST":
-        if not _es_administrativo(request.user):
-            messages.error(
-                request,
-                "Solo el perfil administrativo puede modificar el cuadro tarifario.",
-            )
-            return redirect("web:tarifa")
+    # Primera configuración: no hay precio que proteger todavía, y el operador
+    # acaba de teclear su contraseña para entrar. Pedirla otra vez sería un
+    # obstáculo sin control que lo respalde.
+    if vigente is None:
+        _autorizar_cambio(request)
 
+    if request.method == "POST" and request.POST.get("accion") == "desbloquear":
+        form_clave = DesbloqueoPrecioForm(request.POST)
+        if form_clave.is_valid() and authenticate(
+            username=request.user.get_username(),
+            password=form_clave.cleaned_data["clave"],
+        ):
+            _autorizar_cambio(request)
+        else:
+            messages.error(request, "Contraseña incorrecta. El precio sigue bloqueado.")
+
+    if not _cambio_autorizado(request):
+        contexto["form_clave"] = DesbloqueoPrecioForm()
+        return render(request, "estacionamiento/tarifa_cambiar.html", contexto)
+
+    if request.method == "POST" and request.POST.get("accion") == "guardar":
         form = TarifaForm(request.POST)
         if form.is_valid():
             datos = form.cleaned_data
             try:
                 # Validación del dominio antes de persistir: una fracción
                 # inválida produciría cobros erróneos de forma silenciosa.
-                ParametrosTarifa(
+                parametros = ParametrosTarifa(
                     cuota_hora=datos["cuota_hora"],
                     minutos_cortesia=datos["minutos_cortesia"],
                     fraccion_minutos=datos["fraccion_minutos"],
@@ -471,38 +660,44 @@ def tarifa(request):
                 )
             except ErrorDominio as exc:
                 messages.error(request, str(exc))
-                contexto["form"] = form
-                contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
-                return render(request, "estacionamiento/tarifa.html", contexto)
-
-            ahora = timezone.now()
-            Tarifa.objects.filter(activa=True).update(activa=False)
-            nueva = Tarifa.objects.create(
-                nombre=f"{datos['nombre']} ({ahora:%Y-%m-%d %H:%M})",
-                cuota_hora=datos["cuota_hora"],
-                minutos_cortesia=datos["minutos_cortesia"],
-                fraccion_minutos=datos["fraccion_minutos"],
-                cobro_minimo=datos["cobro_minimo"],
-                tope_diario=datos.get("tope_diario"),
-                activa=True,
-                vigente_desde=ahora,
-            )
-            messages.success(
-                request,
-                f"Tarifa «{nueva.nombre}» vigente desde ahora. La anterior se "
-                "desactivó pero se conserva en el histórico: los folios ya "
-                "cobrados mantienen el precio con que se calcularon.",
-            )
-            return redirect("web:tarifa")
-        messages.error(request, "Revise los datos de la tarifa.")
+            else:
+                nueva = _poner_precio_en_vigencia(parametros)
+                # El desbloqueo no sobrevive al cambio: el precio vuelve a
+                # quedar bloqueado, como dice la pantalla.
+                _olvidar_autorizacion(request)
+                messages.success(
+                    request,
+                    f"El precio quedó en ${nueva.cuota_hora:,.2f} por hora y ya "
+                    "está en vigencia. El anterior se conserva en el histórico: "
+                    "los folios ya cobrados mantienen el precio con que se "
+                    "calcularon.",
+                )
+                return redirect("web:tarifa")
+        else:
+            messages.error(request, "Revise los datos del precio.")
         contexto["form"] = form
     else:
-        contexto["form"] = TarifaForm()
+        contexto["form"] = TarifaForm(initial=_valores_vigentes(vigente))
 
-    try:
-        contexto["vigente"] = services.obtener_tarifa_vigente()
-    except ErrorDominio:
-        contexto["vigente"] = None
+    return render(request, "estacionamiento/tarifa_cambiar.html", contexto)
 
-    contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
-    return render(request, "estacionamiento/tarifa.html", contexto)
+
+def _poner_precio_en_vigencia(parametros: ParametrosTarifa) -> Tarifa:
+    """
+    Crea el precio nuevo y desactiva el anterior. Nunca edita en sitio.
+
+    El nombre lleva marca de tiempo porque el modelo lo exige único y ya no se
+    pide al usuario, que no tiene por qué bautizar un precio.
+    """
+    ahora = timezone.now()
+    Tarifa.objects.filter(activa=True).update(activa=False)
+    return Tarifa.objects.create(
+        nombre=f"Precio {ahora:%Y-%m-%d %H:%M:%S}",
+        cuota_hora=parametros.cuota_hora,
+        minutos_cortesia=parametros.minutos_cortesia,
+        fraccion_minutos=parametros.fraccion_minutos,
+        cobro_minimo=parametros.cobro_minimo,
+        tope_diario=parametros.tope_diario,
+        activa=True,
+        vigente_desde=ahora,
+    )

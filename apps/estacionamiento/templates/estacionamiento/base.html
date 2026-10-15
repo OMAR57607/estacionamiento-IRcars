@@ -16,13 +16,16 @@
   {% if es_administrativo %}
     <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
   {% endif %}
-  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Tarifa</a>
+  {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el precio
+     se consulta y se cambia ahí. Es el mismo nombre que la pestaña del
+     ejecutable de escritorio. {% endcomment %}
+  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Precio</a>
   <span class="operador">
     {{ user.get_username }}
     {% if turno_actual %}· turno {{ turno_actual.pk }} abierto{% else %}· sin turno{% endif %}
   </span>
-  {# El cierre de sesión va por POST: un GET permitiría cerrar la sesión del
-     operador desde un enlace o una imagen incrustada en otra página. #}
+  {% comment %} El cierre de sesión va por POST: un GET permitiría cerrar la sesión del
+     operador desde un enlace o una imagen incrustada en otra página. {% endcomment %}
   <form method="post" action="{% url 'logout' %}" style="margin:0">
     {% csrf_token %}
     <button type="submit" class="boton secundario angosto" style="margin:0">Salir</button>
