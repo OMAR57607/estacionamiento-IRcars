@@ -30,10 +30,11 @@ from .domain.exceptions import (
     FolioYaCerrado,
     PagoInsuficiente,
     SinCajonesDisponibles,
+    SinTurnoAbierto,
     VehiculoYaDentro,
 )
 from .domain.tarifas import Cotizacion, cotizar
-from .models import Cajon, EstadoFolio, Folio, Tarifa, TipoCajon
+from .models import Cajon, EstadoFolio, EstadoTurno, Folio, Tarifa, TipoCajon, Turno
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,45 @@ def _minutos_transcurridos(entrada: datetime, salida: datetime) -> int:
     return int(segundos // SEGUNDOS_POR_MINUTO)
 
 
+def _asignar_cajon(tipo_cajon: str) -> Cajon | None:
+    """
+    Asigna el primer cajón libre del tipo solicitado.
+
+    Si no existe inventario de cajones **en absoluto**, devuelve `None`: el
+    estacionamiento opera en modo "solo tiempo y caja" y el folio se emite sin
+    cajón. Esta tolerancia es deliberada —exigir un inventario que el negocio
+    no lleva detendría la operación sin aportar control alguno—.
+
+    La ausencia se evalúa sobre el inventario completo, no sobre los cajones
+    activos. Si usted dio de alta cajones y los desactivó todos (obra, cierre
+    parcial), eso expresa que sí administra capacidad: la entrada se bloquea en
+    lugar de degradarse en silencio a modo libre, porque un ingreso admitido
+    donde no hay espacio físico es un problema real, no un trámite.
+    """
+    if not Cajon.objects.exists():
+        return None
+
+    # Subconsulta de cajones ocupados: un cajón está libre si no participa en
+    # ningún folio abierto.
+    ocupados = Folio.objects.filter(
+        estado=EstadoFolio.ABIERTO, cajon__isnull=False
+    ).values("cajon_id")
+    cajon = (
+        Cajon.objects.filter(activo=True, tipo=tipo_cajon)
+        .exclude(id__in=ocupados)
+        .order_by("codigo")
+        # skip_locked: si otra caseta ya tomó este cajón, se pasa al siguiente
+        # en lugar de esperar. Evita que una entrada bloquee a la otra.
+        .select_for_update(skip_locked=True)
+        .first()
+    )
+    if cajon is None:
+        raise SinCajonesDisponibles(
+            f"No hay cajones disponibles del tipo {tipo_cajon}."
+        )
+    return cajon
+
+
 @transaction.atomic
 def registrar_entrada(
     *,
@@ -125,22 +165,7 @@ def registrar_entrada(
 
     tarifa = obtener_tarifa_vigente(momento)
 
-    # Subconsulta de cajones ocupados: un cajón está libre si no participa en
-    # ningún folio abierto.
-    ocupados = Folio.objects.filter(estado=EstadoFolio.ABIERTO).values("cajon_id")
-    cajon = (
-        Cajon.objects.filter(activo=True, tipo=tipo_cajon)
-        .exclude(id__in=ocupados)
-        .order_by("codigo")
-        # skip_locked: si otra caseta ya tomó este cajón, se pasa al siguiente
-        # en lugar de esperar. Evita que una entrada bloquee a la otra.
-        .select_for_update(skip_locked=True)
-        .first()
-    )
-    if cajon is None:
-        raise SinCajonesDisponibles(
-            f"No hay cajones disponibles del tipo {tipo_cajon}."
-        )
+    cajon = _asignar_cajon(tipo_cajon)
 
     folio = Folio.objects.create(
         placa=placa,
@@ -156,10 +181,23 @@ def registrar_entrada(
         "Entrada registrada | folio=%s placa=%s cajon=%s tarifa=%s",
         folio.uuid,
         folio.placa,
-        cajon.codigo,
+        cajon.codigo if cajon else "sin-inventario",
         tarifa.nombre,
     )
     return folio
+
+
+def obtener_turno_abierto(operador) -> Turno | None:
+    """
+    Devuelve el turno abierto del operador, o `None` si no tiene ninguno.
+
+    Consulta de solo lectura: no abre turnos de forma implícita. Abrir caja es
+    un acto deliberado del operador, que declara su fondo inicial y asume la
+    responsabilidad del efectivo.
+    """
+    if operador is None or not getattr(operador, "pk", None):
+        return None
+    return Turno.objects.filter(operador=operador, estado=EstadoTurno.ABIERTO).first()
 
 
 def obtener_folio(uuid_folio) -> Folio:
@@ -168,6 +206,49 @@ def obtener_folio(uuid_folio) -> Folio:
     if folio is None:
         raise FolioNoEncontrado(f"No existe el folio {uuid_folio}.")
     return folio
+
+
+def buscar_folio_abierto_por_placa(placa: str) -> Folio | None:
+    """
+    Localiza el folio abierto de una placa.
+
+    Es la consulta central de la caja: el operador no teclea un UUID, teclea
+    la placa que ve en el parabrisas. La normalización previa hace que la
+    búsqueda sea insensible a mayúsculas y a espacios.
+    """
+    placa = normalizar_placa(placa)
+    return (
+        Folio.objects.select_related("cajon", "tarifa")
+        .filter(placa=placa, estado=EstadoFolio.ABIERTO)
+        .first()
+    )
+
+
+def folios_en_patio(momento: datetime | None = None) -> list[dict]:
+    """
+    Vehículos actualmente dentro, con su permanencia acumulada.
+
+    Alimenta el tablero del operador. Los minutos se calculan en memoria
+    porque dependen del instante de consulta, no de un dato almacenado: no
+    existe forma de indexarlos ni razón para persistirlos.
+    """
+    momento = momento or timezone.now()
+    filas = []
+    for folio in (
+        Folio.objects.select_related("cajon")
+        .filter(estado=EstadoFolio.ABIERTO)
+        .order_by("entrada_en")
+    ):
+        filas.append(
+            {
+                "uuid": str(folio.uuid),
+                "placa": folio.placa,
+                "cajon": folio.cajon.codigo if folio.cajon else "—",
+                "entrada_en": folio.entrada_en,
+                "minutos": max(0, _minutos_transcurridos(folio.entrada_en, momento)),
+            }
+        )
+    return filas
 
 
 def cotizar_folio(folio: Folio, momento: datetime | None = None) -> Cotizacion:
@@ -193,6 +274,8 @@ def registrar_salida(
     pago_recibido: Decimal | None = None,
     operador=None,
     momento: datetime | None = None,
+    turno: Turno | None = None,
+    exigir_turno: bool = False,
 ) -> tuple[Folio, Cotizacion]:
     """
     Caso de uso: cobro y salida del vehículo.
@@ -200,8 +283,26 @@ def registrar_salida(
     Calcula el importe, valida el pago, copia los parámetros tarifarios al
     folio y lo cierra. El bloqueo de fila evita que dos cajas cobren el mismo
     folio en paralelo y generen un doble cobro.
+
+    Adscripción al turno: si no se recibe un turno explícito, se busca el
+    turno abierto del operador y el cobro se adscribe automáticamente. Esto
+    no es opcional por comodidad —un ingreso que no cae en ningún turno queda
+    fuera de todo corte—.
+
+    `exigir_turno` interrumpe el cobro cuando no hay turno abierto. La caja de
+    escritorio lo activa, porque ahí sí se maneja efectivo; la API lo deja
+    desactivado para permitir integraciones que no operan caja (pensiones,
+    cobro con terminal, conciliaciones automáticas).
     """
     momento = momento or timezone.now()
+
+    if turno is None and operador is not None:
+        turno = obtener_turno_abierto(operador)
+    if exigir_turno and turno is None:
+        raise SinTurnoAbierto(
+            "No hay un turno de caja abierto. Abra turno antes de cobrar: un "
+            "ingreso sin turno queda fuera del corte."
+        )
 
     # select_for_update sin skip_locked: aquí sí se debe esperar, porque el
     # folio es único y la segunda transacción debe ver el estado ya cerrado.
@@ -245,6 +346,7 @@ def registrar_salida(
     folio.tarifa_tope_diario = parametros.tope_diario
     folio.estado = EstadoFolio.CERRADO
     folio.operador_salida = operador
+    folio.turno = turno
     folio.save()
 
     logger.info(

@@ -45,6 +45,110 @@ class EstadoFolio(models.TextChoices):
     CANCELADO = "CANCELADO", "Cancelado"
 
 
+class EstadoTurno(models.TextChoices):
+    ABIERTO = "ABIERTO", "Abierto"
+    CERRADO = "CERRADO", "Cerrado"
+
+
+class Turno(models.Model):
+    """
+    Turno de caja: la unidad del corte.
+
+    Cada cobro queda adscrito al turno en que ocurrió, de modo que el corte
+    sea reconstruible y atribuible a un operador identificado.
+
+    Los campos del corte (`total_cobrado`, `efectivo_esperado`, `diferencia`)
+    se graban como fotografía en el momento del cierre. Son redundantes
+    respecto a los folios a propósito: un corte firmado no debe recalcularse
+    después, porque un recálculo con datos posteriores cambiaría una cifra ya
+    declarada por el operador.
+    """
+
+    operador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="turnos",
+        verbose_name="operador",
+    )
+    estado = models.CharField(
+        "estado", max_length=10, choices=EstadoTurno.choices, default=EstadoTurno.ABIERTO
+    )
+
+    fondo_inicial = models.DecimalField(
+        "fondo inicial",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Efectivo con el que inicia la caja (cambio).",
+    )
+    abierto_en = models.DateTimeField("abierto en", default=timezone.now)
+    cerrado_en = models.DateTimeField("cerrado en", null=True, blank=True)
+
+    # --- Fotografía del corte (se graba al cerrar) -------------------------
+    efectivo_declarado = models.DecimalField(
+        "efectivo declarado",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Efectivo contado físicamente por el operador (cierre ciego).",
+    )
+    total_cobrado = models.DecimalField(
+        "total cobrado", max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    efectivo_esperado = models.DecimalField(
+        "efectivo esperado", max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    diferencia = models.DecimalField(
+        "diferencia",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Positiva = sobrante; negativa = faltante.",
+    )
+    folios_cobrados = models.PositiveIntegerField(
+        "folios cobrados", null=True, blank=True
+    )
+    folios_cortesia = models.PositiveIntegerField(
+        "folios en cortesía", null=True, blank=True
+    )
+    resumen = models.JSONField(
+        "resumen del corte",
+        null=True,
+        blank=True,
+        help_text="Detalle emitido por el motor de corte. Base del comprobante.",
+    )
+    observaciones = models.TextField("observaciones", blank=True)
+
+    class Meta:
+        verbose_name = "turno"
+        verbose_name_plural = "turnos"
+        ordering = ["-abierto_en"]
+        constraints = [
+            # Un operador no puede tener dos turnos abiertos: el efectivo
+            # quedaría repartido entre dos cortes sin forma de reconciliarlo.
+            models.UniqueConstraint(
+                fields=["operador"],
+                condition=models.Q(estado=EstadoTurno.ABIERTO),
+                name="uq_operador_un_turno_abierto",
+            ),
+            # Un turno cerrado debe tener siempre fecha de cierre y conteo.
+            models.CheckConstraint(
+                condition=models.Q(estado=EstadoTurno.ABIERTO)
+                | models.Q(cerrado_en__isnull=False, efectivo_declarado__isnull=False),
+                name="ck_turno_cerrado_completo",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["estado", "abierto_en"], name="idx_turno_estado_fecha"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Turno {self.pk} · {self.operador} · {self.abierto_en:%Y-%m-%d %H:%M}"
+
+
 class Tarifa(models.Model):
     """
     Cuadro tarifario vigente.
@@ -167,8 +271,26 @@ class Folio(models.Model):
         "folio", default=uuid.uuid4, editable=False, unique=True, db_index=True
     )
     placa = models.CharField("placa", max_length=15, db_index=True)
+    # Opcional a propósito: un estacionamiento que solo controla tiempo y caja
+    # no necesita inventariar cajones. Si se define inventario, la asignación
+    # se vuelve obligatoria y el control de capacidad entra en vigor; si no
+    # hay inventario, el folio se emite sin cajón y la operación no se detiene.
     cajon = models.ForeignKey(
-        Cajon, on_delete=models.PROTECT, related_name="folios", verbose_name="cajón"
+        Cajon,
+        on_delete=models.PROTECT,
+        related_name="folios",
+        verbose_name="cajón",
+        null=True,
+        blank=True,
+    )
+    turno = models.ForeignKey(
+        "Turno",
+        on_delete=models.PROTECT,
+        related_name="folios",
+        verbose_name="turno de cobro",
+        null=True,
+        blank=True,
+        help_text="Turno en que se cobró el folio. Base del corte de caja.",
     )
     tarifa = models.ForeignKey(
         Tarifa, on_delete=models.PROTECT, related_name="folios", verbose_name="tarifa"
