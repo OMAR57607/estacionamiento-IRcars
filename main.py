@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 # Nombre del informe que deja el modo de verificación. Se escribe en archivo
@@ -23,27 +24,69 @@ from pathlib import Path
 ARCHIVO_VERIFICACION = "verificacion.txt"
 
 
+def _guardar_informe_de_fallo(detalle: str) -> str | None:
+    """
+    Deja constancia en archivo de un fallo de arranque.
+
+    Es la pieza que faltaba: el ejecutable se compila sin consola, así que un
+    fallo anterior a la aparición de cualquier ventana no dejaba rastro visible
+    y el operador solo veía que «no abre». Se intenta primero la carpeta de
+    datos y, si no es accesible —que es justamente uno de los fallos
+    posibles—, junto al propio ejecutable.
+    """
+    marca = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    contenido = f"IRcars — fallo de arranque\n{marca}\n\n{detalle}"
+
+    candidatas = []
+    try:
+        from config.settings_local import DIRECTORIO_DATOS
+
+        candidatas.append(Path(DIRECTORIO_DATOS) / "fallo-de-arranque.txt")
+    except Exception:
+        pass
+    # Junto al ejecutable y en el directorio actual, como alternativas.
+    candidatas.append(Path(sys.executable).parent / "fallo-de-arranque.txt")
+    candidatas.append(Path.cwd() / "fallo-de-arranque.txt")
+
+    for ruta in candidatas:
+        try:
+            ruta.write_text(contenido, encoding="utf-8")
+            return str(ruta)
+        except OSError:
+            continue
+    return None
+
+
 def _reportar_fallo_de_arranque(error: BaseException) -> None:
     """
-    Informa un fallo de inicio por el medio que esté disponible.
+    Informa un fallo de inicio por todos los medios disponibles.
 
-    Se intenta un diálogo gráfico porque el ejecutable se compila sin consola;
-    si ni Tkinter puede cargarse, se cae a la salida estándar, que al menos es
-    legible si alguien lo ejecuta desde una terminal.
+    El orden importa: primero se graba el informe en archivo, porque es lo
+    único que sobrevive si el diálogo tampoco puede mostrarse; después se
+    intenta el aviso gráfico, y por último la salida estándar, legible solo si
+    alguien ejecutó el programa desde una terminal.
     """
     detalle = "".join(traceback.format_exception(error))
+    ruta_informe = _guardar_informe_de_fallo(detalle)
+
     mensaje = (
         "No fue posible iniciar la aplicación.\n\n"
         f"{type(error).__name__}: {error}\n\n"
         "Verifique que la carpeta de datos sea accesible y con permiso de "
         "escritura."
     )
+    if ruta_informe:
+        mensaje += f"\n\nEl detalle técnico quedó en:\n{ruta_informe}"
+
     try:
         import tkinter as tk
         from tkinter import messagebox
 
         raiz = tk.Tk()
         raiz.withdraw()
+        # Sin esto, el propio aviso de error puede quedar detrás de otras
+        # ventanas y el operador seguiría sin ver nada.
+        raiz.attributes("-topmost", True)
         messagebox.showerror("IRcars — Error de inicio", mensaje)
         raiz.destroy()
     except Exception:

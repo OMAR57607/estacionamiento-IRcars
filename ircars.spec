@@ -113,6 +113,8 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# --- Ejecutable de operación -----------------------------------------------
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -132,6 +134,38 @@ exe = EXE(
     # Sin consola: es una aplicación de ventana. Los errores de arranque se
     # informan en un diálogo y quedan en la bitácora, según main.py.
     console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
+
+# --- Ejecutable de diagnóstico ---------------------------------------------
+
+# Misma aplicación, pero CON consola. Comparte el mismo análisis, así que no
+# añade tiempo de compilación apreciable ni puede divergir del ejecutable real.
+#
+# Existe porque un programa de ventana que falla antes de dibujar su primera
+# ventana no deja nada en pantalla: el operador solo ve que «no abre». Con esta
+# versión, el error aparece escrito en la consola y puede copiarse tal cual.
+#
+# No es la que se usa a diario —abre una ventana negra de consola junto a la
+# aplicación—, sino la que se ejecuta cuando algo va mal.
+exe_diagnostico = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name="IRcars-Caja-diagnostico",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    runtime_tmpdir=None,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

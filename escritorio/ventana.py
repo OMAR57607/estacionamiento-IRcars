@@ -69,6 +69,14 @@ class VentanaPrincipal(tk.Tk):
         self.deiconify()
         self._construir()
         self._registrar_atajos()
+        # Misma razón que en el diálogo de acceso: tras autenticarse, la
+        # ventana principal debe quedar al frente y con el foco, no detrás de
+        # lo que el operador tuviera abierto.
+        try:
+            self.lift()
+            self.focus_force()
+        except Exception:
+            pass
         self._verificar_tarifa()
 
     # ------------------------------------------------------------------ UI

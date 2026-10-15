@@ -107,18 +107,24 @@ jobs:
           }
           Write-Host "Verificación superada."
 
-      - name: Informar el tamaño del ejecutable
+      - name: Informar el tamaño de los ejecutables
         shell: pwsh
         run: |
-          $archivo = Get-Item "dist\IRcars-Caja.exe"
-          $mb = [math]::Round($archivo.Length / 1MB, 1)
-          Write-Host "IRcars-Caja.exe — $mb MB"
+          foreach ($nombre in @("IRcars-Caja.exe", "IRcars-Caja-diagnostico.exe")) {
+            $archivo = Get-Item "dist\$nombre"
+            $mb = [math]::Round($archivo.Length / 1MB, 1)
+            Write-Host "$nombre — $mb MB"
+          }
 
-      - name: Publicar el ejecutable
+      - name: Publicar los ejecutables
         uses: actions/upload-artifact@v4
         with:
           name: IRcars-Caja-windows
-          path: dist/IRcars-Caja.exe
+          # Se publican los dos: el de operación diaria y el de diagnóstico,
+          # que muestra en consola cualquier error de arranque.
+          path: |
+            dist/IRcars-Caja.exe
+            dist/IRcars-Caja-diagnostico.exe
           # 90 días es el máximo habitual; basta para recuperar una versión
           # anterior si una nueva resulta problemática en la caseta.
           retention-days: 90

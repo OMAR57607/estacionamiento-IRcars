@@ -74,13 +74,51 @@ class DialogoAcceso(tk.Toplevel):
 
         self.title("IRcars — Acceso" if not primer_uso else "IRcars — Primer operador")
         self.resizable(False, False)
-        self.transient(padre)
+
+        # `transient()` SOLO si la ventana padre es visible.
+        #
+        # Esto no es un detalle estético. La ventana principal se oculta con
+        # `withdraw()` hasta que haya operador autenticado, de modo que este
+        # diálogo sería hijo de una ventana invisible. En Windows, un Toplevel
+        # transitorio de una ventana oculta no obtiene botón en la barra de
+        # tareas, puede abrirse por detrás de las demás y puede no recibir el
+        # foco: el operador ve que «no abre» cuando en realidad la aplicación
+        # está corriendo con su ventana enterrada.
+        if padre is not None and padre.winfo_viewable():
+            self.transient(padre)
+
         self.grab_set()
 
         self._construir()
         self._centrar()
         self.protocol("WM_DELETE_WINDOW", self._cancelar)
+        self._traer_al_frente()
         self.entrada_usuario.focus_set()
+
+    def _traer_al_frente(self) -> None:
+        """
+        Fuerza que el diálogo sea visible y tenga el foco.
+
+        Al arrancar desde un icono, el operador acaba de interactuar con el
+        explorador de archivos, que conserva el primer plano. Sin esta
+        insistencia, la ventana de acceso puede quedar detrás y dar la
+        impresión de que el programa no arrancó.
+
+        `-topmost` se activa un instante y se libera enseguida: mantenerlo
+        permanentemente dejaría el diálogo por encima de todo lo demás, lo que
+        resulta molesto y es innecesario una vez que tiene el foco.
+        """
+        try:
+            self.deiconify()
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(300, lambda: self.attributes("-topmost", False))
+            self.focus_force()
+        except Exception:
+            # La visibilidad es una mejora, no un requisito: si el gestor de
+            # ventanas rechaza alguna de estas llamadas, el diálogo sigue
+            # siendo funcional y no debe impedirse el arranque.
+            pass
 
     # -- Construcción ------------------------------------------------------
     def _construir(self) -> None:
