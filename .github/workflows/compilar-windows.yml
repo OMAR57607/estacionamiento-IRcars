@@ -56,6 +56,26 @@ jobs:
           pip install -r requirements.txt -r requirements-build.txt
 
       - name: Compilar el ejecutable
+        # PyInstaller trae un gancho propio para Django: detecta `manage.py`,
+        # lee de ahí el módulo de ajustes y arranca Django para recolectar
+        # modelos y migraciones. Por omisión tomaría `config.settings` —la
+        # configuración del SERVIDOR—, que exige variables de entorno que aquí
+        # no existen y que además arrastraría al empaquetado Django REST
+        # Framework, el panel de administración y el controlador de PostgreSQL.
+        #
+        # Apuntarlo a `config.settings_local` es lo correcto: es la
+        # configuración que el ejecutable usará de verdad.
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings_local
+          # Red de seguridad. Si algo llegara a importar `config.settings` pese
+          # a lo anterior, que falle por una razón real y no por una variable
+          # ausente. Son valores desechables, vivos solo durante este paso.
+          DJANGO_SECRET_KEY: solo-para-compilar-no-es-un-secreto-real
+          DATABASE_URL: sqlite:///compilacion-descartable.sqlite3
+          # Los datos de la verificación van a una carpeta del propio espacio
+          # de trabajo, no a la del usuario del runner: así la comprobación
+          # parte siempre de una base vacía y no deja rastro.
+          IRCARS_DIR_DATOS: ${{ github.workspace }}\datos-verificacion
         run: pyinstaller --noconfirm --clean ircars.spec
 
       # Verificación real del binario, no solo de que se haya generado.
@@ -65,6 +85,11 @@ jobs:
       # la base horaria, esto falla aquí y no en la caseta.
       - name: Verificar el ejecutable
         shell: pwsh
+        env:
+          # Base de datos descartable, en el espacio de trabajo: la
+          # verificación debe partir siempre de cero para que la comprobación
+          # de migraciones signifique algo.
+          IRCARS_DIR_DATOS: ${{ github.workspace }}\datos-verificacion
         run: |
           $proceso = Start-Process -FilePath "dist\IRcars-Caja.exe" `
                                    -ArgumentList "--verificar" `

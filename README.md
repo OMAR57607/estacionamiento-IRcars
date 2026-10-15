@@ -3,21 +3,80 @@
 Sistema de control de estacionamiento con cobro por hora y **fracción
 proporcional**, control de turnos y **corte de caja con cierre ciego**.
 
-Tres interfaces sobre un mismo núcleo de negocio:
+## Modo de operación: ejecutable local
 
-| Interfaz | Para qué | Dónde corre |
-|---|---|---|
-| **Web de caja** | Operación diaria: entrada, cobro, turno, corte, reportes | Railway + Supabase |
-| **API REST** | Integraciones y consulta programática | Railway + Supabase |
-| **Ejecutable de escritorio** | Caja autónoma sin red, con SQLite local | Equipo en la caseta |
+La caja opera con el **ejecutable de escritorio** en el equipo de la caseta,
+con SQLite en ese mismo equipo. Para un estacionamiento de 13–15 autos al día
+—unas 30 operaciones diarias— es la arquitectura correcta, y no por falta de
+ambición técnica:
 
-Las tres comparten exactamente las mismas reglas: el motor de tarificación y
-los casos de uso se escriben una vez y las tres los heredan. Un cambio en el
-cobro o en el control de caja no se replica en tres lugares.
+- **Sigue cobrando sin internet.** Si se cae la red, la caseta no se detiene.
+  Ninguna arquitectura en la nube ofrece eso.
+- **Sin exposición.** No hay puertos abiertos ni servicios accesibles desde
+  fuera.
+- **Sin costo mensual** ni dependencia de un proveedor.
+- **Un solo punto de falla** en lugar de dos.
 
-**Despliegue en operación:**
-`https://estacionamiento-ircars-production.up.railway.app`
-(ver [DESPLIEGUE-RAILWAY.md](DESPLIEGUE-RAILWAY.md))
+A ese volumen, SQLite acumula unos 5,500 folios al año: una fracción mínima de
+su capacidad. La complejidad de un motor cliente-servidor —agrupadores de
+conexiones, réplicas, respaldos gestionados— no aportaría nada aquí.
+
+### Las otras dos interfaces siguen disponibles
+
+El repositorio conserva una **interfaz web** y una **API REST** completas,
+sobre los mismos servicios y el mismo motor de cobro. No están desplegadas hoy,
+pero funcionan: si en el futuro operan varias casetas o quiere consultar la
+caja desde fuera, está hecho. Ver [DESPLIEGUE-RAILWAY.md](DESPLIEGUE-RAILWAY.md).
+
+Las tres interfaces comparten exactamente las mismas reglas: el motor de
+tarificación y los casos de uso se escriben una vez y las tres los heredan. Un
+cambio en el cobro o en el control de caja no se replica en tres lugares.
+
+---
+
+## Obtener el ejecutable de Windows
+
+PyInstaller no hace compilación cruzada, así que el `.exe` se compila en un
+runner de Windows mediante GitHub Actions. **No necesita instalar Python ni
+herramientas de compilación.**
+
+1. Entre a la pestaña **Actions** del repositorio.
+2. Abra la ejecución más reciente de *«Compilar ejecutable de Windows»*.
+3. Descargue el artefacto **`IRcars-Caja-windows`**.
+4. Descomprima y ejecute `IRcars-Caja.exe`.
+
+El flujo se dispara solo cuando cambia algo que afecta al ejecutable, y también
+puede lanzarse a mano desde esa misma pestaña.
+
+Antes de publicar el artefacto, el flujo **ejecuta el propio `.exe`** con
+`--verificar`: arranca Django dentro del binario, aplica las migraciones,
+resuelve la zona horaria y comprueba los motores de tarificación y de corte con
+importes conocidos. Si PyInstaller dejó algo fuera, la compilación falla ahí y
+no le entrega un ejecutable roto.
+
+### Primer uso
+
+En el primer arranque no existe ningún operador, así que la aplicación le guía
+para crear el usuario administrador inicial. Después:
+
+1. Pestaña **Tarifa** → registre el cuadro tarifario (sin tarifa vigente no se
+   puede cobrar).
+2. Pestaña **Turno y corte** → abra turno declarando el fondo inicial.
+3. Pestaña **Caja** → ya puede registrar entradas y cobrar salidas.
+
+Los datos viven en `%LOCALAPPDATA%\IRcars`, ruta que la propia aplicación
+muestra en su barra inferior. **Respaldar el sistema es copiar esa carpeta.**
+
+### Atajos de teclado
+
+Pensados para operar sin ratón con un cliente esperando:
+
+| Tecla | Acción |
+|---|---|
+| `F2` | Registrar entrada |
+| `F4` | Cotizar salida |
+| `F5` | Cobrar y cerrar folio |
+| `F9` | Actualizar el tablero |
 
 ---
 
