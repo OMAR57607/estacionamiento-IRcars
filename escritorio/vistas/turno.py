@@ -41,8 +41,9 @@ class VistaTurno(ttk.Frame):
         super().__init__(padre, padding=tema.ESPACIO_L, style="Fondo.TFrame")
         self.contexto = contexto
 
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.columnconfigure(0, weight=3, uniform="turno")
+        self.columnconfigure(1, weight=2, uniform="turno")
+        self.rowconfigure(1, weight=1)
 
         self._construir_estado()
         self._construir_acciones()
@@ -51,8 +52,10 @@ class VistaTurno(ttk.Frame):
 
     # ------------------------------------------------------------------ UI
     def _construir_estado(self) -> None:
-        self.tarjeta_estado = tema.Tarjeta(self, "Turno en curso")
-        self.tarjeta_estado.grid(row=0, column=0, sticky="ew")
+        self.tarjeta_estado = tema.Tarjeta(
+            self, "Turno en curso", relleno=tema.ESPACIO_M
+        )
+        self.tarjeta_estado.grid(row=0, column=1, sticky="new")
         cuerpo = self.tarjeta_estado.cuerpo
         cuerpo.columnconfigure(0, weight=1)
 
@@ -71,19 +74,28 @@ class VistaTurno(ttk.Frame):
         self.metricas = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
         self.metricas.grid(row=1, column=0, sticky="ew", pady=(tema.ESPACIO_M, 0))
 
-        self.m_fondo = tema.Metrica(self.metricas, "Fondo inicial")
-        self.m_cobrados = tema.Metrica(self.metricas, "Folios cobrados")
-        self.m_cortesias = tema.Metrica(self.metricas, "Cortesías")
+        self.m_fondo = tema.Metrica(self.metricas, "Cambio inicial en caja")
+        self.m_cobrados = tema.Metrica(self.metricas, "Boletos cobrados")
+        self.m_cortesias = tema.Metrica(self.metricas, "Salidas sin cobro")
         self.m_dentro = tema.Metrica(self.metricas, "Vehículos dentro")
-        for columna, metrica in enumerate(
+        for indice, metrica in enumerate(
             (self.m_fondo, self.m_cobrados, self.m_cortesias, self.m_dentro)
         ):
-            metrica.grid(row=0, column=columna, sticky="w", padx=(0, tema.ESPACIO_XL))
+            fila, columna = divmod(indice, 2)
+            metrica.grid(
+                row=fila,
+                column=columna,
+                sticky="w",
+                padx=(0, tema.ESPACIO_L),
+                pady=(0, tema.ESPACIO_M),
+            )
             self.metricas.columnconfigure(columna, weight=1)
 
     def _construir_acciones(self) -> None:
-        self.tarjeta_acciones = tema.Tarjeta(self, "Acciones")
-        self.tarjeta_acciones.grid(row=1, column=0, sticky="ew", pady=(tema.ESPACIO_M, 0))
+        self.tarjeta_acciones = tema.Tarjeta(self, relleno=tema.ESPACIO_M)
+        self.tarjeta_acciones.grid(
+            row=0, column=0, sticky="new", padx=(0, tema.ESPACIO_M)
+        )
         contenedor = self.tarjeta_acciones.cuerpo
         contenedor.columnconfigure(0, weight=1)
 
@@ -91,16 +103,20 @@ class VistaTurno(ttk.Frame):
         self.marco_apertura = ttk.Frame(contenedor, style="Tarjeta.TFrame")
         self.marco_apertura.columnconfigure(2, weight=1)
 
-        ttk.Label(
+        tema.Paso(
             self.marco_apertura,
-            text="Cuente el cambio con que inicia la caja y declárelo. Sin turno "
-            "abierto no es posible cobrar salidas.",
-            style="Secundario.TLabel",
-        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, tema.ESPACIO_M))
+            1,
+            "Abra su turno al empezar",
+            "Cuente el cambio con que inicia la caja y captúrelo. Mientras no "
+            "haya turno abierto puede registrar entradas, pero no cobrar "
+            "salidas.",
+        ).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, tema.ESPACIO_M))
 
         ttk.Label(
-            self.marco_apertura, text="Fondo inicial", style="Secundario.TLabel"
-        ).grid(row=1, column=0, sticky="w", pady=(0, tema.ESPACIO_XS))
+            self.marco_apertura,
+            text="Cambio con que inicia (billetes y monedas que ya hay en caja)",
+            style="Secundario.TLabel",
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, tema.ESPACIO_XS))
         self.fondo = ttk.Entry(
             self.marco_apertura, font=tema.fuente("captura"), width=14
         )
@@ -119,37 +135,32 @@ class VistaTurno(ttk.Frame):
         self.marco_cierre = ttk.Frame(contenedor, style="Tarjeta.TFrame")
         self.marco_cierre.columnconfigure(2, weight=1)
 
-        aviso = tk.Frame(
+        tema.Paso(
             self.marco_cierre,
-            background=tema.AVISO_SUAVE,
-            highlightbackground="#efd9ae",
-            highlightthickness=1,
-            bd=0,
-        )
-        aviso.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, tema.ESPACIO_M))
-        tk.Label(
-            aviso,
-            text=(
-                "Cuente el efectivo que hay en caja —incluido el fondo inicial— y "
-                "capture el total.\nLa diferencia se revela después de registrarlo, "
-                "nunca antes: es lo que hace válido el conteo."
-            ),
-            background=tema.AVISO_SUAVE,
-            foreground=tema.AVISO,
-            font=tema.fuente("cuerpo"),
-            justify="left",
-            anchor="w",
-            padx=14,
-            pady=10,
-        ).pack(fill="x")
+            2,
+            "Corte su turno al terminar",
+            "Saque todo el efectivo de la caja y cuéntelo.",
+        ).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, tema.ESPACIO_M))
+
+        tema.Aviso(
+            self.marco_cierre,
+            "Cuente TODO el efectivo que hay en caja, incluido el cambio con "
+            "que inició.\n"
+            "La diferencia aparece después de capturarlo, nunca antes: por eso "
+            "esta pantalla no le dice cuánto debería haber.",
+            tono="aviso",
+            ancho_texto=620,
+        ).grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, tema.ESPACIO_M))
 
         ttk.Label(
-            self.marco_cierre, text="Efectivo contado", style="Secundario.TLabel"
-        ).grid(row=1, column=0, sticky="w", pady=(0, tema.ESPACIO_XS))
+            self.marco_cierre,
+            text="Total contado en caja",
+            style="Secundario.TLabel",
+        ).grid(row=2, column=0, sticky="w", pady=(0, tema.ESPACIO_XS))
         self.efectivo = ttk.Entry(
             self.marco_cierre, font=tema.fuente("captura"), width=14
         )
-        self.efectivo.grid(row=2, column=0, sticky="w")
+        self.efectivo.grid(row=3, column=0, sticky="w")
         self.efectivo.bind("<Return>", lambda _e: self.cerrar_turno())
 
         ttk.Button(
@@ -157,17 +168,22 @@ class VistaTurno(ttk.Frame):
             text="Cerrar turno y cortar",
             style="Peligro.TButton",
             command=self.cerrar_turno,
-        ).grid(row=2, column=1, sticky="w", padx=(tema.ESPACIO_M, 0))
+        ).grid(row=3, column=1, sticky="w", padx=(tema.ESPACIO_M, 0))
 
         ttk.Label(
             self.marco_cierre,
-            text="Acción definitiva: el corte queda registrado a su nombre.",
+            text="Es definitivo y queda registrado a su nombre. Los vehículos que "
+            "sigan dentro se cobrarán en el turno siguiente.",
             style="Tenue.TLabel",
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(tema.ESPACIO_S, 0))
+            wraplength=560,
+            justify="left",
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(tema.ESPACIO_S, 0))
 
     def _construir_historial(self) -> None:
         tarjeta = tema.Tarjeta(self, relleno=tema.ESPACIO_M)
-        tarjeta.grid(row=2, column=0, sticky="nsew", pady=(tema.ESPACIO_M, 0))
+        tarjeta.grid(
+            row=1, column=0, columnspan=2, sticky="nsew", pady=(tema.ESPACIO_M, 0)
+        )
         cuerpo = tarjeta.cuerpo
         cuerpo.columnconfigure(0, weight=1)
         cuerpo.rowconfigure(1, weight=1)
@@ -175,9 +191,12 @@ class VistaTurno(ttk.Frame):
         encabezado = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
         encabezado.grid(row=0, column=0, sticky="ew", pady=(0, tema.ESPACIO_S))
         encabezado.columnconfigure(0, weight=1)
-        ttk.Label(encabezado, text="TURNOS CORTADOS", style="Seccion.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(
+            encabezado,
+            text="TURNOS QUE YA CORTÓ   ·   doble clic en un renglón para guardar su "
+            "comprobante",
+            style="Seccion.TLabel",
+        ).grid(row=0, column=0, sticky="w")
         ttk.Button(
             encabezado,
             text="Guardar comprobante…",
@@ -190,7 +209,7 @@ class VistaTurno(ttk.Frame):
             (
                 ("fecha", "Cierre", 140, "w"),
                 ("operador", "Operador", 110, "w"),
-                ("fondo", "Fondo", 95, "e"),
+                ("fondo", "Cambio inicial", 110, "e"),
                 ("cobrado", "Cobrado", 105, "e"),
                 ("esperado", "Esperado", 105, "e"),
                 ("contado", "Contado", 105, "e"),
@@ -203,7 +222,7 @@ class VistaTurno(ttk.Frame):
 
         self.vacio = ttk.Label(
             cuerpo,
-            text="Todavía no hay turnos cortados.",
+            text="Todavía no ha cortado ningún turno.",
             style="Tenue.TLabel",
             anchor="center",
         )
@@ -219,7 +238,7 @@ class VistaTurno(ttk.Frame):
         self.contexto.notificar()
         messagebox.showinfo(
             "Apertura de turno",
-            f"Turno abierto con fondo de {formato.moneda(fondo)}.\n"
+            f"Turno abierto con {formato.moneda(fondo)} de cambio en caja.\n"
             "Ya puede cobrar salidas.",
             parent=self.winfo_toplevel(),
         )
@@ -244,6 +263,7 @@ class VistaTurno(ttk.Frame):
             "Confirmar corte",
             f"Declara haber contado {formato.moneda(efectivo)} en caja.\n\n"
             "El corte es definitivo y quedará registrado a su nombre.\n"
+            "Si se equivocó al contar, cancele y vuelva a contar.\n"
             "¿Confirma la cifra?",
             parent=self.winfo_toplevel(),
         ):
@@ -343,8 +363,8 @@ class VistaTurno(ttk.Frame):
                 "SIN TURNO ABIERTO", fondo=tema.PELIGRO_SUAVE, color=tema.PELIGRO
             )
             self.subtitulo.configure(
-                text="Un cobro sin turno queda fuera del corte, así que la caja "
-                "no lo permite."
+                text="Un cobro sin turno quedaría fuera del corte, así que la caja "
+                "no lo permite. Abra el turno con el campo de abajo."
             )
             self.m_fondo.actualizar("—")
             self.m_cobrados.actualizar("—")
@@ -443,15 +463,19 @@ class DialogoCorte(tk.Toplevel):
 
         if resumen.cuadra:
             titular, color, fondo = "LA CAJA CUADRA", tema.EXITO, tema.EXITO_SUAVE
-            veredicto = "El efectivo contado coincide exactamente con lo esperado."
+            veredicto = "Lo que contó coincide exactamente con lo que debía haber."
         elif resumen.hay_faltante:
-            titular, color, fondo = "FALTANTE", tema.PELIGRO, tema.PELIGRO_SUAVE
+            titular, color, fondo = "FALTA DINERO", tema.PELIGRO, tema.PELIGRO_SUAVE
             veredicto = (
-                "Recuente antes de entregar el turno y documente la diferencia."
+                "Hay menos efectivo del que debería. Recuente antes de entregar "
+                "el turno y deje constancia de la diferencia."
             )
         else:
-            titular, color, fondo = "SOBRANTE", tema.AVISO, tema.AVISO_SUAVE
-            veredicto = "Verifique si se omitió registrar algún cobro."
+            titular, color, fondo = "SOBRA DINERO", tema.AVISO, tema.AVISO_SUAVE
+            veredicto = (
+                "Hay más efectivo del que debería. Revise si quedó alguna salida "
+                "sin registrar."
+            )
 
         marco = ttk.Frame(self, style="Tarjeta.TFrame", padding=tema.ESPACIO_XL)
         marco.grid(sticky="nsew")
@@ -499,26 +523,15 @@ class DialogoCorte(tk.Toplevel):
             ("Apertura", formato.fecha_hora(turno.abierto_en)),
             ("Cierre", formato.fecha_hora(turno.cerrado_en)),
             ("", ""),
-            ("Fondo inicial", formato.moneda(resumen.fondo_inicial)),
+            ("Cambio inicial en caja", formato.moneda(resumen.fondo_inicial)),
             ("Cobrado en el turno", formato.moneda(resumen.total_cobrado)),
-            ("Efectivo esperado", formato.moneda(resumen.efectivo_esperado)),
-            ("Efectivo contado", formato.moneda(resumen.efectivo_declarado)),
+            ("Debería haber en caja", formato.moneda(resumen.efectivo_esperado)),
+            ("Usted contó", formato.moneda(resumen.efectivo_declarado)),
             ("", ""),
-            ("Folios cobrados", str(resumen.folios_cobrados)),
-            ("Folios en cortesía", str(resumen.folios_cortesia)),
+            ("Boletos cobrados", str(resumen.folios_cobrados)),
+            ("Salidas sin cobro", str(resumen.folios_cortesia)),
         )
-        for fila, (etiqueta, valor) in enumerate(renglones):
-            if not etiqueta:
-                ttk.Separator(detalle, orient="horizontal").grid(
-                    row=fila, column=0, columnspan=2, sticky="ew", pady=tema.ESPACIO_S
-                )
-                continue
-            ttk.Label(detalle, text=etiqueta, style="Secundario.TLabel").grid(
-                row=fila, column=0, sticky="w", pady=2
-            )
-            ttk.Label(
-                detalle, text=valor, font=tema.fuente("cuerpo_fuerte")
-            ).grid(row=fila, column=1, sticky="e", pady=2)
+        tema.renglones_de_datos(detalle, renglones)
 
         # --- Acciones --------------------------------------------------------
         botones = ttk.Frame(marco, style="Tarjeta.TFrame")

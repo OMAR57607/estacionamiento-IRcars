@@ -566,3 +566,185 @@ def tabla_con_barra(padre, columnas, *, altura: int = 10):
 def etiquetas_de_fila(indice: int, *extra: str) -> tuple[str, ...]:
     """Alternancia de color para `tabla_con_barra`, más etiquetas propias."""
     return (("par" if indice % 2 == 0 else "impar"),) + tuple(e for e in extra if e)
+
+
+class Paso(ttk.Frame):
+    """
+    Encabezado de paso numerado: «1 · Entrada del vehículo».
+
+    Existe porque la pantalla de caja encadena acciones en un orden fijo
+    —entrar, calcular, cobrar— y antes nada lo decía. Dos tarjetas con título
+    sustantivo se leen como dos cosas que están ahí; un número delante las
+    convierte en una secuencia, y el operador nuevo deja de preguntar por
+    dónde empezar.
+    """
+
+    def __init__(self, padre, numero: int | str, titulo: str, descripcion: str = ""):
+        super().__init__(padre, style="Tarjeta.TFrame")
+        self.columnconfigure(1, weight=1)
+
+        tk.Label(
+            self,
+            text=str(numero),
+            background=MARCA_SUAVE,
+            foreground=MARCA,
+            font=(familia(), 12, "bold"),
+            width=3,
+            pady=3,
+            bd=0,
+        ).grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, ESPACIO_M))
+
+        ttk.Label(self, text=titulo, style="Titulo.TLabel").grid(
+            row=0, column=1, sticky="w"
+        )
+        if descripcion:
+            ttk.Label(
+                self,
+                text=descripcion,
+                style="Secundario.TLabel",
+                wraplength=320,
+                justify="left",
+            ).grid(row=1, column=1, sticky="w", pady=(2, 0))
+
+
+class Aviso(tk.Frame):
+    """
+    Nota de color con texto, para explicar una regla donde se aplica.
+
+    Las tres pantallas necesitaban una y cada una la dibujaba a mano con un
+    `Frame` y un `Label`; al repetirse divergían en relleno y en grosor de
+    borde. El color **nunca** va solo: el texto dice lo mismo que el tono,
+    porque un operador puede no distinguir el ámbar del verde.
+    """
+
+    _PALETA = {
+        "info": (MARCA_SUAVE, MARCA, "#c7dbf7"),
+        "exito": (EXITO_SUAVE, EXITO, "#bfe0c9"),
+        "aviso": (AVISO_SUAVE, AVISO, "#efd9ae"),
+        "peligro": (PELIGRO_SUAVE, PELIGRO, "#f3c7c2"),
+    }
+
+    def __init__(self, padre, texto: str = "", *, tono: str = "info", ancho_texto: int = 0):
+        fondo, color, borde = self._PALETA[tono]
+        super().__init__(
+            padre,
+            background=fondo,
+            highlightbackground=borde,
+            highlightcolor=borde,
+            highlightthickness=1,
+            bd=0,
+        )
+        self._tono = tono
+        self.texto = tk.Label(
+            self,
+            text=texto,
+            background=fondo,
+            foreground=color,
+            font=fuente("cuerpo"),
+            justify="left",
+            anchor="w",
+            padx=14,
+            pady=10,
+            wraplength=ancho_texto or 0,
+        )
+        self.texto.pack(fill="x")
+
+    def actualizar(self, texto: str, *, tono: str | None = None) -> None:
+        if tono and tono != self._tono:
+            fondo, color, borde = self._PALETA[tono]
+            self._tono = tono
+            self.configure(highlightbackground=borde, highlightcolor=borde, background=fondo)
+            self.texto.configure(background=fondo, foreground=color)
+        self.texto.configure(text=texto)
+
+
+class Banda(tk.Frame):
+    """
+    Franja de ancho completo que dice qué hacer ahora, con el botón para hacerlo.
+
+    Resuelve el fallo de uso más caro que quedaba: las condiciones que impiden
+    operar —no hay precio configurado, no hay turno abierto— vivían cada una en
+    su pantalla, de modo que el operador las descubría al fallar el primer
+    cobro, con el cliente delante. Aquí la condición y su remedio están juntos
+    y a la vista desde cualquier pestaña.
+
+    Cuando no falta nada la banda no desaparece: informa en tono neutro. Una
+    franja que aparece y desaparece desplaza el contenido de la ventana, y un
+    salto de la interfaz entre dos clientes desorienta más que informa.
+    """
+
+    def __init__(self, padre):
+        super().__init__(padre, background=SUPERFICIE_ALT, bd=0)
+        self.columnconfigure(1, weight=1)
+
+        self._marca = tk.Label(
+            self,
+            text="",
+            background=SUPERFICIE_ALT,
+            foreground=TEXTO_SEC,
+            font=(familia(), 9, "bold"),
+            padx=10,
+            pady=5,
+            bd=0,
+        )
+        self._marca.grid(row=0, column=0, sticky="w", padx=(ESPACIO_L, ESPACIO_M), pady=9)
+
+        self._mensaje = tk.Label(
+            self,
+            text="",
+            background=SUPERFICIE_ALT,
+            foreground=TEXTO,
+            font=fuente("cuerpo"),
+            anchor="w",
+            justify="left",
+        )
+        self._mensaje.grid(row=0, column=1, sticky="w")
+
+        self._accion = ttk.Button(self, text="", style="Secundario.TButton")
+        # Se coloca solo cuando hay algo que hacer; ver `actualizar`.
+
+    def actualizar(
+        self,
+        *,
+        etiqueta: str,
+        mensaje: str,
+        tono: str = "info",
+        accion: str | None = None,
+        al_pulsar=None,
+    ) -> None:
+        fondo_marca, color_marca, _ = Aviso._PALETA[tono]
+        self._marca.configure(text=etiqueta, background=fondo_marca, foreground=color_marca)
+        self._mensaje.configure(text=mensaje)
+
+        if accion and al_pulsar is not None:
+            self._accion.configure(text=accion, command=al_pulsar)
+            self._accion.grid(row=0, column=2, sticky="e", padx=(ESPACIO_M, ESPACIO_L))
+        else:
+            self._accion.grid_remove()
+
+
+def renglones_de_datos(padre, pares, *, fila_inicial: int = 0) -> int:
+    """
+    Pinta pares etiqueta/valor alineados, con separador donde la etiqueta es vacía.
+
+    Tres pantallas presentan una ficha de este tipo —tarifa vigente, resultado
+    del corte, resumen del folio— y las tres la construían con el mismo bucle
+    copiado. Devuelve la siguiente fila libre para que el llamador siga
+    colocando debajo.
+    """
+    fila = fila_inicial
+    for etiqueta, valor in pares:
+        if not etiqueta:
+            ttk.Separator(padre, orient="horizontal").grid(
+                row=fila, column=0, columnspan=2, sticky="ew", pady=ESPACIO_S
+            )
+            fila += 1
+            continue
+        ttk.Label(padre, text=etiqueta, style="Secundario.TLabel").grid(
+            row=fila, column=0, sticky="w", pady=2
+        )
+        ttk.Label(padre, text=valor, font=fuente("cuerpo_fuerte")).grid(
+            row=fila, column=1, sticky="e", pady=2
+        )
+        fila += 1
+    return fila
