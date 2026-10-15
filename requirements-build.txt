@@ -1,0 +1,5 @@
+# Dependencias exclusivas de la COMPILACIÓN del ejecutable de escritorio.
+# Se mantienen aparte de requirements.txt para no instalar PyInstaller en el
+# servidor ni en el entorno de desarrollo: solo lo necesita el flujo que
+# produce el .exe.
+pyinstaller==6.11.1

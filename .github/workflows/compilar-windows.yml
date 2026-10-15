@@ -1,0 +1,108 @@
+# Compila el ejecutable de caja para Windows.
+#
+# PyInstaller no hace compilación cruzada: un .exe de Windows solo puede
+# generarse ejecutando PyInstaller en Windows. Este flujo usa un runner de
+# Windows para producirlo, de modo que no haga falta instalar Python ni
+# herramientas de compilación en el equipo de nadie.
+#
+# El artefacto queda disponible para descarga en la pestaña Actions del
+# repositorio, dentro de la ejecución correspondiente.
+
+name: Compilar ejecutable de Windows
+
+on:
+  push:
+    branches:
+      - claude/ecstatic-hamilton-ytihjo
+    paths:
+      # Solo se recompila cuando cambia algo que afecta al ejecutable. Un
+      # cambio en la interfaz web o en el despliegue no justifica gastar
+      # minutos de runner.
+      - 'main.py'
+      - 'ircars.spec'
+      - 'escritorio/**'
+      - 'apps/estacionamiento/models.py'
+      - 'apps/estacionamiento/services*.py'
+      - 'apps/estacionamiento/domain/**'
+      - 'apps/estacionamiento/migrations/**'
+      - 'apps/estacionamiento/management/**'
+      - 'config/settings_local.py'
+      - 'requirements.txt'
+      - 'requirements-build.txt'
+      - '.github/workflows/compilar-windows.yml'
+  # Permite lanzarlo a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+jobs:
+  compilar:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          # 3.12 y no 3.13: es la versión con soporte más maduro en
+          # PyInstaller, y la misma que usa la imagen del servidor.
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Compilar el ejecutable
+        run: pyinstaller --noconfirm --clean ircars.spec
+
+      # Verificación real del binario, no solo de que se haya generado.
+      # El modo --verificar arranca Django dentro del ejecutable, aplica las
+      # migraciones, resuelve la zona horaria y comprueba los motores de
+      # tarificación y de corte. Si PyInstaller dejó fuera las migraciones o
+      # la base horaria, esto falla aquí y no en la caseta.
+      - name: Verificar el ejecutable
+        shell: pwsh
+        run: |
+          $proceso = Start-Process -FilePath "dist\IRcars-Caja.exe" `
+                                   -ArgumentList "--verificar" `
+                                   -Wait -PassThru -NoNewWindow
+          if (Test-Path "verificacion.txt") {
+            Write-Host "----- Informe de verificación -----"
+            Get-Content "verificacion.txt"
+            Write-Host "-----------------------------------"
+          } else {
+            Write-Host "ADVERTENCIA: no se generó el informe de verificación."
+          }
+          if ($proceso.ExitCode -ne 0) {
+            Write-Error "La verificación del ejecutable falló (código $($proceso.ExitCode))."
+            exit 1
+          }
+          Write-Host "Verificación superada."
+
+      - name: Informar el tamaño del ejecutable
+        shell: pwsh
+        run: |
+          $archivo = Get-Item "dist\IRcars-Caja.exe"
+          $mb = [math]::Round($archivo.Length / 1MB, 1)
+          Write-Host "IRcars-Caja.exe — $mb MB"
+
+      - name: Publicar el ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: IRcars-Caja-windows
+          path: dist/IRcars-Caja.exe
+          # 90 días es el máximo habitual; basta para recuperar una versión
+          # anterior si una nueva resulta problemática en la caseta.
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Publicar el informe de verificación
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-verificacion
+          path: verificacion.txt
+          if-no-files-found: warn
