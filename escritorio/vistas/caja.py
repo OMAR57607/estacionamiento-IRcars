@@ -657,13 +657,19 @@ class VistaCaja(ttk.Frame):
             self.after_cancel(self._refresco_id)
             self._refresco_id = None
 
-        self._filas = services.folios_en_patio()
-        self._pintar_filas()
-
-        # Reprogramación encadenada en lugar de un hilo: Tkinter no es seguro
-        # para accesos desde otros hilos, y `after` mantiene todo en el hilo
-        # de la interfaz sin bloquearla.
-        self._refresco_id = self.after(INTERVALO_REFRESCO_MS, self.refrescar)
+        try:
+            self._filas = services.folios_en_patio()
+            self._pintar_filas()
+        finally:
+            # Reprogramación encadenada en lugar de un hilo: Tkinter no es
+            # seguro para accesos desde otros hilos, y `after` mantiene todo en
+            # el hilo de la interfaz sin bloquearla.
+            #
+            # Va en `finally` porque el temporizador anterior ya se canceló
+            # arriba: si una consulta fallida saliera por la vía de la
+            # excepción, no quedaría ninguno vivo y la lista se congelaría el
+            # resto de la sesión sin que nada lo advirtiera.
+            self._refresco_id = self.after(INTERVALO_REFRESCO_MS, self.refrescar)
 
     def _pintar_filas(self) -> None:
         """

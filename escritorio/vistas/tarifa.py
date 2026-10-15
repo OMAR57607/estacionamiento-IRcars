@@ -36,6 +36,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from django.contrib.auth import authenticate
+from django.db import transaction
 from django.utils import timezone
 
 from apps.estacionamiento import services
@@ -815,17 +816,23 @@ class DialogoPrecio(tk.Toplevel):
         # pide al usuario, que no tiene por qué bautizar un precio.
         nombre = f"Precio {ahora:%Y-%m-%d %H:%M:%S}"
 
-        Tarifa.objects.filter(activa=True).update(activa=False)
-        Tarifa.objects.create(
-            nombre=nombre,
-            cuota_hora=parametros.cuota_hora,
-            minutos_cortesia=parametros.minutos_cortesia,
-            fraccion_minutos=parametros.fraccion_minutos,
-            cobro_minimo=parametros.cobro_minimo,
-            tope_diario=parametros.tope_diario,
-            activa=True,
-            vigente_desde=ahora,
-        )
+        # En una sola transacción: desactivar y crear son dos escrituras, y si
+        # la segunda falla —el nombre lleva restricción única, así que dos
+        # cambios dentro del mismo segundo colisionan— el estacionamiento se
+        # quedaría sin ningún precio vigente y no podría ni registrar entradas
+        # ni cobrar salidas hasta que alguien volviera a configurarlo.
+        with transaction.atomic():
+            Tarifa.objects.filter(activa=True).update(activa=False)
+            Tarifa.objects.create(
+                nombre=nombre,
+                cuota_hora=parametros.cuota_hora,
+                minutos_cortesia=parametros.minutos_cortesia,
+                fraccion_minutos=parametros.fraccion_minutos,
+                cobro_minimo=parametros.cobro_minimo,
+                tope_diario=parametros.tope_diario,
+                activa=True,
+                vigente_desde=ahora,
+            )
 
         self.guardado = True
         self.destroy()

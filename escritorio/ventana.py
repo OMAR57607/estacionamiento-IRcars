@@ -25,6 +25,7 @@ cobrado estuviera a la vista, el conteo físico se ajustaría a él.
 """
 from __future__ import annotations
 
+import logging
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -41,6 +42,8 @@ TITULO = "IRcars — Control de Estacionamiento"
 # Cadencia del reloj de la cabecera. Al minuto basta: es una referencia para
 # el operador, no un cronómetro.
 INTERVALO_RELOJ_MS = 20_000
+
+logger = logging.getLogger(__name__)
 
 
 class Contexto:
@@ -285,23 +288,41 @@ class VentanaPrincipal(tk.Tk):
             )
             return
 
-        dentro = services.folios_en_patio()
+        # La cuenta de vehículos es un adorno informativo: si la consulta
+        # falla, la banda debe seguir diciendo lo esencial —que se puede
+        # cobrar— en lugar de dejar la cabecera a medio pintar.
+        try:
+            dentro = f"{len(services.folios_en_patio())} vehículo(s) dentro"
+        except Exception:
+            logger.exception("No se pudo contar los vehículos en el patio")
+            dentro = "caja lista"
+
         self.banda.actualizar(
             etiqueta=f"TURNO {self.contexto.turno.pk} ABIERTO",
-            mensaje=f"Todo listo para cobrar.   ·   {len(dentro)} vehículo(s) "
-            "dentro en este momento.",
+            mensaje=f"Todo listo para cobrar.   ·   {dentro}",
             tono="exito",
         )
 
     def _tictac(self) -> None:
         from django.utils import timezone
 
-        self.reloj.configure(text=timezone.localtime().strftime("%d/%m/%Y  %H:%M"))
-        # El estado se repinta con el reloj: así la cuenta de vehículos dentro
-        # de la banda no se queda vieja mientras el operador trabaja en otra
-        # pestaña.
-        self._pintar_guia()
-        self.after(INTERVALO_RELOJ_MS, self._tictac)
+        try:
+            self.reloj.configure(
+                text=timezone.localtime().strftime("%d/%m/%Y  %H:%M")
+            )
+            # El estado se repinta con el reloj: así la cuenta de vehículos
+            # dentro de la banda no se queda vieja mientras el operador trabaja
+            # en otra pestaña.
+            self._pintar_guia()
+        except Exception:
+            # Un fallo aquí no debe matar el bucle. Antes la reprogramación
+            # venía después de repintar, de modo que una consulta fallida
+            # —basta que otro proceso tenga bloqueado el archivo de SQLite—
+            # dejaba el reloj y la banda congelados el resto de la sesión, y la
+            # banda podía seguir anunciando un turno ya cortado.
+            logger.exception("Fallo al repintar la cabecera")
+        finally:
+            self.after(INTERVALO_RELOJ_MS, self._tictac)
 
     def _registrar_atajos(self) -> None:
         """
