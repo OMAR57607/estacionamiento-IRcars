@@ -35,7 +35,6 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 
@@ -43,7 +42,7 @@ from apps.estacionamiento import services
 from apps.estacionamiento.domain.tarifas import ParametrosTarifa, cotizar
 from apps.estacionamiento.models import Tarifa
 
-from .. import formato, tema
+from .. import formato, seguridad, tema
 from ..errores import operacion
 
 # Permanencias de muestra para la tabla de ejemplos. Cubren el rango real de
@@ -277,9 +276,14 @@ class VistaTarifa(ttk.Frame):
             self.contexto.notificar()
 
     def _desbloquear(self) -> bool:
-        dialogo = DialogoDesbloqueo(self.winfo_toplevel(), self.contexto.operador)
-        self.wait_window(dialogo)
-        return dialogo.autorizado
+        return seguridad.confirmar_identidad(
+            self.winfo_toplevel(),
+            self.contexto.operador,
+            titulo="Desbloquear el precio",
+            explicacion="Confirme su contraseña para poder cambiar el precio. "
+            "El cambio queda registrado a su nombre.",
+            boton="Desbloquear",
+        )
 
     # ------------------------------------------------------------- Refresco
     def refrescar(self) -> None:
@@ -421,93 +425,6 @@ class VistaTarifa(ttk.Frame):
 
     def al_entrar(self) -> None:
         self.refrescar()
-
-
-class DialogoDesbloqueo(tk.Toplevel):
-    """
-    Confirmación de contraseña antes de tocar el precio.
-
-    Se pide la contraseña del propio operador y no una clave aparte: una clave
-    de supervisor acaba escrita en un papel pegado al monitor, que es peor que
-    no tenerla. Así el cambio queda atribuido a quien se autenticó.
-    """
-
-    def __init__(self, padre, operador):
-        super().__init__(padre)
-        self.autorizado = False
-        self._operador = operador
-
-        self.title("Desbloquear el precio")
-        self.configure(background=tema.SUPERFICIE)
-        self.resizable(False, False)
-        self.transient(padre)
-        self.grab_set()
-
-        marco = ttk.Frame(self, style="Tarjeta.TFrame", padding=tema.ESPACIO_XL)
-        marco.grid(sticky="nsew")
-        marco.columnconfigure(0, weight=1)
-
-        ttk.Label(marco, text="Desbloquear el precio", style="Titulo.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(
-            marco,
-            text=f"Confirme la contraseña de «{operador}» para poder cambiar el "
-            "precio.\nEl cambio queda registrado a su nombre.",
-            style="Secundario.TLabel",
-            justify="left",
-        ).grid(row=1, column=0, sticky="w", pady=(tema.ESPACIO_S, tema.ESPACIO_L))
-
-        ttk.Label(marco, text="Contraseña", style="Secundario.TLabel").grid(
-            row=2, column=0, sticky="w", pady=(0, tema.ESPACIO_XS)
-        )
-        self.clave = ttk.Entry(marco, show="•", font=tema.fuente("captura"), width=26)
-        self.clave.grid(row=3, column=0, sticky="ew")
-        self.clave.bind("<Return>", lambda _e: self._confirmar())
-
-        self.error = ttk.Label(marco, text="", style="Peligro.TLabel")
-        self.error.grid(row=4, column=0, sticky="w", pady=(tema.ESPACIO_S, 0))
-
-        botones = ttk.Frame(marco, style="Tarjeta.TFrame")
-        botones.grid(row=5, column=0, sticky="ew", pady=(tema.ESPACIO_L, 0))
-        botones.columnconfigure(0, weight=1)
-        ttk.Button(
-            botones, text="Cancelar", style="Secundario.TButton", command=self.destroy
-        ).grid(row=0, column=0, sticky="w")
-        ttk.Button(
-            botones,
-            text="Desbloquear",
-            style="Principal.TButton",
-            command=self._confirmar,
-        ).grid(row=0, column=1, sticky="e")
-
-        self.bind("<Escape>", lambda _e: self.destroy())
-        self._centrar(padre)
-        self.clave.focus_force()
-
-    def _confirmar(self) -> None:
-        clave = self.clave.get()
-        if not clave:
-            self.error.configure(text="Capture la contraseña.")
-            return
-
-        usuario = authenticate(
-            username=getattr(self._operador, "username", ""), password=clave
-        )
-        if usuario is None:
-            self.error.configure(text="Contraseña incorrecta.")
-            self.clave.delete(0, tk.END)
-            self.clave.focus_set()
-            return
-
-        self.autorizado = True
-        self.destroy()
-
-    def _centrar(self, padre) -> None:
-        self.update_idletasks()
-        x = padre.winfo_rootx() + (padre.winfo_width() - self.winfo_width()) // 2
-        y = padre.winfo_rooty() + (padre.winfo_height() - self.winfo_height()) // 3
-        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
 
 
 class DialogoPrecio(tk.Toplevel):

@@ -19,15 +19,16 @@ Dos decisiones de presentación:
 from __future__ import annotations
 
 import csv
+import tkinter as tk
 from datetime import datetime, time, timedelta
 from tkinter import filedialog, messagebox, ttk
 
 from django.utils import timezone
 
-from apps.estacionamiento import services_caja
+from apps.estacionamiento import services_caja, services_mantenimiento
 from apps.estacionamiento.models import EstadoFolio, Folio
 
-from .. import formato, tema
+from .. import formato, seguridad, tema
 from ..errores import operacion
 
 FORMATO_FECHA = "%d/%m/%Y"
@@ -54,6 +55,7 @@ class VistaReportes(ttk.Frame):
 
         self._construir_cabecera()
         self._construir_tabla()
+        self._construir_pie()
         self.generar()
 
     # ------------------------------------------------------------------ UI
@@ -185,6 +187,54 @@ class VistaReportes(ttk.Frame):
         self.marco_tabla.grid(row=1, column=0, sticky="nsew")
 
         self.vacio = ttk.Label(cuerpo, text="", style="Tenue.TLabel", anchor="center")
+
+    def _construir_pie(self) -> None:
+        """
+        Herramienta de instalación: deja la base sin los datos de prueba.
+
+        Va al pie de Reportes, lejos de lo que se pulsa a diario, y no en la
+        pantalla de caja: borrar movimientos no es una operación de caseta. La
+        etiqueta de la izquierda dice para qué sirve, porque un botón rojo sin
+        contexto se pulsa por curiosidad.
+
+        Solo lo ve el perfil administrativo. Está pensado para retirarse
+        cuando la operación madure.
+        """
+        if not getattr(self.contexto.operador, "is_staff", False):
+            return
+
+        pie = ttk.Frame(self, style="Fondo.TFrame")
+        pie.grid(row=2, column=0, sticky="ew", pady=(tema.ESPACIO_S, 0))
+        pie.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            pie,
+            text="Puesta en marcha:  deja la base como recién instalada, "
+            "borrando los boletos y turnos de las pruebas.",
+            style="TenueFondo.TLabel",
+        ).grid(row=0, column=0, sticky="w")
+
+        # Botón de texto y no de relleno: se usa una vez en la vida de la
+        # instalación, y en esta pantalla el alto se lo debe quedar la tabla,
+        # que es lo que se consulta a diario. El peso de la advertencia lo
+        # lleva el diálogo, no el botón.
+        ttk.Button(
+            pie,
+            text="Borrar movimientos de prueba…",
+            style="Enlace.TButton",
+            command=self.borrar_movimientos,
+        ).grid(row=0, column=1, sticky="e")
+
+    @operacion("Borrado de movimientos")
+    def borrar_movimientos(self) -> None:
+        dialogo = DialogoBorrado(self.winfo_toplevel(), self.contexto)
+        self.wait_window(dialogo)
+        if dialogo.borrado:
+            # El turno abierto puede haber desaparecido con el borrado: hay
+            # que recalcular el contexto antes de que nadie intente cobrar
+            # contra un turno que ya no existe.
+            self.contexto.notificar()
+            self.generar()
 
     # -------------------------------------------------------------- Acciones
     def _aplicar_atajo(self, desde_dias: int, hasta_dias: int, _nombre: str) -> None:
@@ -377,3 +427,172 @@ class VistaReportes(ttk.Frame):
 
     def al_entrar(self) -> None:
         self.generar()
+
+
+class DialogoBorrado(tk.Toplevel):
+    """
+    Confirmación del borrado, con las cifras delante.
+
+    Tres cosas tiene que dejar claras antes de que nadie pulse nada: **qué** se
+    lleva (las cantidades reales, no una frase genérica), **qué conserva** —el
+    operador y el precio vigente, que son lo que daría miedo perder— y que
+    **queda un respaldo**, porque saber que hay vuelta atrás es lo que permite
+    decidir sin pánico.
+
+    La contraseña se pide al final, cuando ya se sabe qué se está aprobando.
+    Pedirla antes convierte la confirmación en un trámite que se teclea de
+    memoria.
+    """
+
+    def __init__(self, padre, contexto):
+        super().__init__(padre)
+        self.borrado = False
+        self._contexto = contexto
+
+        self.title("Borrar movimientos de prueba")
+        self.configure(background=tema.SUPERFICIE)
+        self.resizable(False, False)
+        self.transient(padre)
+        self.grab_set()
+
+        resumen = services_mantenimiento.resumen_movimientos()
+        self._resumen = resumen
+
+        marco = ttk.Frame(self, style="Tarjeta.TFrame", padding=tema.ESPACIO_XL)
+        marco.grid(sticky="nsew")
+        marco.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            marco, text="Borrar movimientos de prueba", style="Titulo.TLabel"
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            marco,
+            text="Para dejar la caja lista antes de empezar a operar de verdad.",
+            style="Secundario.TLabel",
+        ).grid(row=1, column=0, sticky="w", pady=(tema.ESPACIO_XS, tema.ESPACIO_L))
+
+        # --- Qué se borra ---------------------------------------------------
+        ttk.Label(marco, text="SE BORRA", style="Seccion.TLabel").grid(
+            row=2, column=0, sticky="w"
+        )
+        se_borra = ttk.Frame(marco, style="Tarjeta.TFrame")
+        se_borra.grid(row=3, column=0, sticky="ew", pady=(tema.ESPACIO_XS, 0))
+        se_borra.columnconfigure(1, weight=1)
+        abiertos = (
+            f"   ({resumen['folios_abiertos']} todavía dentro)"
+            if resumen["folios_abiertos"]
+            else ""
+        )
+        tema.renglones_de_datos(
+            se_borra,
+            (
+                ("Boletos", f"{resumen['folios']}{abiertos}"),
+                ("Turnos", str(resumen["turnos"])),
+            ),
+        )
+
+        # --- Qué se conserva -------------------------------------------------
+        ttk.Label(marco, text="SE CONSERVA", style="Seccion.TLabel").grid(
+            row=4, column=0, sticky="w", pady=(tema.ESPACIO_M, 0)
+        )
+        se_queda = ttk.Frame(marco, style="Tarjeta.TFrame")
+        se_queda.grid(row=5, column=0, sticky="ew", pady=(tema.ESPACIO_XS, 0))
+        se_queda.columnconfigure(1, weight=1)
+        tema.renglones_de_datos(
+            se_queda,
+            (
+                ("Su usuario y su contraseña", "sí"),
+                ("El precio en uso", "sí"),
+            ),
+        )
+
+        # --- Opción del histórico de precios ---------------------------------
+        self.limpiar_precios = tk.BooleanVar(value=False)
+        if resumen["precios_historicos"]:
+            viejos = resumen["precios_historicos"]
+            cuantos = (
+                "el precio viejo del histórico"
+                if viejos == 1
+                else f"los {viejos} precios viejos del histórico"
+            )
+            ttk.Checkbutton(
+                marco,
+                text=f"Borrar también {cuantos} "
+                "(el que está en uso se conserva)",
+                variable=self.limpiar_precios,
+                style="TCheckbutton",
+            ).grid(row=6, column=0, sticky="w", pady=(tema.ESPACIO_M, 0))
+
+        tema.Aviso(
+            marco,
+            "Antes de borrar se guarda un respaldo completo junto al archivo de "
+            "datos, así que esto se puede deshacer.",
+            tono="info",
+            ancho_texto=420,
+        ).grid(row=7, column=0, sticky="ew", pady=(tema.ESPACIO_L, 0))
+
+        botones = ttk.Frame(marco, style="Tarjeta.TFrame")
+        botones.grid(row=8, column=0, sticky="ew", pady=(tema.ESPACIO_L, 0))
+        botones.columnconfigure(0, weight=1)
+        ttk.Button(
+            botones, text="Cancelar", style="Secundario.TButton", command=self.destroy
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            botones,
+            text="Borrar",
+            style="Peligro.TButton",
+            command=self.confirmar,
+        ).grid(row=0, column=1, sticky="e")
+
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._centrar(padre)
+        self.focus_force()
+
+    @operacion("Borrado de movimientos")
+    def confirmar(self) -> None:
+        if not self._resumen["folios"] and not self._resumen["turnos"]:
+            messagebox.showinfo(
+                "Borrado",
+                "No hay movimientos que borrar: la base ya está limpia.",
+                parent=self,
+            )
+            self.destroy()
+            return
+
+        if not seguridad.confirmar_identidad(
+            self,
+            self._contexto.operador,
+            titulo="Confirmar el borrado",
+            explicacion="Va a borrar los movimientos de prueba. Confirme su "
+            "contraseña: el borrado queda registrado a su nombre.",
+            boton="Borrar",
+        ):
+            return
+
+        resultado = services_mantenimiento.purgar_movimientos(
+            operador=self._contexto.operador,
+            incluir_historico_precios=bool(self.limpiar_precios.get()),
+        )
+
+        self.borrado = True
+        self.destroy()
+
+        lineas = [
+            f"Se borraron {resultado['folios_borrados']} boleto(s) y "
+            f"{resultado['turnos_borrados']} turno(s).",
+        ]
+        if resultado["precios_borrados"]:
+            lineas.append(
+                f"También {resultado['precios_borrados']} precio(s) del histórico."
+            )
+        lineas.append("\nLa caja queda lista para operar.")
+        if resultado["respaldo"]:
+            lineas.append(f"\nRespaldo guardado en:\n{resultado['respaldo']}")
+
+        messagebox.showinfo("Borrado", "\n".join(lineas), parent=self.master)
+
+    def _centrar(self, padre) -> None:
+        self.update_idletasks()
+        x = padre.winfo_rootx() + (padre.winfo_width() - self.winfo_width()) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - self.winfo_height()) // 4
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")

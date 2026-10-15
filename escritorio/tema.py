@@ -311,6 +311,34 @@ def aplicar(raiz: tk.Misc) -> ttk.Style:
         foreground=[("disabled", TEXTO_DESHABILITADO)],
     )
 
+    # --- Casillas de verificación -----------------------------------------
+    #
+    # `clam` pinta la casilla con su propio gris, que sobre la tarjeta blanca
+    # se ve como un parche. Se fija el fondo al de la superficie y el relleno
+    # de la marca para el estado activo, que es el único momento en que el
+    # color aporta información.
+    estilo.configure(
+        "TCheckbutton",
+        background=SUPERFICIE,
+        foreground=TEXTO,
+        font=fuente("cuerpo"),
+        focuscolor="",
+        indicatorbackground=SUPERFICIE,
+        indicatorforeground="#ffffff",
+        bordercolor=BORDE_FUERTE,
+        padding=(0, 4),
+    )
+    estilo.map(
+        "TCheckbutton",
+        background=[("active", SUPERFICIE)],
+        indicatorbackground=[
+            ("selected", MARCA),
+            ("disabled", SUPERFICIE_ALT),
+        ],
+        bordercolor=[("selected", MARCA)],
+        foreground=[("disabled", TEXTO_DESHABILITADO)],
+    )
+
     # --- Campos de captura ------------------------------------------------
     for nombre in ("TEntry", "Captura.TEntry"):
         estilo.configure(
