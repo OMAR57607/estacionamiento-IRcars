@@ -13,7 +13,11 @@ name: Compilar ejecutable de Windows
 on:
   push:
     branches:
-      - claude/ecstatic-hamilton-ytihjo
+      # La rama estable del proyecto. Antes aquí figuraba una rama de trabajo
+      # con nombre generado automáticamente, de modo que el ejecutable solo se
+      # recompilaba si se empujaba a ella: cualquier otro trabajo quedaba sin
+      # compilar sin que nada lo advirtiera.
+      - main
     paths:
       # Solo se recompila cuando cambia algo que afecta al ejecutable. Un
       # cambio en la interfaz web o en el despliegue no justifica gastar

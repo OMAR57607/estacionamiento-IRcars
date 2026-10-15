@@ -65,11 +65,43 @@ para crear el usuario administrador inicial. Después:
 3. Pestaña **Caja** → ya puede registrar entradas y cobrar salidas.
 
 Los datos viven en `%LOCALAPPDATA%\IRcars`, ruta que la propia aplicación
-muestra en su barra inferior. **Respaldar el sistema es copiar esa carpeta.**
+muestra en su barra inferior —un clic la copia al portapapeles—.
+**Respaldar el sistema es copiar esa carpeta.**
+
+### La pantalla de caja
+
+El ciclo de un vehículo son cuatro gestos, y la pantalla está dispuesta para
+que ocurran sin buscar nada:
+
+1. **Entrada.** Se teclea la placa y se pulsa `Enter`. El acuse confirma la
+   hora —y el cajón, si hay inventario de cajones dado de alta—, y el cursor
+   vuelve al campo listo para el siguiente vehículo.
+2. **Cotización.** Placa en «Salida y cobro» y `Enter`. El importe aparece en
+   grande, con la permanencia y la tarifa aplicada debajo. **No cierra el
+   folio**: todavía puede corregirse.
+3. **Cobro.** Al teclear el pago recibido, **el cambio se calcula al
+   instante** —o avisa cuánto falta—, a tiempo de contar los billetes. Los
+   botones de billete y de importe exacto evitan teclear la cifra.
+4. **Cierre.** `F5` cobra, cierra el folio y libera el cajón.
+
+Dos ayudas para los casos incómodos:
+
+- **Quien perdió el boleto.** El tablero de vehículos dentro tiene buscador:
+  se teclean unos caracteres de la placa y, en cuanto queda una sola
+  coincidencia, `Enter` la cotiza —doble clic sobre cualquier fila hace lo
+  mismo—. La columna «Lleva acumulado» responde «¿cuánto llevo?» sin tener que
+  cotizar folio por folio.
+- **Si no hay turno abierto**, la cabecera lo advierte en rojo desde cualquier
+  pestaña y lleva a abrirlo de un clic. Es la única condición que impide
+  cobrar, y se ve antes de tener al cliente enfrente.
+
+La cabecera **nunca muestra importes del turno en curso**. Es el cierre ciego:
+si el total estuviera a la vista, el conteo físico se ajustaría a él.
 
 ### Atajos de teclado
 
-Pensados para operar sin ratón con un cliente esperando:
+Pensados para operar sin ratón con un cliente esperando. Están impresos de
+forma permanente en la barra inferior, que es como se aprenden:
 
 | Tecla | Acción |
 |---|---|
@@ -77,6 +109,7 @@ Pensados para operar sin ratón con un cliente esperando:
 | `F4` | Cotizar salida |
 | `F5` | Cobrar y cerrar folio |
 | `F9` | Actualizar el tablero |
+| `Enter` | Confirma el campo en que esté el cursor |
 
 ---
 
@@ -108,6 +141,7 @@ aislada y reutilizable por cualquier interfaz futura.
 | Capa | Archivos | Responsabilidad |
 |---|---|---|
 | Interfaz | `web/`, `views.py`, `serializers.py`, `escritorio/` | Deserializar, delegar, presentar |
+| └ Presentación | `escritorio/tema.py` | Color, tipografía y componentes de la app de escritorio |
 | Aplicación | `services.py`, `services_caja.py` | Orquestar casos de uso, transacciones, concurrencia |
 | Dominio | `domain/tarifas.py`, `domain/corte.py` | Calcular importes y diferencias. Sin framework, 100 % testeable |
 | Infraestructura | `models.py`, `migrations/` | Persistir y hacer cumplir la integridad |
@@ -316,6 +350,15 @@ documentado, operador identificado y registro en el log.
 administrativo: el precio no se toca desde una caja. El contenedor no corre
 como `root`.
 
+**La interfaz también sostiene el control.** Las restricciones de negocio no se
+confían solo al código: la pantalla está hecha para no invitar a saltárselas. La
+cabecera no exhibe ningún importe del turno abierto, porque haría inútil el
+cierre ciego. Cotizar y cobrar son dos botones y no uno, para que un error de
+captura no produzca un folio cerrado e inmutable. El único botón rojo de la
+aplicación es el corte de caja, que es la acción irreversible. Y el estado que
+impide operar —no tener turno— se muestra de forma permanente, no cuando ya
+falló la operación.
+
 **Observabilidad (SRE).** Dos sondas distintas: `/healthz` responde si el
 proceso vive, `/api/v1/salud/` verifica la base de datos y reporta `503` cuando
 el equipo no está en condiciones de operar. Cada evento de negocio —entrada,
@@ -333,10 +376,15 @@ hay credenciales en el repositorio.
 Lo construido es la base de operación. Las siguientes extensiones se apoyan en
 los mismos servicios, sin duplicar reglas de negocio:
 
-- **Corte de caja** por turno y operador, con totales y conciliación.
-- **Panel de caja** en Streamlit sobre los servicios existentes.
 - **Pensiones mensuales** y validación de cortesías por comercio.
 - **Controlador de hardware**: pluma, sensores de cajón, lector de QR.
-- **Impresión de boleto y comprobante** a partir del desglose ya persistido.
+- **Impresión directa a la térmica.** El comprobante de corte ya se genera en
+  texto plano y se guarda en archivo; falta enviarlo a la impresora sin pasar
+  por el explorador, y emitir boleto de entrada y recibo de cobro con el
+  desglose que el folio ya persiste.
 - **Sincronización opcional a la nube** para respaldo y reportería central,
   manteniendo la operación local como fuente de verdad.
+
+Ya no figuran aquí dos puntos que sí están construidos: el **corte de caja**
+por turno y operador —con cierre ciego, conciliación e historial— y el **panel
+de caja**, que es la propia aplicación de escritorio.
