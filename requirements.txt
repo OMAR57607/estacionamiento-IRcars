@@ -1,0 +1,12 @@
+# --- Núcleo de la aplicación -------------------------------------------------
+Django==5.1.4
+djangorestframework==3.15.2
+django-environ==0.11.2          # Configuración por variables de entorno (12-factor)
+psycopg[binary]==3.2.3          # Driver PostgreSQL
+
+# --- Servidor de aplicación (uso en sitio / producción) ----------------------
+gunicorn==23.0.0
+
+# --- Calidad y pruebas -------------------------------------------------------
+pytest==8.3.4
+pytest-django==4.9.0

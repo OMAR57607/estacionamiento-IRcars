@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# Entorno de desarrollo local completo: aplicación + PostgreSQL.
+#   docker compose up --build
+# La API queda en http://localhost:8000/api/v1/
+# ---------------------------------------------------------------------------
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ircars
+      POSTGRES_USER: ircars
+      POSTGRES_PASSWORD: ircars
+    volumes:
+      # Volumen nombrado: los datos sobreviven a `docker compose down`.
+      - datos_postgres:/var/lib/postgresql/data
+    ports:
+      # Expuesto para poder inspeccionar la base con psql o un cliente gráfico.
+      - "5432:5432"
+    healthcheck:
+      # La aplicación no debe arrancar antes de que Postgres acepte conexiones.
+      test: ["CMD-SHELL", "pg_isready -U ircars -d ircars"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    # `migrate` en el arranque mantiene el esquema al día en desarrollo.
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      # Montaje en caliente: los cambios en el código recargan el servidor.
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  datos_postgres:

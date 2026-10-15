@@ -1,0 +1,22 @@
+# Entorno
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django
+*.sqlite3
+/staticfiles/
+/media/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
