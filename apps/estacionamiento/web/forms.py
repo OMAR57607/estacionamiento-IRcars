@@ -192,60 +192,107 @@ class RangoFechasForm(forms.Form):
         return {"desde": hoy, "hasta": hoy}
 
 
+class DesbloqueoPrecioForm(forms.Form):
+    """
+    Confirmación de contraseña antes de abrir el cambio de precio.
+
+    Se pide la contraseña del propio operador y no una clave aparte: una clave
+    de supervisor acaba escrita en un papel pegado al monitor, que es peor que
+    no tenerla. Así el cambio queda atribuido a quien se autenticó.
+    """
+
+    clave = forms.CharField(
+        label="Contraseña",
+        strip=False,
+        widget=forms.PasswordInput(
+            attrs={
+                "autofocus": True,
+                "autocomplete": "current-password",
+                "class": "campo campo-grande",
+            }
+        ),
+    )
+
+
 class TarifaForm(forms.Form):
     """
-    Alta de una tarifa nueva.
+    Cambio del precio.
 
-    No existe formulario de edición a propósito: guardar crea una tarifa y
-    desactiva la anterior, de modo que quede registro de qué precio estuvo
-    vigente en cada fecha. Editar en sitio reescribiría la historia de los
-    cobros ya realizados.
+    Dos decisiones gobiernan este formulario, y son las mismas que gobiernan la
+    pantalla equivalente del ejecutable de escritorio:
+
+    * **No existe formulario de edición a propósito.** Guardar crea un precio
+      nuevo y desactiva el anterior, de modo que quede registro de qué precio
+      estuvo vigente en cada fecha. Editar en sitio reescribiría la historia de
+      los cobros ya realizados.
+
+    * **Ningún campo trae valor de ejemplo.** Los `initial` los arma la vista a
+      partir del precio vigente. Cuando estaban aquí, fijos en el código,
+      «subir un peso la hora» reescribía en silencio la cortesía, la fracción y
+      el tope con lo que decía esta clase.
+
+    El nombre tampoco se pide: lo genera la vista con una marca de tiempo. El
+    modelo lo exige único y quien cambia el precio es el dueño, que no tiene
+    por qué bautizarlo.
     """
 
-    nombre = forms.CharField(
-        max_length=60,
-        initial="General",
-        label="Nombre",
-        widget=forms.TextInput(attrs={"class": "campo"}),
-    )
     cuota_hora = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
-        label="Cuota por hora",
-        widget=forms.NumberInput(attrs={"step": "0.01", "class": "campo"}),
+        label="Precio por hora",
+        help_text="Lo que cuesta una hora completa. Es la cifra del letrero.",
+        widget=forms.NumberInput(
+            attrs={
+                # Es la cifra que se viene a cambiar: el cursor empieza aquí.
+                "autofocus": True,
+                "step": "0.01",
+                "class": "campo campo-grande",
+                "inputmode": "decimal",
+            }
+        ),
     )
     minutos_cortesia = forms.IntegerField(
         min_value=0,
-        initial=15,
-        label="Minutos de cortesía",
-        widget=forms.NumberInput(attrs={"class": "campo"}),
+        label="Minutos gratis al entrar",
+        help_text=(
+            "Tolerancia sin costo, para maniobrar o dejar a alguien. "
+            "0 = se cobra desde el primer minuto."
+        ),
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
     )
     fraccion_minutos = forms.IntegerField(
         min_value=1,
         max_value=60,
-        initial=1,
-        label="Fracción de cobro (minutos)",
+        label="Se cobra en bloques de (minutos)",
         help_text=(
-            "1 = cobro por minuto real (proporcionalidad estricta, conforme al "
-            "criterio de cobro proporcional de PROFECO)."
+            "1 = se paga el tiempo exacto, proporcionalidad estricta conforme al "
+            "criterio de cobro proporcional de PROFECO. 15 = todo bloque de 15 "
+            "minutos iniciado se cobra completo."
         ),
-        widget=forms.NumberInput(attrs={"class": "campo"}),
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
     )
     cobro_minimo = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
-        initial=Decimal("0.00"),
         label="Cobro mínimo",
-        widget=forms.NumberInput(attrs={"step": "0.01", "class": "campo"}),
+        help_text="Piso del importe, pasados los minutos gratis. 0 = sin mínimo.",
+        widget=forms.NumberInput(
+            attrs={"step": "0.01", "class": "campo", "inputmode": "decimal"}
+        ),
     )
     tope_diario = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
         required=False,
-        label="Tope diario",
-        help_text="Déjelo vacío para no aplicar tope.",
-        widget=forms.NumberInput(attrs={"step": "0.01", "class": "campo"}),
+        label="Máximo por día",
+        help_text=(
+            "Más de esto no se cobra por cada día iniciado. "
+            "Vacío = sin máximo."
+        ),
+        widget=forms.NumberInput(
+            attrs={"step": "0.01", "class": "campo", "inputmode": "decimal"}
+        ),
     )
