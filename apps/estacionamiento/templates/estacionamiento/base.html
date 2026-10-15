@@ -1,0 +1,44 @@
+{% load static %}<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Caja{% endblock %} · Estacionamiento IRcars</title>
+  <link rel="stylesheet" href="{% static 'estacionamiento/estilos.css' %}">
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<nav class="barra no-imprimir">
+  <span class="marca">Estacionamiento IRcars</span>
+  <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>
+  <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
+  {% if es_administrativo %}
+    <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
+  {% endif %}
+  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Tarifa</a>
+  <span class="operador">
+    {{ user.get_username }}
+    {% if turno_actual %}· turno {{ turno_actual.pk }} abierto{% else %}· sin turno{% endif %}
+  </span>
+  {# El cierre de sesión va por POST: un GET permitiría cerrar la sesión del
+     operador desde un enlace o una imagen incrustada en otra página. #}
+  <form method="post" action="{% url 'logout' %}" style="margin:0">
+    {% csrf_token %}
+    <button type="submit" class="boton secundario angosto" style="margin:0">Salir</button>
+  </form>
+</nav>
+{% endif %}
+
+<main class="contenido">
+  {% if messages %}
+    {% for mensaje in messages %}
+      <div class="aviso {{ mensaje.tags }}">{{ mensaje }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% block contenido %}{% endblock %}
+</main>
+
+</body>
+</html>

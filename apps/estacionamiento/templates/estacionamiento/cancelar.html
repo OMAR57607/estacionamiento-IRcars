@@ -1,0 +1,35 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Cancelar folio{% endblock %}
+
+{% block contenido %}
+<div class="tarjeta" style="max-width:560px;margin:0 auto">
+  <h2>Cancelar folio</h2>
+
+  <div class="aviso warning">
+    La cancelación es definitiva y queda registrada con su nombre y el motivo
+    que capture. Está prevista para errores de captura, no para corregir cobros:
+    un folio ya cobrado no se cancela.
+  </div>
+
+  <p class="detalle-cobro">
+    Placa: <strong>{{ folio.placa }}</strong><br>
+    Entrada: <strong>{{ folio.entrada_en|date:"d/m/Y H:i" }}</strong><br>
+    Estado: <strong>{{ folio.get_estado_display }}</strong>
+    {% if folio.cajon %}<br>Cajón: <strong>{{ folio.cajon.codigo }}</strong>{% endif %}
+  </p>
+
+  <form method="post" action="{% url 'web:caja' %}">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="cancelar">
+    {{ form.folio }}
+    <label for="{{ form.motivo.id_for_label }}">Motivo de la cancelación</label>
+    {{ form.motivo }}
+    <button type="submit" class="boton peligro">Cancelar el folio</button>
+  </form>
+
+  <p class="ayuda" style="margin-top:.8rem">
+    <a href="{% url 'web:caja' %}">Volver a la caja sin cancelar</a>
+  </p>
+</div>
+{% endblock %}

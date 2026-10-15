@@ -1,0 +1,107 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Reportes{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta">
+  <h2>Periodo</h2>
+  <form method="get">
+    <div class="rejilla-doble">
+      <div>
+        <label for="{{ form.desde.id_for_label }}">Desde</label>
+        {{ form.desde }}
+      </div>
+      <div>
+        <label for="{{ form.hasta.id_for_label }}">Hasta</label>
+        {{ form.hasta }}
+      </div>
+    </div>
+    {% if form.errors %}
+      <div class="aviso error" style="margin-top:.8rem">
+        {% for errores in form.errors.values %}{% for e in errores %}{{ e }}{% endfor %}{% endfor %}
+      </div>
+    {% endif %}
+    <button type="submit" class="boton">Generar reporte</button>
+  </form>
+</div>
+
+{% if datos %}
+<div class="indicadores" style="margin-bottom:1rem">
+  <div class="indicador">
+    <div class="rotulo">Total cobrado</div>
+    <div class="valor">{{ datos.total_cobrado|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Folios cobrados</div>
+    <div class="valor">{{ datos.folios_cobrados }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Cortesías</div>
+    <div class="valor">{{ datos.folios_cortesia }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Importe promedio</div>
+    <div class="valor">{{ datos.importe_promedio|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Minutos promedio</div>
+    <div class="valor">{{ datos.minutos_promedio }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Turnos cortados</div>
+    <div class="valor">{{ datos.turnos_cerrados }}</div>
+  </div>
+</div>
+
+<div class="tarjeta">
+  <h2>Folios cobrados</h2>
+
+  {% if truncado %}
+    <div class="aviso info">
+      Se muestran los {{ folios|length }} más recientes de {{ total_folios }}.
+      Exporte a CSV para obtener el periodo completo.
+    </div>
+  {% endif %}
+
+  {% if folios %}
+    <p class="ayuda" style="margin-bottom:.8rem">
+      <a class="boton secundario angosto"
+         href="?desde={{ form.desde.value|date:'Y-m-d' }}&hasta={{ form.hasta.value|date:'Y-m-d' }}&formato=csv">
+        Exportar a CSV
+      </a>
+    </p>
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th class="numero">Minutos</th>
+            <th class="numero">Importe</th>
+            <th>Cobró</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for f in folios %}
+          <tr>
+            <td class="placa">{{ f.placa }}</td>
+            <td>{{ f.entrada_en|date:"d/m/Y H:i" }}</td>
+            <td>{{ f.salida_en|date:"d/m/Y H:i" }}</td>
+            <td class="numero">{{ f.minutos|duracion }}</td>
+            <td class="numero">{{ f.importe|pesos }}</td>
+            <td>{{ f.operador_salida|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="vacio">El periodo seleccionado no tiene folios cobrados.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

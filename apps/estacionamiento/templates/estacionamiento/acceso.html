@@ -1,0 +1,37 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Acceso{% endblock %}
+
+{% block contenido %}
+<div class="pantalla-acceso">
+  <div class="caja-acceso">
+    <div class="tarjeta">
+      <h2>Acceso a la caja</h2>
+
+      {% if form.errors %}
+        {# Mensaje genérico a propósito: no revela si el usuario existe, para
+           no facilitar la enumeración de cuentas. #}
+        <div class="aviso error">Usuario o contraseña incorrectos.</div>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <label for="id_username">Usuario</label>
+        <input type="text" name="username" id="id_username" class="campo"
+               autofocus autocomplete="username" required>
+
+        <label for="id_password" style="margin-top:.8rem">Contraseña</label>
+        <input type="password" name="password" id="id_password" class="campo"
+               autocomplete="current-password" required>
+
+        <button type="submit" class="boton">Entrar</button>
+      </form>
+
+      <p class="ayuda" style="margin-top:1rem">
+        Cada movimiento queda registrado a nombre del operador que lo realiza.
+        El corte de caja se le atribuye a esa misma persona.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

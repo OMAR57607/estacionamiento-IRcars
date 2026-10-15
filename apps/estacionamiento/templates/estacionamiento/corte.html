@@ -1,0 +1,100 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Corte del turno {{ turno_corte.pk }}{% endblock %}
+
+{% block contenido %}
+
+{# El veredicto encabeza la pantalla: es lo que debe verse primero, sin
+   depender del color para comunicarlo. #}
+{% if resumen.cuadra %}
+  <div class="aviso success"><strong>La caja cuadra exactamente.</strong></div>
+{% elif resumen.hay_faltante %}
+  <div class="aviso error">
+    <strong>FALTANTE de {{ resumen.diferencia|pesos_absoluto }}.</strong>
+    Recuente antes de entregar el turno y documente la diferencia.
+  </div>
+{% else %}
+  <div class="aviso warning">
+    <strong>SOBRANTE de {{ resumen.diferencia|pesos_absoluto }}.</strong>
+    Verifique si se omitió registrar algún cobro.
+  </div>
+{% endif %}
+
+<div class="tarjeta">
+  <h2>Corte de caja · turno {{ turno_corte.pk }}</h2>
+
+  <table>
+    <tbody>
+      <tr><th>Operador</th><td>{{ turno_corte.operador }}</td></tr>
+      <tr><th>Apertura</th><td>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Cierre</th><td>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</td></tr>
+      <tr><th>Fondo inicial</th><td class="numero">{{ resumen.fondo_inicial|pesos }}</td></tr>
+      <tr><th>Cobrado en el turno</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
+      <tr><th>Efectivo esperado</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
+      <tr><th>Efectivo contado</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
+      <tr style="font-weight:700">
+        <th>DIFERENCIA</th>
+        <td class="numero">{{ resumen.diferencia|pesos_con_signo }}</td>
+      </tr>
+      <tr><th>Folios cobrados</th><td class="numero">{{ resumen.folios_cobrados }}</td></tr>
+      <tr><th>Folios en cortesía</th><td class="numero">{{ resumen.folios_cortesia }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if turno_corte.observaciones %}
+    <p class="detalle-cobro" style="margin-top:1rem">
+      <strong>Observaciones:</strong><br>{{ turno_corte.observaciones|linebreaksbr }}
+    </p>
+  {% endif %}
+
+  {# Espacio de firmas: el corte se entrega en papel junto con el efectivo. #}
+  <div style="display:flex;gap:3rem;margin-top:3rem;font-size:.85rem">
+    <div style="flex:1;border-top:1px solid #16202b;padding-top:.4rem;text-align:center">
+      Firma del operador
+    </div>
+    <div style="flex:1;border-top:1px solid #16202b;padding-top:.4rem;text-align:center">
+      Firma de quien recibe
+    </div>
+  </div>
+
+  <button type="button" class="boton secundario no-imprimir" onclick="window.print()">
+    Imprimir comprobante
+  </button>
+</div>
+
+{% if folios %}
+<div class="tarjeta">
+  <h2>Folios cobrados en el turno ({{ folios|length }})</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr>
+          <th>Placa</th>
+          <th>Entrada</th>
+          <th>Salida</th>
+          <th class="numero">Minutos</th>
+          <th class="numero">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for f in folios %}
+        <tr>
+          <td class="placa">{{ f.placa }}</td>
+          <td>{{ f.entrada_en|date:"d/m H:i" }}</td>
+          <td>{{ f.salida_en|date:"d/m H:i" }}</td>
+          <td class="numero">{{ f.minutos|duracion }}</td>
+          <td class="numero">{{ f.importe|pesos }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<p class="ayuda no-imprimir">
+  <a href="{% url 'web:turno' %}">Volver a turnos</a>
+</p>
+
+{% endblock %}

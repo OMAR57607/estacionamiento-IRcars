@@ -6,6 +6,7 @@ psycopg[binary]==3.2.3          # Driver PostgreSQL
 
 # --- Servidor de aplicación (uso en sitio / producción) ----------------------
 gunicorn==23.0.0
+whitenoise[brotli]==6.8.2       # Archivos estáticos sin servidor web adicional
 
 # --- Calidad y pruebas -------------------------------------------------------
 pytest==8.3.4

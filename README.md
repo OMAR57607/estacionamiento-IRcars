@@ -1,12 +1,23 @@
 # Controlador de Estacionamiento — IRcars
 
 Sistema de control de estacionamiento con cobro por hora y **fracción
-proporcional**. Expone una API REST para las operaciones de caseta y caja:
-registro de entrada, cotización, cobro de salida, cancelación documentada y
-consulta de ocupación en tiempo real.
+proporcional**, control de turnos y **corte de caja con cierre ciego**.
 
-Diseñado para operar **en local**, en el equipo instalado en el sitio: si el
-enlace a internet se cae, la caja sigue cobrando y la operación no se detiene.
+Tres interfaces sobre un mismo núcleo de negocio:
+
+| Interfaz | Para qué | Dónde corre |
+|---|---|---|
+| **Web de caja** | Operación diaria: entrada, cobro, turno, corte, reportes | Railway + Supabase |
+| **API REST** | Integraciones y consulta programática | Railway + Supabase |
+| **Ejecutable de escritorio** | Caja autónoma sin red, con SQLite local | Equipo en la caseta |
+
+Las tres comparten exactamente las mismas reglas: el motor de tarificación y
+los casos de uso se escriben una vez y las tres los heredan. Un cambio en el
+cobro o en el control de caja no se replica en tres lugares.
+
+**Despliegue en operación:**
+`https://estacionamiento-ircars-production.up.railway.app`
+(ver [DESPLIEGUE-RAILWAY.md](DESPLIEGUE-RAILWAY.md))
 
 ---
 
@@ -17,26 +28,29 @@ conoce Django, HTTP ni la base de datos, por lo que es verificable de forma
 aislada y reutilizable por cualquier interfaz futura.
 
 ```
-  views.py          Controlador HTTP delgado (DRF). No contiene reglas.
-  serializers.py    Validación de forma y presentación.
-  api_errors.py     Traducción centralizada de errores de dominio a HTTP.
+  web/views.py      Interfaz web de caja (plantillas Django)
+  views.py          API REST (DRF)                    ─┐
+  escritorio/       Aplicación de escritorio (Tkinter) ─┤ tres interfaces,
+  api_errors.py     Errores de dominio → HTTP          ─┘ cero reglas propias
         │
         ▼
-  services.py       Casos de uso: transacciones, bloqueos, asignación de cajón.
+  services.py       Casos de uso: entrada, cotización, cobro, cancelación
+  services_caja.py  Casos de uso: apertura de turno, cierre ciego, corte
         │
         ▼
-  domain/tarifas.py Motor de tarificación. Lógica pura, sin dependencias.
-  domain/exceptions.py
+  domain/tarifas.py Motor de tarificación   ─┐ lógica pura, sin Django,
+  domain/corte.py   Motor de corte de caja  ─┤ sin ORM, sin reloj propio
+  domain/exceptions.py                       ─┘
         │
         ▼
-  models.py         Persistencia e integridad (PostgreSQL).
+  models.py         Persistencia e integridad (PostgreSQL / SQLite)
 ```
 
-| Capa | Archivo | Responsabilidad |
+| Capa | Archivos | Responsabilidad |
 |---|---|---|
-| Interfaz | `views.py`, `serializers.py`, `urls.py` | Deserializar, delegar, serializar |
-| Aplicación | `services.py` | Orquestar casos de uso, transacciones, concurrencia |
-| Dominio | `domain/tarifas.py` | Calcular el importe. Sin framework, 100 % testeable |
+| Interfaz | `web/`, `views.py`, `serializers.py`, `escritorio/` | Deserializar, delegar, presentar |
+| Aplicación | `services.py`, `services_caja.py` | Orquestar casos de uso, transacciones, concurrencia |
+| Dominio | `domain/tarifas.py`, `domain/corte.py` | Calcular importes y diferencias. Sin framework, 100 % testeable |
 | Infraestructura | `models.py`, `migrations/` | Persistir y hacer cumplir la integridad |
 
 ---
@@ -97,16 +111,28 @@ python manage.py runserver
 ```bash
 pytest                                              # suite completa
 pytest apps/estacionamiento/tests/test_tarifas.py   # solo el motor de cobro
+pytest apps/estacionamiento/tests/test_corte.py     # solo el corte de caja
 ```
 
-La suite cubre 56 casos: motor de tarifas (fronteras de cortesía,
-proporcionalidad, cobro mínimo, tope diario, precisión monetaria), casos de uso
-(asignación de cajón, unicidad de folios, auditoría de la tarifa aplicada,
-validación del pago) y contrato de la API (códigos de estado, permisos,
-autenticación).
+La suite cubre **91 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 
-Las pruebas del motor de tarificación **no requieren base de datos**: son
+- **Motor de tarifas**: fronteras de cortesía, proporcionalidad, cobro mínimo,
+  tope por día natural, precisión monetaria, validación de parámetros.
+- **Motor de corte**: efectivo esperado, sobrante, faltante, cuadre exacto,
+  cortesías, y la distinción entre «no se contó» y «se contó cero» —confundirlas
+  ocultaría un faltante total—.
+- **Casos de uso**: asignación de cajón, unicidad de folios y turnos, auditoría
+  de la tarifa aplicada, validación del pago, adscripción del cobro al turno,
+  inmutabilidad del corte cerrado.
+- **Contrato de la API**: códigos de estado, permisos, autenticación.
+
+Los motores de tarificación y de corte **no requieren base de datos**: son
 lógica pura y corren en milisegundos.
+
+> Probar contra PostgreSQL no es redundante. Un defecto real apareció solo ahí:
+> al volverse opcional el cajón, `select_related` generó un `LEFT OUTER JOIN` y
+> PostgreSQL rechazó el `FOR UPDATE`. En SQLite no se manifestó porque ahí
+> `select_for_update` se ignora en silencio.
 
 ---
 

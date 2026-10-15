@@ -1,0 +1,153 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Caja{% endblock %}
+
+{% block contenido %}
+
+{% if not turno_actual %}
+  <div class="aviso warning">
+    <strong>No tiene un turno de caja abierto.</strong>
+    Puede registrar entradas, pero no cobrar salidas: un ingreso sin turno
+    quedaría fuera de todo corte.
+    <a href="{% url 'web:turno' %}">Abrir turno</a>
+  </div>
+{% endif %}
+
+{# ------------------------------------------------- Cotización en curso #}
+{% if cotizacion and folio_cotizado %}
+<div class="tarjeta" style="border-color:#1b4f91;border-width:2px">
+  <h2>Cobro de {{ folio_cotizado.placa }}</h2>
+
+  <p class="detalle-cobro">
+    Entrada: <strong>{{ folio_cotizado.entrada_en|date:"d/m/Y H:i" }}</strong><br>
+    Permanencia: <strong>{{ cotizacion.minutos|duracion }}</strong>
+    {% if cotizacion.es_cortesia %}<em>(dentro de cortesía)</em>{% endif %}<br>
+    Tarifa aplicada: <strong>{{ folio_cotizado.tarifa.nombre }}</strong>
+    {% if folio_cotizado.cajon %}<br>Cajón: <strong>{{ folio_cotizado.cajon.codigo }}</strong>{% endif %}
+    {% if cotizacion.tope_diario_aplicado %}<br><em>Se aplicó el tope diario.</em>{% endif %}
+    {% if cotizacion.cobro_minimo_aplicado %}<br><em>Se aplicó el cobro mínimo.</em>{% endif %}
+  </p>
+
+  <div class="importe-destacado">{{ cotizacion.importe|pesos }}</div>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="cobrar">
+    {{ form_cobro.folio }}
+    <label for="{{ form_cobro.pago_recibido.id_for_label }}">Pago recibido</label>
+    {{ form_cobro.pago_recibido }}
+    <p class="ayuda">{{ form_cobro.pago_recibido.help_text }}</p>
+    <button type="submit" class="boton">Cobrar y cerrar folio</button>
+  </form>
+
+  <p class="ayuda" style="margin-top:.8rem">
+    <a href="{% url 'web:cancelar' folio_cotizado.uuid %}">
+      Cancelar este folio por error de captura
+    </a>
+  </p>
+</div>
+{% endif %}
+
+<div class="rejilla-doble">
+
+  {# ------------------------------------------------------------ Entrada #}
+  <div class="tarjeta">
+    <h2>Entrada de vehículo</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="entrada">
+      <label for="{{ form_entrada.placa.id_for_label }}">Placa</label>
+      {{ form_entrada.placa }}
+      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" style="margin-top:.7rem">Tipo</label>
+      {{ form_entrada.tipo_cajon }}
+      <button type="submit" class="boton">Registrar entrada</button>
+    </form>
+  </div>
+
+  {# -------------------------------------------------------------- Salida #}
+  <div class="tarjeta">
+    <h2>Salida y cobro</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="cotizar">
+      <label for="{{ form_buscar.placa.id_for_label }}">Placa</label>
+      {{ form_buscar.placa }}
+      <button type="submit" class="boton">Cotizar</button>
+    </form>
+    <p class="ayuda" style="margin-top:.7rem">
+      La cotización no cierra el folio: informe el monto, reciba el efectivo y
+      cobre después.
+    </p>
+  </div>
+
+</div>
+
+{# --------------------------------------------------------- Ocupación #}
+{% if ocupacion.capacidad_total %}
+<div class="indicadores" style="margin-bottom:1rem">
+  <div class="indicador">
+    <div class="rotulo">Dentro</div>
+    <div class="valor">{{ ocupacion.ocupados_total }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Disponibles</div>
+    <div class="valor">{{ ocupacion.disponibles_total }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Capacidad</div>
+    <div class="valor">{{ ocupacion.capacidad_total }}</div>
+  </div>
+  {% if ocupacion.lleno %}
+  <div class="indicador" style="border-color:#a01818">
+    <div class="rotulo">Estado</div>
+    <div class="valor" style="color:#a01818;font-size:1.2rem">LLENO</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ------------------------------------------------- Vehículos dentro #}
+<div class="tarjeta">
+  <h2>Vehículos dentro ({{ patio|length }})</h2>
+
+  {% if patio %}
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Cajón</th>
+            <th>Entrada</th>
+            <th class="numero">Permanencia</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for fila in patio %}
+          <tr>
+            <td class="placa">{{ fila.placa }}</td>
+            <td>{{ fila.cajon }}</td>
+            <td>{{ fila.entrada_en|date:"d/m H:i" }}</td>
+            <td class="numero">{{ fila.minutos|duracion }}</td>
+            <td>
+              {# Formulario en lugar de enlace: cotizar es idempotente, pero
+                 el POST mantiene una sola vía de entrada a la lógica. #}
+              <form method="post" style="margin:0">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="cotizar">
+                <input type="hidden" name="placa" value="{{ fila.placa }}">
+                <button type="submit" class="boton angosto" style="margin:0">Cobrar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="vacio">No hay vehículos dentro en este momento.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

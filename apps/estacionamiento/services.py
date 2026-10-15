@@ -306,8 +306,16 @@ def registrar_salida(
 
     # select_for_update sin skip_locked: aquí sí se debe esperar, porque el
     # folio es único y la segunda transacción debe ver el estado ya cerrado.
+    #
+    # `of=("self",)` restringe el bloqueo a la fila del folio. Es necesario y
+    # no una optimización: al ser `cajon` opcional, `select_related` genera un
+    # LEFT OUTER JOIN, y PostgreSQL rechaza `FOR UPDATE` sobre el lado nulable
+    # de un outer join con «FOR UPDATE cannot be applied to the nullable side
+    # of an outer join». Además es lo correcto desde el diseño: lo que debe
+    # protegerse del doble cobro es el folio, no los catálogos de cajón y
+    # tarifa, que solo se leen.
     folio = (
-        Folio.objects.select_for_update()
+        Folio.objects.select_for_update(of=("self",))
         .select_related("cajon", "tarifa")
         .filter(uuid=uuid_folio)
         .first()

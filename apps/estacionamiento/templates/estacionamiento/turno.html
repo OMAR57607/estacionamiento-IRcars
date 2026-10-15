@@ -1,0 +1,136 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Turno y corte{% endblock %}
+
+{% block contenido %}
+
+{% if turno_actual %}
+  {# ------------------------------------------------ Turno abierto: cierre #}
+  <div class="tarjeta">
+    <h2>Turno {{ turno_actual.pk }} · abierto</h2>
+    <p class="detalle-cobro">
+      Operador: <strong>{{ turno_actual.operador }}</strong><br>
+      Apertura: <strong>{{ turno_actual.abierto_en|date:"d/m/Y H:i" }}</strong><br>
+      Fondo inicial: <strong>{{ turno_actual.fondo_inicial|pesos }}</strong>
+    </p>
+
+    <div class="indicadores" style="margin:.8rem 0">
+      <div class="indicador">
+        <div class="rotulo">Folios cobrados</div>
+        <div class="valor">{{ avance.folios_cobrados }}</div>
+      </div>
+      <div class="indicador">
+        <div class="rotulo">Cortesías</div>
+        <div class="valor">{{ avance.folios_cortesia }}</div>
+      </div>
+      <div class="indicador">
+        <div class="rotulo">Vehículos dentro</div>
+        <div class="valor">{{ avance.folios_abiertos_en_patio }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Corte de caja</h2>
+
+    <div class="aviso info">
+      <strong>Cierre ciego.</strong>
+      Cuente el efectivo que hay en caja —incluyendo el fondo inicial— y
+      capture el total. El sistema le mostrará la diferencia <em>después</em> de
+      registrar su conteo.
+      <br><br>
+      Esta pantalla no muestra el total esperado a propósito: si lo conociera
+      antes de contar, el conteo se ajustaría a esa cifra y un faltante nunca
+      quedaría registrado.
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="cerrar">
+      <label for="{{ form_cerrar.efectivo_declarado.id_for_label }}">
+        {{ form_cerrar.efectivo_declarado.label }}
+      </label>
+      {{ form_cerrar.efectivo_declarado }}
+      <label for="{{ form_cerrar.observaciones.id_for_label }}" style="margin-top:.8rem">
+        {{ form_cerrar.observaciones.label }}
+      </label>
+      {{ form_cerrar.observaciones }}
+      <button type="submit" class="boton">Cerrar turno y generar corte</button>
+    </form>
+
+    <p class="ayuda" style="margin-top:.8rem">
+      El corte es definitivo y quedará registrado a su nombre. Los vehículos
+      que sigan dentro se cobrarán en el turno siguiente.
+    </p>
+  </div>
+
+{% else %}
+  {# ------------------------------------------------ Sin turno: apertura #}
+  <div class="tarjeta" style="max-width:520px">
+    <h2>Abrir turno de caja</h2>
+    <p class="ayuda" style="margin-bottom:.8rem">
+      Declare el efectivo con el que inicia la caja (el cambio). Sin ese dato
+      el corte no tiene línea base y cualquier diferencia sería ininterpretable.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="abrir">
+      <label for="{{ form_abrir.fondo_inicial.id_for_label }}">
+        {{ form_abrir.fondo_inicial.label }}
+      </label>
+      {{ form_abrir.fondo_inicial }}
+      <button type="submit" class="boton">Abrir turno</button>
+    </form>
+  </div>
+{% endif %}
+
+{# ------------------------------------------------------------ Histórico #}
+<div class="tarjeta">
+  <h2>Turnos cortados</h2>
+
+  {% if turnos_cerrados %}
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Cierre</th>
+            <th>Operador</th>
+            <th class="numero">Fondo</th>
+            <th class="numero">Cobrado</th>
+            <th class="numero">Esperado</th>
+            <th class="numero">Contado</th>
+            <th class="numero">Diferencia</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t in turnos_cerrados %}
+          <tr class="{% if t.diferencia < 0 %}faltante{% elif t.diferencia > 0 %}sobrante{% endif %}">
+            <td>{{ t.cerrado_en|date:"d/m/Y H:i" }}</td>
+            <td>{{ t.operador }}</td>
+            <td class="numero">{{ t.fondo_inicial|pesos }}</td>
+            <td class="numero">{{ t.total_cobrado|pesos }}</td>
+            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
+            <td class="numero">{{ t.efectivo_declarado|pesos }}</td>
+            <td class="numero">
+              {% if t.diferencia < 0 %}
+                <span class="etiqueta faltante">Faltante</span> {{ t.diferencia|pesos_absoluto }}
+              {% elif t.diferencia > 0 %}
+                <span class="etiqueta sobrante">Sobrante</span> {{ t.diferencia|pesos_absoluto }}
+              {% else %}
+                <span class="etiqueta cuadra">Cuadra</span>
+              {% endif %}
+            </td>
+            <td><a href="{% url 'web:corte' t.pk %}">Ver corte</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="vacio">Todavía no hay turnos cortados.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

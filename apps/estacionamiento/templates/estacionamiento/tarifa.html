@@ -1,0 +1,99 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Tarifa{% endblock %}
+
+{% block contenido %}
+
+{% if vigente %}
+<div class="tarjeta">
+  <h2>Tarifa vigente</h2>
+  <table>
+    <tbody>
+      <tr><th>Nombre</th><td>{{ vigente.nombre }}</td></tr>
+      <tr><th>Cuota por hora</th><td class="numero">{{ vigente.cuota_hora|pesos }}</td></tr>
+      <tr><th>Minutos de cortesía</th><td class="numero">{{ vigente.minutos_cortesia }}</td></tr>
+      <tr><th>Fracción de cobro</th><td class="numero">{{ vigente.fraccion_minutos }} min</td></tr>
+      <tr><th>Cobro mínimo</th><td class="numero">{{ vigente.cobro_minimo|pesos }}</td></tr>
+      <tr><th>Tope diario</th><td class="numero">{% if vigente.tope_diario %}{{ vigente.tope_diario|pesos }}{% else %}sin tope{% endif %}</td></tr>
+      <tr><th>Vigente desde</th><td>{{ vigente.vigente_desde|date:"d/m/Y H:i" }}</td></tr>
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="aviso error">
+  <strong>No hay tarifa vigente.</strong>
+  No es posible registrar entradas ni cobrar salidas hasta que se registre una.
+</div>
+{% endif %}
+
+{% if es_administrativo %}
+<div class="tarjeta">
+  <h2>Registrar tarifa nueva</h2>
+
+  <div class="aviso info">
+    Las tarifas no se editan: al guardar se crea una nueva y se desactiva la
+    anterior, que se conserva en el histórico. Así queda registro de qué precio
+    estuvo vigente en cada fecha —lo que debe demostrarse ante una aclaración
+    del cliente o una verificación de la autoridad— y los folios ya cobrados
+    mantienen el precio con que se calcularon.
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {% for campo in form %}
+      <div style="margin-bottom:.8rem">
+        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {{ campo }}
+        {% if campo.help_text %}<p class="ayuda">{{ campo.help_text }}</p>{% endif %}
+        {% for e in campo.errors %}<p class="ayuda" style="color:#a01818">{{ e }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="boton">Crear tarifa y poner en vigencia</button>
+  </form>
+</div>
+{% else %}
+<div class="aviso info">
+  Solo el perfil administrativo puede modificar el cuadro tarifario. El precio
+  es el parámetro más sensible del sistema y no debe ser modificable desde una
+  caja.
+</div>
+{% endif %}
+
+<div class="tarjeta">
+  <h2>Histórico de tarifas</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th class="numero">Cuota/hora</th>
+          <th class="numero">Cortesía</th>
+          <th class="numero">Fracción</th>
+          <th class="numero">Mínimo</th>
+          <th class="numero">Tope</th>
+          <th>Vigente desde</th>
+          <th>Activa</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in tarifas %}
+        <tr>
+          <td>{{ t.nombre }}</td>
+          <td class="numero">{{ t.cuota_hora|pesos }}</td>
+          <td class="numero">{{ t.minutos_cortesia }} min</td>
+          <td class="numero">{{ t.fraccion_minutos }} min</td>
+          <td class="numero">{{ t.cobro_minimo|pesos }}</td>
+          <td class="numero">{% if t.tope_diario %}{{ t.tope_diario|pesos }}{% else %}—{% endif %}</td>
+          <td>{{ t.vigente_desde|date:"d/m/Y H:i" }}</td>
+          <td>{% if t.activa %}<span class="etiqueta cuadra">Sí</span>{% else %}No{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="vacio">Todavía no hay tarifas registradas.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
