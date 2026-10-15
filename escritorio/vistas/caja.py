@@ -33,6 +33,12 @@ atiende el uso real, no la elegancia:
   cuando el cliente perdió el boleto, el caso incómodo más frecuente en una
   caseta. Con el patio lleno, recorrer la lista con la vista es más lento que
   teclear tres caracteres, así que el filtro va arriba de la tabla.
+
+* **Una entrada mal capturada se puede deshacer.** Con la placa mal teclada, el
+  vehículo real no aparece al salir y la placa equivocada se queda dentro para
+  siempre, ocupando la única plaza que el sistema admite por placa. Cancelar el
+  boleto desde la propia lista es la salida honesta; la practicada sin esta
+  pantalla era cobrarle a un vehículo que nunca estuvo, y eso falsea el corte.
 """
 from __future__ import annotations
 
@@ -366,6 +372,21 @@ class VistaCaja(ttk.Frame):
         self.tabla.bind("<Double-1>", lambda _e: self._cotizar_desde_tablero())
         self.tabla.bind("<Return>", lambda _e: self._cotizar_desde_tablero())
 
+        # Botón derecho sobre el renglón: las dos cosas que se le pueden hacer
+        # a un vehículo que está dentro, en el sitio donde el operador ya lo
+        # está señalando. Duplica el botón del pie de la lista a propósito;
+        # ninguno de los dos gestos es evidente para todo el mundo.
+        self.menu_fila = tk.Menu(self.tabla, tearoff=0)
+        self.menu_fila.add_command(
+            label="Calcular el cobro de este vehículo",
+            command=self._cotizar_desde_tablero,
+        )
+        self.menu_fila.add_separator()
+        self.menu_fila.add_command(
+            label="Cancelar este boleto…", command=self.cancelar_boleto
+        )
+        self.tabla.bind("<Button-3>", self._abrir_menu_fila)
+
         # Mensaje para el patio vacío. Una tabla en blanco no distingue «no hay
         # nadie dentro» de «no cargó».
         self.vacio = ttk.Label(
@@ -376,12 +397,27 @@ class VistaCaja(ttk.Frame):
             justify="center",
         )
 
-        self.resumen_tablero = ttk.Label(
-            cuerpo,
-            text="",
-            style="Tenue.TLabel",
-        )
-        self.resumen_tablero.grid(row=2, column=0, sticky="w", pady=(tema.ESPACIO_S, 0))
+        # Pie de la lista: a la izquierda lo que hay, a la derecha la única
+        # acción que se le puede hacer a un renglón además de cobrarle.
+        pie = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
+        pie.grid(row=2, column=0, sticky="ew", pady=(tema.ESPACIO_S, 0))
+        pie.columnconfigure(0, weight=1)
+
+        self.resumen_tablero = ttk.Label(pie, text="", style="Tenue.TLabel")
+        self.resumen_tablero.grid(row=0, column=0, sticky="w")
+
+        # Acción terciaria, con estilo de enlace y lejos de los botones de
+        # cobro: se usa una vez al día y compitiendo en peso con ellos
+        # invitaría a pulsarla por error. Va visible, y no solo escondida en el
+        # botón derecho, porque un menú contextual no se descubre solo: quien
+        # acaba de teclear mal una placa necesita encontrar la salida en la
+        # pantalla, no adivinarla.
+        ttk.Button(
+            pie,
+            text="Cancelar boleto…",
+            style="Enlace.TButton",
+            command=self.cancelar_boleto,
+        ).grid(row=0, column=1, sticky="e")
 
     # -------------------------------------------------------------- Acciones
     @operacion("Entrada")
@@ -501,7 +537,88 @@ class VistaCaja(ttk.Frame):
         self.refrescar()
         self.contexto.notificar()
 
+    @operacion("Cancelar boleto")
+    def cancelar_boleto(self) -> None:
+        """
+        Deshace una entrada mal capturada: el boleto queda cancelado, sin cobro.
+
+        **Puede hacerlo el cajero, no solo el perfil administrativo**, y es la
+        decisión discutible de esta pantalla. Cancelar es la vía natural de fuga
+        de ingresos —se cancela el boleto y se cobra por fuera—, así que el
+        argumento para exigir `is_staff`, como en el precio, es real. Pesa más
+        el otro lado: quien teclea mal la placa es el cajero, lo descubre con el
+        cliente delante y el patio no espera a que aparezca el dueño. Sin esta
+        pantalla la salida practicada era cobrarle a un vehículo que nunca
+        estuvo, que es peor: falsea el corte y no deja ningún rastro de que algo
+        se corrigió.
+
+        El control se pone entonces en el registro y no en el permiso: se exige
+        un motivo escrito, el folio lo conserva en sus observaciones y la
+        bitácora anota cada cancelación en nivel WARNING con el usuario que la
+        hizo. Una cancelación de más se ve al revisar; un cobro falso, no.
+        """
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            messagebox.showinfo(
+                "Cancelar boleto",
+                "Primero señale en la lista «Vehículos dentro» el renglón del "
+                "vehículo cuyo boleto quiere cancelar.",
+                parent=self.winfo_toplevel(),
+            )
+            return
+
+        uuid_folio = seleccion[0]
+        placa = self.tabla.item(uuid_folio, "values")[0]
+
+        dialogo = DialogoCancelacion(
+            self.winfo_toplevel(), placa=placa, operador=self.contexto.operador
+        )
+        self.wait_window(dialogo)
+        if not dialogo.motivo:
+            return
+
+        services.cancelar_folio(
+            uuid_folio=uuid_folio,
+            motivo=dialogo.motivo,
+            operador=self.contexto.operador,
+        )
+
+        # El boleto cancelado puede ser justo el que está cotizado en la columna
+        # del cobro. Dejarlo ahí permitiría pulsar «Cobrar y cerrar» sobre un
+        # folio que ya no está abierto, y el error saldría como un diálogo de
+        # fallo en lugar de como lo que es: algo que la pantalla debió limpiar.
+        if (
+            self._folio_cotizado is not None
+            and str(self._folio_cotizado.uuid) == uuid_folio
+        ):
+            self._limpiar_cobro()
+            self.placa_salida.delete(0, tk.END)
+
+        # El acuse va en la zona de la entrada porque una cancelación es
+        # exactamente eso: una entrada que se deshace. Es además el único sitio
+        # de esta columna que sobrevive al repintado de la lista.
+        self._mostrar_aviso_entrada(
+            f"✓  Se canceló el boleto de {placa}. No se le cobró nada."
+        )
+        self.refrescar()
+        self.contexto.notificar()
+
     # ------------------------------------------------------------- Auxiliares
+    def _abrir_menu_fila(self, evento) -> None:
+        """Despliega el menú del botón derecho sobre el renglón señalado."""
+        fila = self.tabla.identify_row(evento.y)
+        if not fila:
+            return
+        # Se selecciona antes de abrir el menú: sin esto, el menú actuaría
+        # sobre la fila que estuviera seleccionada de antes y no sobre la que
+        # el operador acaba de señalar, que es el peor error posible aquí.
+        self.tabla.selection_set(fila)
+        self.tabla.focus(fila)
+        try:
+            self.menu_fila.tk_popup(evento.x_root, evento.y_root)
+        finally:
+            self.menu_fila.grab_release()
+
     def _mostrar_resultado_cobro(self, folio, cotizacion) -> None:
         """
         Deja el resultado del cobro en el visor grande.
@@ -705,9 +822,13 @@ class VistaCaja(ttk.Frame):
         parametros = self._parametros_tarifa()
 
         for indice, fila in enumerate(filas):
+            # El identificador del renglón es el folio, no un número de
+            # orden: la cancelación necesita saber *qué boleto* se señaló, y la
+            # placa visible no basta —se elige precisamente cuando está mal—.
             self.tabla.insert(
                 "",
                 "end",
+                iid=fila["uuid"],
                 values=(
                     fila["placa"],
                     fila["cajon"],
@@ -783,3 +904,118 @@ class VistaCaja(ttk.Frame):
     def al_entrar(self) -> None:
         """Invocado al seleccionar la pestaña: deja el foco listo para teclear."""
         self.placa_entrada.focus_set()
+
+
+class DialogoCancelacion(tk.Toplevel):
+    """
+    Confirmación de la cancelación de un boleto, con el motivo por escrito.
+
+    No es un «¿está seguro?». Un diálogo de sí o no se contesta sin leerlo; este
+    pide teclear algo, y teclear el motivo obliga a pensar qué pasó. El texto no
+    se pide por trámite: queda en las observaciones del folio y es lo único que
+    explicará, al revisar el corte, por qué un vehículo estuvo dentro y no pagó.
+
+    Dice además lo que **no** es: la cancelación no es la forma de dejar salir a
+    quien no quiere pagar. Dicho en la ventana, al operador honesto le resuelve
+    la duda y al corte le deja constancia de cuál era la regla.
+    """
+
+    # Un punto o una letra sueltos cumplirían la validación del servicio y no
+    # explicarían nada a quien revise el corte dentro de un mes.
+    MINIMO_MOTIVO = 5
+
+    def __init__(self, padre, *, placa: str, operador):
+        super().__init__(padre)
+        self.motivo = ""
+
+        self.title("Cancelar este boleto")
+        self.configure(background=tema.SUPERFICIE)
+        self.resizable(False, False)
+        self.transient(padre)
+        self.grab_set()
+
+        marco = ttk.Frame(self, style="Tarjeta.TFrame", padding=tema.ESPACIO_XL)
+        marco.grid(sticky="nsew")
+        marco.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            marco, text=f"Cancelar el boleto de {placa}", style="Titulo.TLabel"
+        ).grid(row=0, column=0, sticky="w")
+
+        ttk.Label(
+            marco,
+            text=(
+                f"{placa} desaparece de la lista de vehículos dentro y su "
+                "boleto queda cancelado, sin cobro. Su lugar vuelve a quedar "
+                "libre.\n\n"
+                "Es para arreglar una captura equivocada —la placa mal "
+                "teclada, la misma entrada registrada dos veces—. No es la "
+                "manera de dejar salir a un cliente sin pagar.\n\n"
+                "No se puede deshacer, y queda registrado a nombre de "
+                f"«{getattr(operador, 'username', 'sistema')}»."
+            ),
+            style="Secundario.TLabel",
+            wraplength=430,
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(tema.ESPACIO_S, tema.ESPACIO_L))
+
+        ttk.Label(marco, text="¿Por qué se cancela?", style="Secundario.TLabel").grid(
+            row=2, column=0, sticky="w", pady=(0, tema.ESPACIO_XS)
+        )
+        self.campo = ttk.Entry(marco, font=tema.fuente("cuerpo"), width=52)
+        self.campo.grid(row=3, column=0, sticky="ew")
+        self.campo.bind("<Return>", lambda _e: self._confirmar())
+
+        ttk.Label(
+            marco,
+            text="Por ejemplo: «placa mal capturada, el vehículo real es "
+            "ABC-123».",
+            style="Tenue.TLabel",
+            wraplength=430,
+            justify="left",
+        ).grid(row=4, column=0, sticky="w", pady=(tema.ESPACIO_XS, 0))
+
+        self.error = ttk.Label(marco, text="", style="Peligro.TLabel")
+        self.error.grid(row=5, column=0, sticky="w", pady=(tema.ESPACIO_S, 0))
+
+        botones = ttk.Frame(marco, style="Tarjeta.TFrame")
+        botones.grid(row=6, column=0, sticky="ew", pady=(tema.ESPACIO_L, 0))
+        botones.columnconfigure(0, weight=1)
+        # «Dejarlo como está» y no «Cancelar»: en esta ventana la palabra
+        # cancelar ya significa otra cosa, y el botón de salida no puede
+        # confundirse con el que ejecuta.
+        ttk.Button(
+            botones,
+            text="Dejarlo como está",
+            style="Secundario.TButton",
+            command=self.destroy,
+        ).grid(row=0, column=0, sticky="w")
+        ttk.Button(
+            botones,
+            text="Cancelar el boleto",
+            style="Peligro.TButton",
+            command=self._confirmar,
+        ).grid(row=0, column=1, sticky="e")
+
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self._centrar(padre)
+        self.campo.focus_force()
+
+    def _confirmar(self) -> None:
+        motivo = self.campo.get().strip()
+        if len(motivo) < self.MINIMO_MOTIVO:
+            self.error.configure(
+                text="Escriba el motivo: quien revise el corte tiene que "
+                "entender por qué."
+            )
+            self.campo.focus_set()
+            return
+
+        self.motivo = motivo
+        self.destroy()
+
+    def _centrar(self, padre) -> None:
+        self.update_idletasks()
+        x = padre.winfo_rootx() + (padre.winfo_width() - self.winfo_width()) // 2
+        y = padre.winfo_rooty() + (padre.winfo_height() - self.winfo_height()) // 3
+        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")

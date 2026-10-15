@@ -400,7 +400,11 @@ class DialogoAyuda(tk.Toplevel):
         (
             "Cuando entra un vehículo",
             "1.  Teclee la placa en «Entra un vehículo» y pulse Enter (o F2).\n"
-            "2.  El vehículo aparece en la lista de los que están dentro.",
+            "2.  El vehículo aparece en la lista de los que están dentro.\n\n"
+            "Si capturó mal la placa, señale el renglón en esa lista y pulse "
+            "«Cancelar boleto…». Hay que escribir el motivo, y el boleto queda "
+            "cancelado sin cobrarle nada. Es lo que corresponde: cobrarle a un "
+            "vehículo que nunca estuvo descuadra el corte.",
         ),
         (
             "Cuando sale un vehículo",
