@@ -6,6 +6,17 @@ autenticado y su turno abierto. Ese contexto es la única pieza de estado
 global, y existe porque dos pestañas distintas —caja y turno— deben coincidir
 en si hay turno abierto: si cada una lo consultara por su cuenta, podrían
 discrepar y el operador vería información contradictoria.
+
+La ventana aporta además la **cabecera de estado**, visible desde cualquier
+pestaña. Resuelve el fallo de uso más caro del diseño anterior: la condición
+que impide cobrar —no tener turno abierto— solo era visible entrando a otra
+pestaña, de modo que el operador la descubría con el cliente ya en la
+ventanilla. Ahora el estado del turno está siempre a la vista y, si falta, la
+propia cabecera lleva a abrirlo de un clic.
+
+La cabecera **no muestra importe alguno del turno en curso**. Es la misma
+restricción del cierre ciego que gobierna la pestaña de corte: si el total
+cobrado estuviera a la vista, el conteo físico se ajustaría a él.
 """
 from __future__ import annotations
 
@@ -14,13 +25,17 @@ from tkinter import messagebox, ttk
 
 from apps.estacionamiento import services
 
-from . import arranque
+from . import arranque, tema
 from .vistas.caja import VistaCaja
 from .vistas.reportes import VistaReportes
 from .vistas.tarifa import VistaTarifa
 from .vistas.turno import VistaTurno
 
 TITULO = "IRcars — Control de Estacionamiento"
+
+# Cadencia del reloj de la cabecera. Al minuto basta: es una referencia para
+# el operador, no un cronómetro.
+INTERVALO_RELOJ_MS = 20_000
 
 
 class Contexto:
@@ -35,12 +50,30 @@ class Contexto:
     def __init__(self, operador):
         self.operador = operador
         self.turno = None
+        # Las vistas se registran aquí para que un cambio de turno producido en
+        # una se refleje de inmediato en la cabecera y en las demás, sin que
+        # cada una tenga que conocer a las otras.
+        self._observadores = []
 
     def refrescar_turno(self):
         from apps.estacionamiento import services as servicios_operacion
 
         self.turno = servicios_operacion.obtener_turno_abierto(self.operador)
         return self.turno
+
+    def al_cambiar(self, devolucion) -> None:
+        self._observadores.append(devolucion)
+
+    def notificar(self) -> None:
+        """Avisa del cambio de turno a quien lo haya pedido."""
+        self.refrescar_turno()
+        for devolucion in self._observadores:
+            try:
+                devolucion()
+            except Exception:
+                # Un observador que falle no debe impedir que los demás se
+                # enteren ni tumbar la operación en curso.
+                pass
 
 
 class VentanaPrincipal(tk.Tk):
@@ -49,10 +82,10 @@ class VentanaPrincipal(tk.Tk):
         self.withdraw()  # Oculta la ventana hasta que haya operador autenticado.
 
         self.title(TITULO)
-        self.geometry("1040x720")
-        self.minsize(900, 620)
+        self.geometry("1240x800")
+        self.minsize(1024, 650)
 
-        self._aplicar_tema()
+        tema.aplicar(self)
 
         from .autenticacion import solicitar_acceso
 
@@ -69,6 +102,9 @@ class VentanaPrincipal(tk.Tk):
         self.deiconify()
         self._construir()
         self._registrar_atajos()
+        self.contexto.al_cambiar(self._pintar_estado_turno)
+        self._pintar_estado_turno()
+        self._tictac()
         # Misma razón que en el diálogo de acceso: tras autenticarse, la
         # ventana principal debe quedar al frente y con el foco, no detrás de
         # lo que el operador tuviera abierto.
@@ -80,53 +116,145 @@ class VentanaPrincipal(tk.Tk):
         self._verificar_tarifa()
 
     # ------------------------------------------------------------------ UI
-    def _aplicar_tema(self) -> None:
-        estilo = ttk.Style(self)
-        # `clam` se ve consistente en Windows y Linux; los temas nativos
-        # difieren tanto que la pantalla sería irreconocible entre equipos.
-        if "clam" in estilo.theme_names():
-            estilo.theme_use("clam")
-        estilo.configure("TLabelframe.Label", font=("TkDefaultFont", 10, "bold"))
-        estilo.configure("Treeview", rowheight=24)
-
     def _construir(self) -> None:
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
 
-        self.pestanas = ttk.Notebook(self)
-        self.pestanas.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 0))
+        self._construir_cabecera()
+
+        contenedor = ttk.Frame(self, style="Fondo.TFrame")
+        contenedor.grid(row=1, column=0, sticky="nsew", padx=tema.ESPACIO_L)
+        contenedor.columnconfigure(0, weight=1)
+        contenedor.rowconfigure(0, weight=1)
+
+        self.pestanas = ttk.Notebook(contenedor)
+        self.pestanas.grid(row=0, column=0, sticky="nsew")
 
         self.vista_caja = VistaCaja(self.pestanas, self.contexto)
         self.vista_turno = VistaTurno(self.pestanas, self.contexto)
         self.vista_reportes = VistaReportes(self.pestanas, self.contexto)
         self.vista_tarifa = VistaTarifa(self.pestanas, self.contexto)
 
-        self.pestanas.add(self.vista_caja, text="  Caja  ")
-        self.pestanas.add(self.vista_turno, text="  Turno y corte  ")
-        self.pestanas.add(self.vista_reportes, text="  Reportes  ")
-        self.pestanas.add(self.vista_tarifa, text="  Tarifa  ")
+        self.pestanas.add(self.vista_caja, text="Caja")
+        self.pestanas.add(self.vista_turno, text="Turno y corte")
+        self.pestanas.add(self.vista_reportes, text="Reportes")
+        self.pestanas.add(self.vista_tarifa, text="Tarifa")
         self.pestanas.bind("<<NotebookTabChanged>>", self._al_cambiar_pestana)
 
         self._construir_barra_estado()
         self.protocol("WM_DELETE_WINDOW", self._al_cerrar)
 
+    def _construir_cabecera(self) -> None:
+        """
+        Franja superior con la identidad, el operador y el estado del turno.
+
+        El estado del turno ocupa el extremo derecho, donde la vista se dirige
+        al terminar de leer la pantalla, y es pulsable: señalar un problema sin
+        ofrecer la vía para resolverlo obliga al operador a buscarla.
+        """
+        cabecera = tk.Frame(self, background=tema.SUPERFICIE)
+        cabecera.grid(row=0, column=0, sticky="ew")
+        cabecera.columnconfigure(1, weight=1)
+
+        marca = ttk.Frame(cabecera, style="Cabecera.TFrame", padding=(tema.ESPACIO_L, 14))
+        marca.grid(row=0, column=0, sticky="w")
+        ttk.Label(marca, text="IRcars", style="Titulo.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(
+            marca, text="Control de estacionamiento", style="Tenue.TLabel"
+        ).grid(row=1, column=0, sticky="w")
+
+        derecha = ttk.Frame(cabecera, style="Cabecera.TFrame", padding=(tema.ESPACIO_L, 14))
+        derecha.grid(row=0, column=2, sticky="e")
+
+        self.reloj = ttk.Label(derecha, text="", style="Secundario.TLabel")
+        self.reloj.grid(row=0, column=0, padx=(0, tema.ESPACIO_L))
+
+        operador = ttk.Frame(derecha, style="Cabecera.TFrame")
+        operador.grid(row=0, column=1, padx=(0, tema.ESPACIO_M))
+        ttk.Label(
+            operador,
+            text=str(self.contexto.operador),
+            style="TLabel",
+            font=tema.fuente("cuerpo_fuerte"),
+        ).grid(row=0, column=0, sticky="e")
+        ttk.Label(operador, text="Operador", style="Tenue.TLabel").grid(
+            row=1, column=0, sticky="e"
+        )
+
+        self.pildora_turno = tema.Pildora(derecha, "")
+        self.pildora_turno.grid(row=0, column=2)
+        self.pildora_turno.configure(cursor="hand2")
+        self.pildora_turno.bind(
+            "<Button-1>", lambda _e: self.pestanas.select(self.vista_turno)
+        )
+
+        # Línea divisoria: separa la cabecera del área de trabajo sin recurrir
+        # a un cambio de color que compita con las tarjetas.
+        tk.Frame(self, background=tema.BORDE, height=1).grid(
+            row=0, column=0, sticky="sew"
+        )
+
     def _construir_barra_estado(self) -> None:
-        barra = ttk.Frame(self, padding=(10, 6))
-        barra.grid(row=1, column=0, sticky="ew")
+        barra = ttk.Frame(self, style="Barra.TFrame", padding=(tema.ESPACIO_L, 8))
+        barra.grid(row=2, column=0, sticky="ew")
         barra.columnconfigure(1, weight=1)
 
-        ttk.Label(
-            barra, text=f"Operador: {self.contexto.operador}", font=("TkDefaultFont", 9)
-        ).grid(row=0, column=0, sticky="w")
-
-        # La ruta del archivo de datos se muestra de forma permanente: es lo
-        # que el responsable debe respaldar, y de nada sirve si no sabe dónde está.
+        # Los atajos se recuerdan viéndolos. Tenerlos siempre a la vista es lo
+        # que hace que el operador deje de usar el ratón.
         ttk.Label(
             barra,
-            text=f"Datos: {arranque.ruta_base_datos()}",
-            font=("TkDefaultFont", 8),
-            foreground="#666666",
-        ).grid(row=0, column=1, sticky="e")
+            text="F2 Entrada     F4 Cotizar     F5 Cobrar     F9 Actualizar",
+            style="TenueFondo.TLabel",
+        ).grid(row=0, column=0, sticky="w")
+
+        # La carpeta de datos se muestra de forma permanente: es lo que el
+        # responsable debe respaldar, y de nada sirve si no sabe dónde está. Se
+        # muestra la carpeta y no el archivo —la ruta completa desbordaba la
+        # barra— y un clic la copia al portapapeles, que es lo que se hace con
+        # ella.
+        import os
+
+        carpeta = os.path.dirname(arranque.ruta_base_datos())
+        self.etiqueta_datos = ttk.Label(
+            barra,
+            text=f"Datos: {carpeta}",
+            style="TenueFondo.TLabel",
+            cursor="hand2",
+        )
+        self.etiqueta_datos.grid(row=0, column=1, sticky="e")
+        self.etiqueta_datos.bind("<Button-1>", lambda _e: self._copiar_ruta(carpeta))
+
+    def _copiar_ruta(self, ruta: str) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(ruta)
+        original = self.etiqueta_datos.cget("text")
+        self.etiqueta_datos.configure(text="Ruta copiada al portapapeles")
+        self.after(2500, lambda: self.etiqueta_datos.configure(text=original))
+
+    # -------------------------------------------------------------- Estado
+    def _pintar_estado_turno(self) -> None:
+        """Refleja en la cabecera si se puede cobrar o no."""
+        turno = self.contexto.turno
+        if turno is None:
+            self.pildora_turno.actualizar(
+                "SIN TURNO — NO SE PUEDE COBRAR",
+                fondo=tema.PELIGRO_SUAVE,
+                color=tema.PELIGRO,
+            )
+        else:
+            self.pildora_turno.actualizar(
+                f"TURNO {turno.pk} ABIERTO",
+                fondo=tema.EXITO_SUAVE,
+                color=tema.EXITO,
+            )
+
+    def _tictac(self) -> None:
+        from django.utils import timezone
+
+        self.reloj.configure(text=timezone.localtime().strftime("%d/%m/%Y  %H:%M"))
+        self.after(INTERVALO_RELOJ_MS, self._tictac)
 
     def _registrar_atajos(self) -> None:
         """

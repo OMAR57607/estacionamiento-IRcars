@@ -5,6 +5,16 @@ Responde la pregunta del dueño: cuánto se cobró, cuántos vehículos entraron
 cuánta cortesía se otorgó en un periodo. La exportación a CSV existe porque esa
 información termina invariablemente en una hoja de cálculo o en manos del
 contador, y transcribirla a mano introduce errores.
+
+Dos decisiones de presentación:
+
+* **Los totales son cifras, no un párrafo.** Es la pantalla que se consulta de
+  pie, para contestar «¿cómo vamos hoy?». Un bloque de texto obliga a leerlo
+  entero para encontrar un dato; cuatro cifras separadas se localizan de un
+  vistazo.
+* **El periodo se elige con botones.** Teclear fechas es donde se cometen los
+  errores, y «hoy», «esta semana» y «este mes» cubren casi todas las consultas
+  reales. Los campos siguen ahí para el caso que no cubren.
 """
 from __future__ import annotations
 
@@ -17,94 +27,134 @@ from django.utils import timezone
 from apps.estacionamiento import services_caja
 from apps.estacionamiento.models import EstadoFolio, Folio
 
-from .. import formato
+from .. import formato, tema
 from ..errores import operacion
 
 FORMATO_FECHA = "%d/%m/%Y"
 
+ATAJOS = (("Hoy", 0), ("Últimos 7 días", 6), ("Últimos 30 días", 29))
+
 
 class VistaReportes(ttk.Frame):
     def __init__(self, padre, contexto):
-        super().__init__(padre, padding=12)
+        super().__init__(padre, padding=tema.ESPACIO_L, style="Fondo.TFrame")
         self.contexto = contexto
         self._folios = []
 
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(1, weight=1)
 
-        self._construir_filtros()
-        self._construir_totales()
+        self._construir_cabecera()
         self._construir_tabla()
         self.generar()
 
     # ------------------------------------------------------------------ UI
-    def _construir_filtros(self) -> None:
-        grupo = ttk.LabelFrame(self, text=" Periodo ", padding=12)
-        grupo.grid(row=0, column=0, sticky="ew")
+    def _construir_cabecera(self) -> None:
+        tarjeta = tema.Tarjeta(self, "Periodo")
+        tarjeta.grid(row=0, column=0, sticky="ew")
+        cuerpo = tarjeta.cuerpo
+        cuerpo.columnconfigure(0, weight=1)
+
+        # --- Selección del periodo -----------------------------------------
+        filtros = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
+        filtros.grid(row=0, column=0, sticky="ew")
+        filtros.columnconfigure(5, weight=1)
 
         hoy = timezone.localtime().date()
 
-        ttk.Label(grupo, text="Desde (dd/mm/aaaa):").grid(row=0, column=0, sticky="w")
-        self.desde = ttk.Entry(grupo, width=14)
-        self.desde.grid(row=0, column=1, padx=(8, 16))
+        ttk.Label(filtros, text="Desde", style="Secundario.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(0, tema.ESPACIO_S)
+        )
+        self.desde = ttk.Entry(filtros, width=12)
+        self.desde.grid(row=0, column=1, padx=(0, tema.ESPACIO_L))
         self.desde.insert(0, hoy.strftime(FORMATO_FECHA))
+        self.desde.bind("<Return>", lambda _e: self.generar())
 
-        ttk.Label(grupo, text="Hasta:").grid(row=0, column=2, sticky="w")
-        self.hasta = ttk.Entry(grupo, width=14)
-        self.hasta.grid(row=0, column=3, padx=(8, 16))
+        ttk.Label(filtros, text="Hasta", style="Secundario.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(0, tema.ESPACIO_S)
+        )
+        self.hasta = ttk.Entry(filtros, width=12)
+        self.hasta.grid(row=0, column=3, padx=(0, tema.ESPACIO_M))
         self.hasta.insert(0, hoy.strftime(FORMATO_FECHA))
+        self.hasta.bind("<Return>", lambda _e: self.generar())
 
-        ttk.Button(grupo, text="Generar", command=self.generar).grid(row=0, column=4)
+        ttk.Button(
+            filtros, text="Generar", style="Principal.TButton", command=self.generar
+        ).grid(row=0, column=4, sticky="w")
 
-        # Atajos de periodo: cubren el 90 % de las consultas reales y evitan
-        # teclear fechas, donde se cometen la mayoría de los errores.
-        atajos = ttk.Frame(grupo)
-        atajos.grid(row=1, column=0, columnspan=5, sticky="w", pady=(10, 0))
-        for texto, dias in (("Hoy", 0), ("Últimos 7 días", 6), ("Últimos 30 días", 29)):
+        atajos = ttk.Frame(filtros, style="Tarjeta.TFrame")
+        atajos.grid(row=0, column=5, sticky="e")
+        for columna, (texto, dias) in enumerate(ATAJOS):
             ttk.Button(
                 atajos,
                 text=texto,
+                style="Secundario.TButton",
                 command=lambda d=dias: self._aplicar_atajo(d),
-            ).grid(row=0, column=atajos.grid_size()[0], padx=(0, 8))
+            ).grid(row=0, column=columna, padx=(tema.ESPACIO_XS, 0))
 
-    def _construir_totales(self) -> None:
-        grupo = ttk.LabelFrame(self, text=" Totales del periodo ", padding=12)
-        grupo.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        self.etiqueta_totales = ttk.Label(
-            grupo, text="", justify="left", font=("TkDefaultFont", 11)
+        ttk.Separator(cuerpo, orient="horizontal").grid(
+            row=1, column=0, sticky="ew", pady=tema.ESPACIO_L
         )
-        self.etiqueta_totales.grid(row=0, column=0, sticky="w")
+
+        # --- Totales ---------------------------------------------------------
+        metricas = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
+        metricas.grid(row=2, column=0, sticky="ew")
+
+        self.m_total = tema.Metrica(metricas, "Total cobrado")
+        self.m_folios = tema.Metrica(metricas, "Folios cobrados")
+        self.m_cortesias = tema.Metrica(metricas, "Cortesías")
+        self.m_promedio = tema.Metrica(metricas, "Importe promedio")
+        self.m_permanencia = tema.Metrica(metricas, "Permanencia promedio")
+        self.m_turnos = tema.Metrica(metricas, "Turnos cortados")
+
+        for columna, metrica in enumerate(
+            (
+                self.m_total,
+                self.m_folios,
+                self.m_cortesias,
+                self.m_promedio,
+                self.m_permanencia,
+                self.m_turnos,
+            )
+        ):
+            metrica.grid(row=0, column=columna, sticky="w", padx=(0, tema.ESPACIO_XL))
+            metricas.columnconfigure(columna, weight=1)
 
     def _construir_tabla(self) -> None:
-        grupo = ttk.LabelFrame(self, text=" Folios cobrados ", padding=8)
-        grupo.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
-        grupo.columnconfigure(0, weight=1)
-        grupo.rowconfigure(0, weight=1)
+        tarjeta = tema.Tarjeta(self, relleno=tema.ESPACIO_M)
+        tarjeta.grid(row=1, column=0, sticky="nsew", pady=(tema.ESPACIO_M, 0))
+        cuerpo = tarjeta.cuerpo
+        cuerpo.columnconfigure(0, weight=1)
+        cuerpo.rowconfigure(1, weight=1)
 
-        columnas = ("placa", "entrada", "salida", "permanencia", "importe", "operador")
-        self.tabla = ttk.Treeview(grupo, columns=columnas, show="headings")
-        for columna, titulo, ancho, anclaje in (
-            ("placa", "Placa", 120, "w"),
-            ("entrada", "Entrada", 130, "w"),
-            ("salida", "Salida", 130, "w"),
-            ("permanencia", "Permanencia", 120, "w"),
-            ("importe", "Importe", 100, "e"),
-            ("operador", "Cobró", 110, "w"),
-        ):
-            self.tabla.heading(columna, text=titulo)
-            self.tabla.column(columna, width=ancho, anchor=anclaje)
-        self.tabla.grid(row=0, column=0, sticky="nsew")
-
-        barra = ttk.Scrollbar(grupo, orient="vertical", command=self.tabla.yview)
-        self.tabla.configure(yscrollcommand=barra.set)
-        barra.grid(row=0, column=1, sticky="ns")
-
-        pie = ttk.Frame(grupo)
-        pie.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
-        pie.columnconfigure(0, weight=1)
-        ttk.Button(pie, text="Exportar a CSV…", command=self.exportar).grid(
-            row=0, column=1, sticky="e"
+        encabezado = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
+        encabezado.grid(row=0, column=0, sticky="ew", pady=(0, tema.ESPACIO_S))
+        encabezado.columnconfigure(0, weight=1)
+        ttk.Label(encabezado, text="FOLIOS COBRADOS", style="Seccion.TLabel").grid(
+            row=0, column=0, sticky="w"
         )
+        ttk.Button(
+            encabezado,
+            text="Exportar a CSV…",
+            style="Enlace.TButton",
+            command=self.exportar,
+        ).grid(row=0, column=1, sticky="e")
+
+        self.marco_tabla, self.tabla = tema.tabla_con_barra(
+            cuerpo,
+            (
+                ("placa", "Placa", 130, "w"),
+                ("entrada", "Entrada", 140, "w"),
+                ("salida", "Salida", 140, "w"),
+                ("permanencia", "Permanencia", 130, "w"),
+                ("importe", "Importe", 110, "e"),
+                ("operador", "Cobró", 120, "w"),
+            ),
+            altura=8,
+        )
+        self.marco_tabla.grid(row=1, column=0, sticky="nsew")
+
+        self.vacio = ttk.Label(cuerpo, text="", style="Tenue.TLabel", anchor="center")
 
     # -------------------------------------------------------------- Acciones
     def _aplicar_atajo(self, dias_atras: int) -> None:
@@ -132,6 +182,13 @@ class VistaReportes(ttk.Frame):
                 "Las fechas deben tener el formato dd/mm/aaaa, por ejemplo 05/03/2026."
             ) from exc
 
+        if inicio > fin:
+            # Se corrige en el mensaje y no en silencio: invertir el rango por
+            # cuenta propia daría un reporte que el usuario no pidió.
+            raise ValueError(
+                "La fecha «Desde» es posterior a «Hasta». Invierta el orden."
+            )
+
         zona = timezone.get_current_timezone()
         return (
             timezone.make_aware(datetime.combine(inicio, time.min), zona),
@@ -143,16 +200,14 @@ class VistaReportes(ttk.Frame):
         desde, hasta = self._leer_rango()
         datos = services_caja.reporte_por_rango(desde, hasta)
 
-        self.etiqueta_totales.configure(
-            text=(
-                f"Total cobrado:        {formato.moneda(datos['total_cobrado'])}\n"
-                f"Folios cobrados:      {datos['folios_cobrados']}  "
-                f"(cortesías: {datos['folios_cortesia']})\n"
-                f"Importe promedio:     {formato.moneda(datos['importe_promedio'])}\n"
-                f"Permanencia promedio: {formato.duracion(int(datos['minutos_promedio']))}\n"
-                f"Turnos cortados:      {datos['turnos_cerrados']}"
-            )
+        self.m_total.actualizar(formato.moneda(datos["total_cobrado"]))
+        self.m_folios.actualizar(str(datos["folios_cobrados"]))
+        self.m_cortesias.actualizar(str(datos["folios_cortesia"]))
+        self.m_promedio.actualizar(formato.moneda(datos["importe_promedio"]))
+        self.m_permanencia.actualizar(
+            formato.duracion(int(datos["minutos_promedio"]))
         )
+        self.m_turnos.actualizar(str(datos["turnos_cerrados"]))
 
         self._folios = list(
             Folio.objects.select_related("operador_salida")
@@ -164,7 +219,7 @@ class VistaReportes(ttk.Frame):
 
         for fila in self.tabla.get_children():
             self.tabla.delete(fila)
-        for folio in self._folios:
+        for indice, folio in enumerate(self._folios):
             self.tabla.insert(
                 "",
                 "end",
@@ -176,7 +231,19 @@ class VistaReportes(ttk.Frame):
                     formato.moneda(folio.importe),
                     folio.operador_salida or "—",
                 ),
+                tags=tema.etiquetas_de_fila(indice),
             )
+
+        # Una tabla en blanco no distingue «no hubo movimientos» de «no cargó».
+        if self._folios:
+            self.vacio.grid_remove()
+            self.marco_tabla.grid()
+        else:
+            self.marco_tabla.grid_remove()
+            self.vacio.configure(
+                text="No hay folios cobrados en el periodo seleccionado."
+            )
+            self.vacio.grid(row=1, column=0, sticky="nsew", pady=tema.ESPACIO_XL)
 
     @operacion("Exportación")
     def exportar(self) -> None:

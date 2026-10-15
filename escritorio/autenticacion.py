@@ -19,6 +19,8 @@ from django.contrib.auth import authenticate, get_user_model
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 
+from . import tema
+
 LONGITUD_MINIMA_CLAVE = 8
 
 
@@ -74,6 +76,7 @@ class DialogoAcceso(tk.Toplevel):
 
         self.title("IRcars — Acceso" if not primer_uso else "IRcars — Primer operador")
         self.resizable(False, False)
+        self.configure(background=tema.SUPERFICIE)
 
         # `transient()` SOLO si la ventana padre es visible.
         #
@@ -122,9 +125,30 @@ class DialogoAcceso(tk.Toplevel):
 
     # -- Construcción ------------------------------------------------------
     def _construir(self) -> None:
-        marco = ttk.Frame(self, padding=20)
-        marco.grid(sticky="nsew")
+        """
+        Pantalla de acceso con la identidad del sistema.
 
+        Es lo primero que ve el operador al empezar su jornada y lo único que
+        hay en pantalla. De ahí la marca arriba y una sola acción evidente: en
+        el diseño anterior, «Cancelar» y «Entrar» eran dos botones grises
+        idénticos, y el que cierra la aplicación iba primero.
+        """
+        marco = ttk.Frame(self, padding=(32, 28), style="Tarjeta.TFrame")
+        marco.grid(sticky="nsew")
+        marco.columnconfigure(0, weight=1)
+
+        ttk.Label(marco, text="IRcars", style="Titulo.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(
+            marco, text="Control de estacionamiento", style="Tenue.TLabel"
+        ).grid(row=1, column=0, sticky="w")
+
+        ttk.Separator(marco, orient="horizontal").grid(
+            row=2, column=0, sticky="ew", pady=(16, 18)
+        )
+
+        fila = 3
         if self._primer_uso:
             ttk.Label(
                 marco,
@@ -132,30 +156,47 @@ class DialogoAcceso(tk.Toplevel):
                     "No hay operadores registrados.\n"
                     "Cree el primer usuario administrador."
                 ),
+                style="Secundario.TLabel",
                 justify="left",
-            ).grid(row=0, column=0, columnspan=2, pady=(0, 12), sticky="w")
+            ).grid(row=fila, column=0, pady=(0, 16), sticky="w")
+            fila += 1
 
-        ttk.Label(marco, text="Usuario:").grid(row=1, column=0, sticky="w", pady=4)
-        self.entrada_usuario = ttk.Entry(marco, width=26)
-        self.entrada_usuario.grid(row=1, column=1, pady=4)
+        ttk.Label(marco, text="Usuario", style="Secundario.TLabel").grid(
+            row=fila, column=0, sticky="w"
+        )
+        self.entrada_usuario = ttk.Entry(marco, width=28)
+        self.entrada_usuario.grid(row=fila + 1, column=0, sticky="ew", pady=(4, 12))
 
-        ttk.Label(marco, text="Contraseña:").grid(row=2, column=0, sticky="w", pady=4)
-        self.entrada_clave = ttk.Entry(marco, width=26, show="•")
-        self.entrada_clave.grid(row=2, column=1, pady=4)
+        ttk.Label(marco, text="Contraseña", style="Secundario.TLabel").grid(
+            row=fila + 2, column=0, sticky="w"
+        )
+        self.entrada_clave = ttk.Entry(marco, width=28, show="•")
+        self.entrada_clave.grid(row=fila + 3, column=0, sticky="ew", pady=(4, 0))
+        fila += 4
 
         if self._primer_uso:
-            ttk.Label(marco, text="Repetir:").grid(row=3, column=0, sticky="w", pady=4)
-            self.entrada_clave2 = ttk.Entry(marco, width=26, show="•")
-            self.entrada_clave2.grid(row=3, column=1, pady=4)
+            ttk.Label(
+                marco, text="Repetir contraseña", style="Secundario.TLabel"
+            ).grid(row=fila, column=0, sticky="w", pady=(12, 0))
+            self.entrada_clave2 = ttk.Entry(marco, width=28, show="•")
+            self.entrada_clave2.grid(row=fila + 1, column=0, sticky="ew", pady=(4, 0))
+            ttk.Label(
+                marco,
+                text=f"Mínimo {LONGITUD_MINIMA_CLAVE} caracteres.",
+                style="Tenue.TLabel",
+            ).grid(row=fila + 2, column=0, sticky="w", pady=(4, 0))
+            fila += 3
 
-        botones = ttk.Frame(marco)
-        botones.grid(row=4, column=0, columnspan=2, pady=(16, 0), sticky="e")
-        ttk.Button(botones, text="Cancelar", command=self._cancelar).grid(
-            row=0, column=0, padx=(0, 8)
-        )
         texto = "Crear y entrar" if self._primer_uso else "Entrar"
-        principal = ttk.Button(botones, text=texto, command=self._aceptar)
-        principal.grid(row=0, column=1)
+        ttk.Button(
+            marco, text=texto, style="Principal.TButton", command=self._aceptar
+        ).grid(row=fila, column=0, sticky="ew", pady=(22, 0))
+
+        # Cancelar cierra la aplicación, así que no compite visualmente con la
+        # acción que el operador quiere: se ofrece, no se propone.
+        ttk.Button(
+            marco, text="Cancelar", style="Enlace.TButton", command=self._cancelar
+        ).grid(row=fila + 1, column=0, pady=(6, 0))
 
         # Enter confirma desde cualquier campo: es el gesto natural y evita
         # que el operador busque el botón con el ratón en cada turno.

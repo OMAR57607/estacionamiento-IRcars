@@ -6,17 +6,22 @@ Dos reglas de control gobiernan esta pantalla:
 1. **Solo perfil administrativo.** El precio es el parámetro más sensible del
    sistema. Un operador de caja no debe poder alterarlo: sería la vía más
    simple de cobrar de menos y quedarse con la diferencia. Para el resto, la
-   pantalla es de solo lectura.
+   pantalla es de solo lectura, y lo dice con todas sus letras en lugar de
+   limitarse a deshabilitar los campos sin explicar por qué.
 
 2. **Las tarifas no se editan, se sustituyen.** Guardar un cambio **crea una
    tarifa nueva** y desactiva la anterior. Así queda registro de qué precio
    estaba vigente en cada fecha, que es exactamente lo que hay que demostrar
    ante una aclaración del cliente o una verificación de la autoridad. Editar
    en sitio reescribiría la historia de los cobros ya realizados.
+
+Cada parámetro lleva su explicación junto al campo. Son cinco cifras que se
+tocan una vez al año y cuyo efecto no es evidente —«fracción de cobro» no
+significa nada por sí solo—, así que la ayuda tiene que estar donde se captura
+y no en un manual que nadie abrirá.
 """
 from __future__ import annotations
 
-from decimal import Decimal
 from tkinter import messagebox, ttk
 
 from django.utils import timezone
@@ -24,18 +29,52 @@ from django.utils import timezone
 from apps.estacionamiento import services
 from apps.estacionamiento.models import Tarifa
 
-from .. import formato
+from .. import formato, tema
 from ..errores import operacion
+
+# Definición del formulario: clave, etiqueta, valor inicial y la explicación
+# que acompaña al campo.
+CAMPOS = (
+    ("nombre", "Nombre", "General", "Cómo se identifica este cuadro tarifario."),
+    ("cuota_hora", "Cuota por hora", "30.00", "Precio de una hora completa."),
+    (
+        "minutos_cortesia",
+        "Minutos de cortesía",
+        "15",
+        "Tolerancia sin costo, para maniobras.",
+    ),
+    (
+        "fraccion_minutos",
+        "Fracción de cobro (min)",
+        "1",
+        "Bloque mínimo facturable. 1 = cobro por minuto real.",
+    ),
+    (
+        "cobro_minimo",
+        "Cobro mínimo",
+        "0.00",
+        "Piso del importe. No aplica dentro de la cortesía.",
+    ),
+    (
+        "tope_diario",
+        "Tope diario",
+        "250.00",
+        "Techo por cada día natural iniciado. Vacío = sin tope.",
+    ),
+)
 
 
 class VistaTarifa(ttk.Frame):
     def __init__(self, padre, contexto):
-        super().__init__(padre, padding=12)
+        super().__init__(padre, padding=tema.ESPACIO_L, style="Fondo.TFrame")
         self.contexto = contexto
         self.solo_lectura = not getattr(contexto.operador, "is_staff", False)
 
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        # Columnas iguales: con la izquierda más estrecha, el histórico perdía
+        # las dos últimas columnas.
+        self.columnconfigure(0, weight=1, uniform="tar")
+        self.columnconfigure(1, weight=1, uniform="tar")
+        self.rowconfigure(1, weight=1)
 
         self._construir_vigente()
         self._construir_formulario()
@@ -44,84 +83,126 @@ class VistaTarifa(ttk.Frame):
 
     # ------------------------------------------------------------------ UI
     def _construir_vigente(self) -> None:
-        grupo = ttk.LabelFrame(self, text=" Tarifa vigente ", padding=12)
-        grupo.grid(row=0, column=0, sticky="ew")
-        self.etiqueta_vigente = ttk.Label(
-            grupo, text="", justify="left", font=("TkDefaultFont", 11)
+        tarjeta = tema.Tarjeta(self, "Tarifa vigente")
+        tarjeta.grid(row=0, column=0, sticky="new", padx=(0, tema.ESPACIO_M))
+        cuerpo = tarjeta.cuerpo
+        cuerpo.columnconfigure(0, weight=1)
+
+        self.nombre_vigente = ttk.Label(cuerpo, text="—", style="Titulo.TLabel")
+        self.nombre_vigente.grid(row=0, column=0, sticky="w")
+
+        # La cuota por hora es el número que el cliente pregunta y el que se
+        # exhibe en el letrero; va en grande y el resto como desglose.
+        self.cuota_vigente = ttk.Label(cuerpo, text="—", style="Cifra.TLabel")
+        self.cuota_vigente.grid(row=1, column=0, sticky="w", pady=(tema.ESPACIO_S, 0))
+        ttk.Label(cuerpo, text="por hora", style="Tenue.TLabel").grid(
+            row=2, column=0, sticky="w"
         )
-        self.etiqueta_vigente.grid(row=0, column=0, sticky="w")
+
+        ttk.Separator(cuerpo, orient="horizontal").grid(
+            row=3, column=0, sticky="ew", pady=tema.ESPACIO_M
+        )
+
+        self.detalle_vigente = ttk.Frame(cuerpo, style="Tarjeta.TFrame")
+        self.detalle_vigente.grid(row=4, column=0, sticky="ew")
+        self.detalle_vigente.columnconfigure(1, weight=1)
 
     def _construir_formulario(self) -> None:
         titulo = (
-            " Nueva tarifa "
-            if not self.solo_lectura
-            else " Nueva tarifa (requiere perfil administrativo) "
+            "Nueva tarifa" if not self.solo_lectura else "Nueva tarifa (bloqueada)"
         )
-        grupo = ttk.LabelFrame(self, text=titulo, padding=12)
-        grupo.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        tarjeta = tema.Tarjeta(self, titulo)
+        tarjeta.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        cuerpo = tarjeta.cuerpo
+        cuerpo.columnconfigure(1, weight=1)
+
+        fila = 0
+        if self.solo_lectura:
+            # Un campo deshabilitado sin explicación se lee como un fallo del
+            # programa. Decir por qué está bloqueado evita la llamada a soporte.
+            aviso = ttk.Label(
+                cuerpo,
+                text=(
+                    "Solo el personal administrativo puede modificar el cuadro "
+                    "tarifario.\nEl precio no se cambia desde una caja."
+                ),
+                style="Secundario.TLabel",
+                justify="left",
+            )
+            aviso.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, tema.ESPACIO_M))
+            fila = 1
 
         self.campos: dict[str, ttk.Entry] = {}
-        definicion = (
-            ("nombre", "Nombre:", "General"),
-            ("cuota_hora", "Cuota por hora:", "30.00"),
-            ("minutos_cortesia", "Minutos de cortesía:", "15"),
-            ("fraccion_minutos", "Fracción de cobro (min):", "1"),
-            ("cobro_minimo", "Cobro mínimo:", "0.00"),
-            ("tope_diario", "Tope diario (vacío = sin tope):", "250.00"),
-        )
-        for fila, (clave, etiqueta, valor) in enumerate(definicion):
-            ttk.Label(grupo, text=etiqueta).grid(row=fila, column=0, sticky="w", pady=3)
-            campo = ttk.Entry(grupo, width=18)
-            campo.grid(row=fila, column=1, sticky="w", padx=(8, 0), pady=3)
+        for clave, etiqueta, valor, ayuda in CAMPOS:
+            ttk.Label(cuerpo, text=etiqueta, style="Secundario.TLabel").grid(
+                row=fila, column=0, sticky="w", pady=(tema.ESPACIO_S, 0)
+            )
+            campo = ttk.Entry(cuerpo, width=16)
+            campo.grid(
+                row=fila, column=1, sticky="w", padx=(tema.ESPACIO_M, 0),
+                pady=(tema.ESPACIO_S, 0),
+            )
             campo.insert(0, valor)
             if self.solo_lectura:
                 campo.configure(state="disabled")
             self.campos[clave] = campo
 
+            ttk.Label(cuerpo, text=ayuda, style="Tenue.TLabel").grid(
+                row=fila + 1, column=0, columnspan=2, sticky="w"
+            )
+            fila += 2
+
         ttk.Label(
-            grupo,
+            cuerpo,
             text=(
-                "Fracción 1 = cobro por minuto real (proporcionalidad estricta,\n"
-                "conforme al criterio de cobro proporcional de PROFECO)."
+                "Guardar crea una tarifa nueva y desactiva la anterior; los folios "
+                "ya cobrados conservan el precio con que se calcularon."
             ),
+            style="Tenue.TLabel",
+            wraplength=360,
             justify="left",
-            foreground="#555555",
-        ).grid(row=len(definicion), column=0, columnspan=2, sticky="w", pady=(10, 0))
+        ).grid(row=fila, column=0, columnspan=2, sticky="w", pady=(tema.ESPACIO_M, 0))
 
         self.boton_guardar = ttk.Button(
-            grupo, text="Crear tarifa y poner en vigencia", command=self.guardar
+            cuerpo,
+            text="Crear tarifa y poner en vigencia",
+            style="Principal.TButton",
+            command=self.guardar,
         )
         self.boton_guardar.grid(
-            row=len(definicion) + 1, column=0, columnspan=2, sticky="w", pady=(12, 0)
+            row=fila + 1, column=0, columnspan=2, sticky="ew", pady=(tema.ESPACIO_M, 0)
         )
         if self.solo_lectura:
             self.boton_guardar.configure(state="disabled")
+        cuerpo.rowconfigure(fila + 2, weight=1)
 
     def _construir_historial(self) -> None:
-        grupo = ttk.LabelFrame(self, text=" Histórico de tarifas ", padding=8)
-        grupo.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
-        grupo.columnconfigure(0, weight=1)
-        grupo.rowconfigure(0, weight=1)
+        tarjeta = tema.Tarjeta(self, relleno=tema.ESPACIO_M)
+        tarjeta.grid(
+            row=1, column=0, sticky="nsew", padx=(0, tema.ESPACIO_M),
+            pady=(tema.ESPACIO_M, 0),
+        )
+        cuerpo = tarjeta.cuerpo
+        cuerpo.columnconfigure(0, weight=1)
+        cuerpo.rowconfigure(1, weight=1)
 
-        columnas = ("nombre", "cuota", "cortesia", "fraccion", "minimo", "tope", "vigencia", "activa")
-        self.tabla = ttk.Treeview(grupo, columns=columnas, show="headings")
-        for columna, titulo, ancho, anclaje in (
-            ("nombre", "Nombre", 120, "w"),
-            ("cuota", "Cuota/hora", 100, "e"),
-            ("cortesia", "Cortesía", 80, "e"),
-            ("fraccion", "Fracción", 80, "e"),
-            ("minimo", "Mínimo", 90, "e"),
-            ("tope", "Tope diario", 100, "e"),
-            ("vigencia", "Vigente desde", 130, "w"),
-            ("activa", "Activa", 70, "center"),
-        ):
-            self.tabla.heading(columna, text=titulo)
-            self.tabla.column(columna, width=ancho, anchor=anclaje)
-        self.tabla.grid(row=0, column=0, sticky="nsew")
+        ttk.Label(cuerpo, text="HISTÓRICO DE TARIFAS", style="Seccion.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, tema.ESPACIO_S)
+        )
 
-        barra = ttk.Scrollbar(grupo, orient="vertical", command=self.tabla.yview)
-        self.tabla.configure(yscrollcommand=barra.set)
-        barra.grid(row=0, column=1, sticky="ns")
+        marco, self.tabla = tema.tabla_con_barra(
+            cuerpo,
+            (
+                ("cuota", "Cuota/hora", 95, "e"),
+                ("cortesia", "Cortesía", 80, "e"),
+                ("fraccion", "Fracción", 80, "e"),
+                ("tope", "Tope", 90, "e"),
+                ("vigencia", "Vigente desde", 130, "w"),
+                ("activa", "Activa", 70, "center"),
+            ),
+            altura=6,
+        )
+        marco.grid(row=1, column=0, sticky="nsew")
 
     # -------------------------------------------------------------- Acciones
     @operacion("Tarifa")
@@ -193,46 +274,63 @@ class VistaTarifa(ttk.Frame):
 
     # ------------------------------------------------------------- Refresco
     def refrescar(self) -> None:
+        for hijo in self.detalle_vigente.winfo_children():
+            hijo.destroy()
+
         try:
             vigente = services.obtener_tarifa_vigente()
-            self.etiqueta_vigente.configure(
-                text=(
-                    f"{vigente.nombre}\n"
-                    f"Cuota por hora:      {formato.moneda(vigente.cuota_hora)}\n"
-                    f"Cortesía:            {vigente.minutos_cortesia} min\n"
-                    f"Fracción de cobro:   {vigente.fraccion_minutos} min\n"
-                    f"Cobro mínimo:        {formato.moneda(vigente.cobro_minimo)}\n"
-                    f"Tope diario:         {formato.moneda(vigente.tope_diario)}\n"
-                    f"Vigente desde:       {formato.fecha_hora(vigente.vigente_desde)}"
-                )
-            )
         except Exception:
             # Sin tarifa vigente no se puede cobrar: el aviso debe ser
             # inequívoco y señalar la acción a tomar.
-            self.etiqueta_vigente.configure(
-                text=(
-                    "⚠ NO HAY TARIFA VIGENTE.\n"
-                    "No es posible registrar entradas ni cobrar salidas hasta "
-                    "que se registre una tarifa."
-                )
+            self.nombre_vigente.configure(
+                text="No hay tarifa vigente", foreground=tema.PELIGRO
             )
+            self.cuota_vigente.configure(text="—", foreground=tema.DESHABILITADO)
+            ttk.Label(
+                self.detalle_vigente,
+                text=(
+                    "No es posible registrar entradas ni cobrar salidas hasta "
+                    "registrar una tarifa."
+                ),
+                style="Peligro.TLabel",
+                wraplength=280,
+                justify="left",
+            ).grid(row=0, column=0, columnspan=2, sticky="w")
+        else:
+            self.nombre_vigente.configure(text=vigente.nombre, foreground=tema.TEXTO)
+            self.cuota_vigente.configure(
+                text=formato.moneda(vigente.cuota_hora), foreground=tema.TEXTO
+            )
+            renglones = (
+                ("Cortesía", f"{vigente.minutos_cortesia} min"),
+                ("Fracción de cobro", f"{vigente.fraccion_minutos} min"),
+                ("Cobro mínimo", formato.moneda(vigente.cobro_minimo)),
+                ("Tope diario", formato.moneda(vigente.tope_diario)),
+                ("Vigente desde", formato.fecha_hora(vigente.vigente_desde)),
+            )
+            for fila, (etiqueta, valor) in enumerate(renglones):
+                ttk.Label(
+                    self.detalle_vigente, text=etiqueta, style="Secundario.TLabel"
+                ).grid(row=fila, column=0, sticky="w", pady=2)
+                ttk.Label(
+                    self.detalle_vigente, text=valor, font=tema.fuente("cuerpo_fuerte")
+                ).grid(row=fila, column=1, sticky="e", pady=2)
 
         for fila in self.tabla.get_children():
             self.tabla.delete(fila)
-        for tarifa in Tarifa.objects.order_by("-vigente_desde")[:100]:
+        for indice, tarifa in enumerate(Tarifa.objects.order_by("-vigente_desde")[:100]):
             self.tabla.insert(
                 "",
                 "end",
                 values=(
-                    tarifa.nombre,
                     formato.moneda(tarifa.cuota_hora),
                     f"{tarifa.minutos_cortesia} min",
                     f"{tarifa.fraccion_minutos} min",
-                    formato.moneda(tarifa.cobro_minimo),
                     formato.moneda(tarifa.tope_diario),
                     formato.fecha_hora(tarifa.vigente_desde),
-                    "Sí" if tarifa.activa else "No",
+                    "Sí" if tarifa.activa else "—",
                 ),
+                tags=tema.etiquetas_de_fila(indice),
             )
 
     def al_entrar(self) -> None:
