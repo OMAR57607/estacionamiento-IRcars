@@ -49,6 +49,7 @@ hiddenimports += collect_submodules("django.contrib.contenttypes.migrations")
 # papel en el ejecutable de escritorio.
 hiddenimports += [
     "config.settings_local",
+    "config.urls_vacio",
     "apps.estacionamiento",
     "apps.estacionamiento.apps",
     "apps.estacionamiento.models",

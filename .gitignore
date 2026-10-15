@@ -20,3 +20,10 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# PyInstaller
+/build/
+/dist/
+*.spec.bak
+verificacion.txt
+datos-verificacion/

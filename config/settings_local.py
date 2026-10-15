@@ -122,6 +122,14 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# La aplicación de escritorio no expone URLs, pero Django exige que
+# `ROOT_URLCONF` apunte a algún módulo y no le da valor por omisión —a
+# diferencia de `MIDDLEWARE` o `TEMPLATES`—. El gancho de PyInstaller para
+# Django también lo lee sin comprobar que exista, dando por hecho que todo
+# proyecto Django es web: sin esta línea, la compilación del ejecutable falla
+# con `AttributeError: 'Settings' object has no attribute 'ROOT_URLCONF'`.
+ROOT_URLCONF = "config.urls_vacio"
+
 LANGUAGE_CODE = "es-mx"
 TIME_ZONE = os.environ.get("IRCARS_ZONA_HORARIA", "America/Mexico_City")
 USE_I18N = True
