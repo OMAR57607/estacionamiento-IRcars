@@ -13,7 +13,7 @@ sustenta y lo que falta por hacer.
 | Servicio | `estacionamiento-IRcars` | configurado |
 | Repositorio | `OMAR57607/estacionamiento-IRcars`, rama `claude/ecstatic-hamilton-ytihjo` | conectado |
 | Dominio | `estacionamiento-ircars-production.up.railway.app` | asignado |
-| Constructor | Railpack (detecta Django por `requirements.txt` y `Procfile`) | configurado |
+| Constructor | **Dockerfile** (Railway lo prefiere cuando existe) | configurado |
 | Sonda de salud | `/healthz`, 60 s de margen | configurada |
 | Política de reinicio | `ON_FAILURE`, hasta 5 intentos | configurada |
 | Base de datos | Supabase PostgreSQL 17, esquema `estacionamiento` | esquema creado |
@@ -90,6 +90,44 @@ configurados, que por omisión son `public` y `graphql_public`. Al no estar
 expuesto, el esquema `estacionamiento` **no es alcanzable** por la API pública
 ni por las claves anónimas. El único acceso es la conexión directa de
 PostgreSQL que usa el servicio.
+
+---
+
+## El Dockerfile manda, el Procfile no
+
+Esto costó un despliegue fallido y conviene que quede escrito.
+
+**Railway construye con el `Dockerfile` cuando existe e ignora el `Procfile`**,
+aunque el constructor aparezca configurado como Railpack. El `Dockerfile`
+original se había escrito para Docker Compose en local, con
+`CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]`. El resultado fue un
+despliegue que intentaba servir producción con el **servidor de desarrollo de
+Django**, en un puerto fijo que no es el que la plataforma asigna, y sin aplicar
+migraciones ni recolectar estáticos.
+
+El fallo visible fue otro —faltaba `DATABASE_URL`, y la configuración abortó
+antes— lo que ocultó el problema de fondo. Sin esa segunda falla, el servicio
+habría arrancado con el servidor de desarrollo y el diagnóstico habría sido
+mucho más confuso.
+
+La corrección: **una sola fuente de verdad**, el script
+`scripts/arrancar.sh`, que ejecuta migraciones y luego Gunicorn sobre `$PORT`.
+Lo invocan tanto el `Dockerfile` (`CMD`) como el `Procfile`, de modo que el
+comando de producción es idéntico sea quien sea el que construya.
+
+Para el desarrollo local, `docker-compose.yml` **sobrescribe** ese comando con
+`runserver`, que es donde sí corresponde por la recarga automática. No retire
+esa línea del compose creyéndola redundante: sin ella, el entorno local
+arrancaría con Gunicorn y perdería la recarga al guardar.
+
+Detalle sobre los archivos estáticos: se recolectan durante la **construcción**
+de la imagen, no en el arranque. Como la configuración exige `DATABASE_URL` al
+importarse y `collectstatic` no toca la base, esa capa usa un valor desechable
+que vive solo en la construcción y **no** queda en el entorno de la imagen. En
+ejecución, `DATABASE_URL` sigue siendo obligatoria, y eso se conserva a
+propósito: un valor por omisión haría que un despliegue sin configurar
+"funcionara" escribiendo en una base efímera. Perder cobros en silencio es
+mucho peor que un arranque fallido.
 
 ---
 

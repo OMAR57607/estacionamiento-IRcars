@@ -25,7 +25,11 @@ services:
 
   web:
     build: .
-    # `migrate` en el arranque mantiene el esquema al día en desarrollo.
+    # Sobrescribe el CMD del Dockerfile, que es el de PRODUCCIÓN (Gunicorn).
+    # Aquí se usa `runserver` a propósito: recarga el código al guardar, que es
+    # lo que se quiere en desarrollo y lo que nunca debe llegar a producción.
+    # No retire esta línea pensando que es redundante: sin ella, el entorno
+    # local arrancaría con Gunicorn y perdería la recarga automática.
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py runserver 0.0.0.0:8000"
