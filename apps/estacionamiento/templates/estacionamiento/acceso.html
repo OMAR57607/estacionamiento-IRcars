@@ -9,8 +9,8 @@
       <h2>Acceso a la caja</h2>
 
       {% if form.errors %}
-        {# Mensaje genérico a propósito: no revela si el usuario existe, para
-           no facilitar la enumeración de cuentas. #}
+        {% comment %} Mensaje genérico a propósito: no revela si el usuario existe, para
+           no facilitar la enumeración de cuentas. {% endcomment %}
         <div class="aviso error">Usuario o contraseña incorrectos.</div>
       {% endif %}
 

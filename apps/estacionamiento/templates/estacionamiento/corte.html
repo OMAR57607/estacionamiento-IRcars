@@ -5,8 +5,8 @@
 
 {% block contenido %}
 
-{# El veredicto encabeza la pantalla: es lo que debe verse primero, sin
-   depender del color para comunicarlo. #}
+{% comment %} El veredicto encabeza la pantalla: es lo que debe verse primero, sin
+   depender del color para comunicarlo. {% endcomment %}
 {% if resumen.cuadra %}
   <div class="aviso success"><strong>La caja cuadra exactamente.</strong></div>
 {% elif resumen.hay_faltante %}

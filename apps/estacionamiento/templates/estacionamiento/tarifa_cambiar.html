@@ -1,0 +1,111 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Cambiar el precio{% endblock %}
+
+{% comment %}
+  El cambio de precio, en dos pasos.
+
+  Primero la contraseña, y solo después el formulario. Mientras no se confirme
+  la contraseña, esta página no contiene ningún campo del precio: no está
+  escondido con CSS ni deshabilitado, no se envía al navegador.
+
+  El formulario llega con los valores que están en uso. El anterior arrancaba
+  con valores de ejemplo, de modo que cambiar la cuota por hora restablecía en
+  silencio los otros cuatro parámetros a lo que decía el código.
+{% endcomment %}
+
+{% block contenido %}
+
+<p class="no-imprimir"><a href="{% url 'web:tarifa' %}">‹ Volver al precio</a></p>
+
+{% if form_clave %}
+
+  <div class="tarjeta" style="max-width:480px">
+    <h2>Desbloquear el precio</h2>
+    <p>
+      Confirme la contraseña de <strong>{{ user.get_username }}</strong> para
+      poder cambiar el precio. El cambio queda registrado a su nombre.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="desbloquear">
+      <label for="{{ form_clave.clave.id_for_label }}">{{ form_clave.clave.label }}</label>
+      {{ form_clave.clave }}
+      <button type="submit" class="boton" style="margin-top:1rem">Desbloquear</button>
+    </form>
+  </div>
+
+{% else %}
+
+  <div class="rejilla-doble">
+
+    <div class="tarjeta">
+      <h2>{% if vigente %}Cambiar el precio{% else %}Configurar el precio{% endif %}</h2>
+      <p class="ayuda" style="margin-top:0">
+        {% if vigente %}
+          Los campos traen el precio que está en uso. Lo que no toque, no cambia.
+        {% else %}
+          Este es el precio con el que operará la caseta. Podrá cambiarlo
+          después, desbloqueando la pantalla.
+        {% endif %}
+      </p>
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="guardar">
+        {% for campo in form %}
+          <div style="margin-bottom:.8rem">
+            <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+            {{ campo }}
+            {% if campo.help_text %}<p class="ayuda">{{ campo.help_text }}</p>{% endif %}
+            {% for e in campo.errors %}<p class="ayuda" style="color:var(--error)">{{ e }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+
+        <div class="aviso warning">
+          Al guardar, este precio entra en vigencia de inmediato y el anterior
+          queda en el histórico. Los cobros ya hechos no se tocan.
+        </div>
+
+        <button type="submit" class="boton">Guardar y poner en vigencia</button>
+      </form>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Precio que está en uso</h2>
+      {% if vigente %}
+        <p class="importe-destacado">{{ vigente.cuota_hora|pesos }}</p>
+        <p class="detalle-cobro" style="margin-top:-.4rem">
+          por hora
+          <span class="ayuda">· desde el {{ vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
+        </p>
+        <table>
+          <tbody>
+          {% for ejemplo in ejemplos %}
+            <tr>
+              <th style="text-transform:none;font-size:.92rem">{{ ejemplo.etiqueta }}</th>
+              <td class="numero">
+                {% if ejemplo.es_cortesia %}gratis{% else %}{{ ejemplo.importe|pesos }}{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p class="ayuda">
+          Lo que se cobra hoy. Compárelo con lo que teclea arriba: la cifra de
+          una hora delata de un vistazo un $3.00 escrito donde iba $30.00.
+        </p>
+      {% else %}
+        <p class="vacio">
+          Todavía no hay ningún precio. La caseta podrá operar en cuanto guarde
+          este.
+        </p>
+      {% endif %}
+    </div>
+
+  </div>
+
+{% endif %}
+
+{% endblock %}
