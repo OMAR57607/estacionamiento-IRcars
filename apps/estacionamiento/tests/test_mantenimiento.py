@@ -191,3 +191,101 @@ class TestControl:
         finally:
             copia.close()
         assert guardados == 2
+
+
+class TestPantallaWeb:
+    """
+    La pantalla que expone el borrado en la caja web.
+
+    El servicio ya estaba probado; lo que se verifica aquí son las barreras,
+    que es lo propio de una pantalla: quién llega, qué ve antes de pulsar y
+    qué hace falta para que borre. Un borrado que ocurra sin contraseña, o al
+    que llegue un cajero, convierte la operación más destructiva del sistema
+    en un clic.
+    """
+
+    @pytest.fixture
+    def cajero(self):
+        return get_user_model().objects.create_user(
+            username="cajero", password="clave-de-prueba-1234"
+        )
+
+    def test_un_cajero_no_llega_a_la_pantalla(self, client, cajero):
+        from django.urls import reverse
+
+        client.force_login(cajero)
+        respuesta = client.get(reverse("web:mantenimiento"))
+
+        assert respuesta.status_code == 302
+        assert respuesta["Location"].startswith(reverse("login")), (
+            "Un cajero no debe ver la pantalla de borrado"
+        )
+
+    def test_un_cajero_no_puede_borrar_aunque_envie_el_formulario(
+        self, client, cajero, con_movimientos
+    ):
+        """
+        La barrera no puede vivir solo en el enlace que no se le muestra.
+        """
+        from django.urls import reverse
+
+        client.force_login(cajero)
+        client.post(
+            reverse("web:mantenimiento"), {"clave": "clave-de-prueba-1234"}
+        )
+
+        assert Folio.objects.exists()
+
+    def test_muestra_lo_que_se_va_a_borrar(self, client, operador, con_movimientos):
+        from django.urls import reverse
+
+        client.force_login(operador)
+        contenido = client.get(reverse("web:mantenimiento")).content.decode()
+
+        assert "Se va a borrar" in contenido
+        assert "vehículo(s) todavía dentro" in contenido, (
+            "Un folio abierto pierde su entrada: tiene que avisarse antes"
+        )
+
+    def test_sin_la_contrasena_correcta_no_borra_nada(
+        self, client, operador, con_movimientos
+    ):
+        from django.urls import reverse
+
+        client.force_login(operador)
+        respuesta = client.post(
+            reverse("web:mantenimiento"), {"clave": "no-es-la-contrasena"}
+        )
+
+        assert respuesta.status_code == 200
+        assert Folio.objects.exists()
+        assert Turno.objects.exists()
+
+    def test_con_la_contrasena_borra_y_conserva_lo_que_debe(
+        self, client, operador, tarifa, con_movimientos
+    ):
+        from django.urls import reverse
+
+        client.force_login(operador)
+        respuesta = client.post(
+            reverse("web:mantenimiento"), {"clave": "clave-de-prueba-1234"}
+        )
+
+        assert respuesta.status_code == 302
+        assert not Folio.objects.exists()
+        assert not Turno.objects.exists()
+        # Lo que no debe irse con el borrado.
+        assert get_user_model().objects.filter(pk=operador.pk).exists()
+        assert Tarifa.objects.filter(pk=tarifa.pk, activa=True).exists()
+
+    def test_una_visita_nunca_borra(self, client, operador, con_movimientos):
+        """
+        Abrir la pantalla es consultar. Si un GET borrara, bastaría con que
+        alguien compartiera el enlace.
+        """
+        from django.urls import reverse
+
+        client.force_login(operador)
+        client.get(reverse("web:mantenimiento"))
+
+        assert Folio.objects.exists()

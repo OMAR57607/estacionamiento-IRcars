@@ -104,4 +104,15 @@
 </div>
 {% endif %}
 
+{% if es_administrativo %}
+  {% comment %} Puesta en marcha, al pie y en texto: se usa una vez en la vida de la
+     instalación. La etiqueta dice para qué sirve, porque un enlace de borrado
+     sin contexto se pulsa por curiosidad. {% endcomment %}
+  <p class="ayuda" style="margin-top:1.5rem">
+    <strong>Puesta en marcha.</strong>
+    ¿Quedaron boletos y turnos de las pruebas?
+    <a href="{% url 'web:mantenimiento' %}">Borrar movimientos de prueba…</a>
+  </p>
+{% endif %}
+
 {% endblock %}

@@ -31,7 +31,7 @@ from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_safe
 
-from .. import marca, reglas, services, services_caja
+from .. import marca, reglas, services, services_caja, services_mantenimiento
 from ..domain.exceptions import ErrorDominio
 from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
@@ -42,7 +42,7 @@ from .forms import (
     CancelarFolioForm,
     CerrarTurnoForm,
     CobroForm,
-    DesbloqueoPrecioForm,
+    ConfirmarClaveForm,
     EntradaForm,
     OperadorEditarForm,
     OperadorNuevoForm,
@@ -543,6 +543,69 @@ def reportes(request):
     contexto["total_folios"] = folios.count()
     contexto["truncado"] = contexto["total_folios"] > MAXIMO_FILAS
     return render(request, "estacionamiento/reportes.html", contexto)
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def mantenimiento(request):
+    """
+    Deja la base como recién instalada: borra boletos y turnos de prueba.
+
+    Vive en su propia dirección y no en una pantalla de uso diario. Borrar
+    movimientos no es una operación de caseta, y un botón así junto a los que
+    se pulsan todo el día se acaba pulsando por curiosidad.
+
+    Tres barreras, de menor a mayor peso: solo perfil administrativo, las
+    cifras de lo que se va a borrar a la vista —un número inesperado detiene
+    a tiempo— y la contraseña del propio operador, que convierte un clic de
+    más en una decisión y deja el borrado atribuido a quien lo hizo.
+
+    Lo que el servicio conserva, y conviene no perder de vista: los
+    operadores, que son la identidad con la que se firma cada movimiento, y
+    el precio vigente, sin el cual la caseta no puede ni abrir.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "reportes"
+    contexto["resumen"] = services_mantenimiento.resumen_movimientos()
+    contexto["form_clave"] = ConfirmarClaveForm()
+
+    if request.method == "POST":
+        form_clave = ConfirmarClaveForm(request.POST)
+        contexto["form_clave"] = form_clave
+
+        if not form_clave.is_valid() or not authenticate(
+            username=request.user.get_username(),
+            password=form_clave.cleaned_data["clave"],
+        ):
+            messages.error(request, "Contraseña incorrecta. No se borró nada.")
+            return render(request, "estacionamiento/mantenimiento.html", contexto)
+
+        try:
+            resultado = services_mantenimiento.purgar_movimientos(
+                operador=request.user,
+                incluir_historico_precios=bool(request.POST.get("historico_precios")),
+                # Sin respaldo local: esto corre en un servidor, cuya base no
+                # se respalda desde una pantalla, y además la petición ya viene
+                # dentro de una transacción, donde la copia de SQLite se
+                # quedaría esperando a que se liberara la base. La pantalla lo
+                # dice con todas sus letras antes de pedir la contraseña.
+                respaldar=False,
+            )
+        except ErrorDominio as exc:
+            messages.error(request, str(exc))
+            return render(request, "estacionamiento/mantenimiento.html", contexto)
+
+        aviso = (
+            f"Se borraron {resultado['folios_borrados']} registro(s) de boletos "
+            f"y {resultado['turnos_borrados']} turno(s)."
+        )
+        if resultado["precios_borrados"]:
+            aviso += f" También {resultado['precios_borrados']} precio(s) del histórico."
+        messages.success(request, aviso + " La caja queda lista para operar.")
+        return redirect("web:mantenimiento")
+
+    return render(request, "estacionamiento/mantenimiento.html", contexto)
 
 
 def _rango_local(desde, hasta) -> tuple[datetime, datetime]:
@@ -1080,7 +1143,7 @@ def tarifa_cambiar(request):
         _autorizar_cambio(request)
 
     if request.method == "POST" and request.POST.get("accion") == "desbloquear":
-        form_clave = DesbloqueoPrecioForm(request.POST)
+        form_clave = ConfirmarClaveForm(request.POST)
         if form_clave.is_valid() and authenticate(
             username=request.user.get_username(),
             password=form_clave.cleaned_data["clave"],
@@ -1090,7 +1153,7 @@ def tarifa_cambiar(request):
             messages.error(request, "Contraseña incorrecta. El precio sigue bloqueado.")
 
     if not _cambio_autorizado(request):
-        contexto["form_clave"] = DesbloqueoPrecioForm()
+        contexto["form_clave"] = ConfirmarClaveForm()
         return render(request, "estacionamiento/tarifa_cambiar.html", contexto)
 
     if request.method == "POST" and request.POST.get("accion") == "guardar":
