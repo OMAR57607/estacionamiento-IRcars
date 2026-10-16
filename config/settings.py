@@ -81,6 +81,12 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Va en primer lugar para resolver el dominio de una sola vez. Si fuera
+    # después de SecurityMiddleware, una petición al dominio anterior por HTTP
+    # daría dos saltos —primero a HTTPS en el dominio viejo, después al
+    # canónico— y cada salto cuenta en el teléfono de un cliente que está
+    # escaneando su boleto.
+    "config.middleware.RedirigirAlDominioCanonico",
     "django.middleware.security.SecurityMiddleware",
     # WhiteNoise sirve los archivos estáticos del panel de administración
     # desde el propio proceso. En Railway no hay nginx delante, y sin esto el
@@ -282,6 +288,12 @@ IRCARS_TRAS_PROXY = env.bool("IRCARS_TRAS_PROXY", default=True)
 # Desactivada por omisión: activarla sin estar realmente detrás de Cloudflare
 # haría confiable una cabecera que cualquiera podría inventar.
 IRCARS_TRAS_CLOUDFLARE = env.bool("IRCARS_TRAS_CLOUDFLARE", default=False)
+
+# Dominio propio del servicio. Si se define, toda lectura que llegue por otra
+# dirección —la que asigna la plataforma, un dominio anterior— se redirige
+# aquí. Importa porque los códigos QR ya emitidos llevan grabado el dominio
+# con el que se generaron. Vacío desactiva la redirección por completo.
+IRCARS_DOMINIO_CANONICO = env("IRCARS_DOMINIO_CANONICO", default="")
 
 # Reduce el despliegue a la consulta e ingesta de boletos: sin panel de
 # administración, sin interfaz de caja y sin API del estacionamiento. Es la

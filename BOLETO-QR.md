@@ -414,6 +414,26 @@ cuestión de código sino de restringir el origen para que solo acepte tráfico
 de Cloudflare. Mientras tanto, el perjuicio de confiar en la cabecera es muy
 inferior al de no hacerlo.
 
+### Redirigir la dirección anterior
+
+`IRCARS_DOMINIO_CANONICO` lleva al dominio propio toda lectura que llegue por
+otra dirección. No es cosmético: **los códigos QR ya emitidos llevan grabado
+el dominio con el que se generaron**, y un boleto impreso o compartido por
+WhatsApp antes del cambio seguirá apuntando ahí durante días. Es el cliente,
+no el operador, quien se quedaría sin poder consultarlo.
+
+No puede resolverse en Cloudflare: Cloudflare solo ve el tráfico de la zona
+que administra, y la dirección de la plataforma no pertenece a ella. Lo decide
+la aplicación, que es quien recibe ambas.
+
+Tres decisiones del middleware (`config/middleware.py`):
+
+| Decisión | Por qué |
+|---|---|
+| **302**, no 301 | Un 301 queda cacheado en el navegador de cada operador y no hay forma de retirarlo en remoto: un dominio canónico mal configurado dejaría a todos apuntando a una dirección equivocada. El sistema no se indexa, así que el 301 no aporta nada que lo compense |
+| Solo **lecturas** | Un POST redirigido hace que el navegador descarte el cuerpo y repita como GET. Aquí sería un cobro que el operador da por hecho y que nunca llegó |
+| `/healthz` **exento** | La plataforma lo consulta contra la dirección interna; un 302 podría leerse como caída |
+
 ### Una advertencia sobre HSTS
 
 La configuración envía `Strict-Transport-Security` con un año,
