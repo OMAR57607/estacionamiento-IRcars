@@ -17,8 +17,15 @@
       <form method="post">
         {% csrf_token %}
         <label for="id_username">Usuario</label>
+        {% comment %} Sin estos atributos, el teclado de Android capitaliza la primera
+           letra y envía «Omar» donde la cuenta es «omar». Django distingue
+           mayúsculas en el nombre de usuario, así que el acceso falla con un
+           mensaje de credenciales incorrectas que no explica la causa: el
+           operador ve bien lo que escribió. El campo de la placa ya tomaba
+           esta precaución; este se había quedado sin ella. {% endcomment %}
         <input type="text" name="username" id="id_username" class="campo"
-               autofocus autocomplete="username" required>
+               autofocus autocomplete="username" required
+               autocapitalize="none" autocorrect="off" spellcheck="false">
 
         <label for="id_password" style="margin-top:.8rem">Contraseña</label>
         <input type="password" name="password" id="id_password" class="campo"
