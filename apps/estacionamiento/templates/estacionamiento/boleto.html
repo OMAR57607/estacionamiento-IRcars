@@ -1,11 +1,17 @@
 {% extends "estacionamiento/base.html" %}
-{% load moneda %}
+{% load moneda static %}
 
 {% block titulo %}Boleto {{ folio.placa }}{% endblock %}
 
 {% block contenido %}
 
 <div class="tarjeta boleto-emitido">
+
+  {% comment %} La marca también aquí: esta pantalla se pone delante del cliente, y
+     si el código no se lee y el operador tiene que enseñar el teléfono, lo
+     que se ve debe identificar al estacionamiento. {% endcomment %}
+  <img class="marca-logo" src="{% static 'estacionamiento/icono-192.png' %}"
+       alt="" width="64" height="64">
 
   <h2>Boleto de {{ folio.placa }}</h2>
   <p class="ayuda">

@@ -16,7 +16,12 @@
   <meta name="theme-color" content="#1b4f91" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1823" media="(prefers-color-scheme: dark)">
 
-  <link rel="icon" href="{% static 'estacionamiento/icono.svg' %}" type="image/svg+xml">
+  {% comment %} El icono es el logotipo de la marca, en mapa de bits. Se declaran dos
+     tamaños en lugar de un SVG porque el logotipo no es vectorial: a 32 px el
+     navegador necesita una versión dibujada a ese tamaño, no una reducción
+     automática que convierte los trazos finos en un borrón. {% endcomment %}
+  <link rel="icon" href="{% static 'estacionamiento/icono-32.png' %}" sizes="32x32" type="image/png">
+  <link rel="icon" href="{% static 'estacionamiento/icono-192.png' %}" sizes="192x192" type="image/png">
   {% comment %} iOS no admite SVG como icono de pantalla de inicio: necesita un PNG de
      180 px. Sin él, muestra una captura de la página, que se lee fatal a ese
      tamaño. {% endcomment %}

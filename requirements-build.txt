@@ -3,3 +3,9 @@
 # servidor ni en el entorno de desarrollo: solo lo necesita el flujo que
 # produce el .exe.
 pyinstaller==6.11.1
+
+# Preparación del icono y la marca a partir del logotipo original
+# (`scripts/generar_iconos.py`). Igual que PyInstaller, es una herramienta de
+# construcción: ni el servidor ni el ejecutable la necesitan en ejecución, y
+# los archivos que produce se versionan ya listos.
+pillow==12.3.0
