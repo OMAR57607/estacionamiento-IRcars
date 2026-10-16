@@ -84,11 +84,22 @@ class TestPanelDeAdministracion:
 
 
 class TestLimiteDeAcceso:
-    def test_los_intentos_de_contrasena_se_cortan(self, client, cajero):
+    def test_los_intentos_de_contrasena_se_cortan(self, client, cajero, monkeypatch):
         """
         Django no limita los intentos de acceso. Con la caja en internet, el
         formulario es el objetivo más obvio del sistema: detrás hay dinero.
+
+        El reloj se fija a propósito. El límite usa ventana fija —la hora
+        forma parte de la clave del contador— y, si la prueba corría justo
+        cuando cambiaba la ventana, los doce intentos se repartían en dos
+        contadores de seis y ninguno llegaba al tope: la prueba fallaba sin
+        que nada estuviera roto. Es una intermitencia observada, no una
+        hipótesis.
         """
+        from apps.boletos import limites
+
+        monkeypatch.setattr(limites, "request_timestamp", lambda: 1_700_000_000.0)
+
         ruta = reverse("login")
         codigos = [
             client.post(

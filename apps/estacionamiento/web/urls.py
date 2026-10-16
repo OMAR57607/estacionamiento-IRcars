@@ -18,6 +18,9 @@ urlpatterns = [
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     path("reportes/", views.reportes, name="reportes"),
+    # Puesta en marcha: borrar los movimientos de prueba. En su propia
+    # dirección, lejos de lo que se pulsa a diario.
+    path("mantenimiento/", views.mantenimiento, name="mantenimiento"),
     # Alta y gobierno de operadores. Sustituye al panel de administración de
     # Django, que no se monta.
     path("operadores/", views.operadores, name="operadores"),

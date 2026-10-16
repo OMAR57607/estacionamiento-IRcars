@@ -1,0 +1,89 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Borrar movimientos de prueba{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta" style="max-width:640px">
+  <h2>Dejar la base como recién instalada</h2>
+
+  <p class="ayuda" style="margin-top:0">
+    Tras las pruebas de instalación quedan boletos y turnos que no
+    corresponden a ninguna operación real. Dejarlos envenena el primer corte
+    de caja y cualquier reporte posterior, porque después nadie distingue un
+    cobro de prueba de uno de verdad.
+  </p>
+
+  {% comment %} Las cifras antes del botón, y no en un aviso posterior: un número
+     inesperado —diez boletos donde se esperaban dos— es lo único que detiene
+     a tiempo a quien ya decidió pulsar. {% endcomment %}
+  <h3 style="margin-bottom:.4rem">Se va a borrar</h3>
+  <table>
+    <tbody>
+      <tr><th>Boletos (folios)</th><td class="numero">{{ resumen.folios }}</td></tr>
+      <tr><th>Turnos</th><td class="numero">{{ resumen.turnos }}</td></tr>
+    </tbody>
+  </table>
+
+  {% if resumen.folios_abiertos %}
+    <div class="aviso warning">
+      Hay <strong>{{ resumen.folios_abiertos }} vehículo(s) todavía dentro</strong>.
+      Su registro de entrada se borrará con todo lo demás y no se les podrá
+      cobrar la salida. Si alguno es real, cóbrelo o cancélelo antes.
+    </div>
+  {% endif %}
+
+  {% if resumen.turnos_abiertos %}
+    <div class="aviso warning">
+      El turno abierto desaparecerá. Tendrá que abrir uno nuevo antes de
+      volver a cobrar.
+    </div>
+  {% endif %}
+
+  <h3 style="margin-bottom:.4rem">Se conserva</h3>
+  <table>
+    <tbody>
+      <tr><th>Su usuario y su contraseña</th><td>sí</td></tr>
+      <tr><th>Los demás operadores</th><td>sí</td></tr>
+      <tr><th>El precio en uso</th><td>sí</td></tr>
+    </tbody>
+  </table>
+
+  {% comment %} La base vive en el servidor y su respaldo no depende de esta
+     pantalla. Decirlo es obligado: cambia lo que el operador tiene que hacer
+     antes de pulsar. La caja de escritorio sí respalda, porque es dueña de su
+     propio archivo. {% endcomment %}
+  <div class="aviso error">
+    <strong>Esto no se puede deshacer desde aquí.</strong>
+    La base vive en el servidor y su respaldo no depende de esta pantalla.
+    Si quiere conservar evidencia de las pruebas,
+    <a href="{% url 'web:reportes' %}">exporte antes el reporte en CSV</a>.
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    {% if resumen.precios_historicos %}
+      <label style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.8rem">
+        <input type="checkbox" name="historico_precios" value="1">
+        <span>
+          Borrar también {{ resumen.precios_historicos }} precio(s) viejo(s) del
+          histórico. El que está en uso se conserva.
+        </span>
+      </label>
+    {% endif %}
+
+    <label for="{{ form_clave.clave.id_for_label }}">
+      Confirme su contraseña
+    </label>
+    {{ form_clave.clave }}
+    <p class="ayuda">
+      El borrado queda registrado en la bitácora a nombre de quien lo ejecuta.
+    </p>
+
+    <button type="submit" class="boton peligro">Borrar movimientos de prueba</button>
+    <a href="{% url 'web:reportes' %}" class="boton secundario">Cancelar</a>
+  </form>
+</div>
+
+{% endblock %}

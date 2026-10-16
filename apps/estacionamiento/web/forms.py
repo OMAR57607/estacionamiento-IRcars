@@ -196,9 +196,12 @@ class RangoFechasForm(forms.Form):
         return {"desde": hoy, "hasta": hoy}
 
 
-class DesbloqueoPrecioForm(forms.Form):
+class ConfirmarClaveForm(forms.Form):
     """
-    Confirmación de contraseña antes de abrir el cambio de precio.
+    Confirmación de contraseña antes de una acción delicada.
+
+    La usan el cambio de precio y el borrado de movimientos de prueba. Una
+    copia por pantalla acabaría con que una pide la contraseña y la otra no.
 
     Se pide la contraseña del propio operador y no una clave aparte: una clave
     de supervisor acaba escrita en un papel pegado al monitor, que es peor que
