@@ -106,6 +106,10 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "apps.estacionamiento",
+    # Bandeja de salida de boletos. Añade una tabla pequeña y una señal; no
+    # abre ningún puerto ni contacta a nadie mientras la publicación esté
+    # desactivada, que es como viene de fábrica.
+    "apps.boletos",
 ]
 
 DATABASES = {
@@ -175,3 +179,79 @@ LOGGING = {
         },
     },
 }
+
+
+# --- Publicación de boletos (consulta del cliente por QR) -------------------
+#
+# Desactivada mientras no se configure. Una caja que se actualice sin haber
+# contratado el servicio no debe empezar a emitir peticiones a internet por el
+# solo hecho de instalar la versión nueva.
+#
+# La configuración se lee de un archivo JSON en la carpeta de datos y no de
+# variables de entorno. El motivo es práctico: en la caseta, el programa se
+# abre con un doble clic desde un acceso directo, y nadie va a definir
+# variables de entorno en ese equipo. Un archivo que se edita con el Bloc de
+# notas sí es operable por quien administra el estacionamiento.
+#
+#   %LOCALAPPDATA%\IRcars\boletos.json
+#   {
+#     "activo": true,
+#     "url": "https://boletos.mi-estacionamiento.mx",
+#     "token": "<el mismo valor que IRCARS_TOKEN_PUBLICACION en el servicio>"
+#   }
+
+ARCHIVO_PUBLICACION = DIRECTORIO_DATOS / "boletos.json"
+
+
+def _configuracion_publicacion() -> dict:
+    """
+    Lee la configuración del servicio de boletos. Nunca falla.
+
+    Un archivo ausente, vacío o con JSON inválido deja la publicación
+    desactivada y lo registra, en lugar de impedir que la aplicación abra: la
+    caja debe poder cobrar aunque la configuración del boleto esté rota.
+    """
+    import json
+
+    if not ARCHIVO_PUBLICACION.exists():
+        return {}
+    try:
+        contenido = json.loads(ARCHIVO_PUBLICACION.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # No se usa `logging` aquí: este módulo se evalúa antes de que la
+        # configuración de bitácora exista.
+        return {}
+    return contenido if isinstance(contenido, dict) else {}
+
+
+_publicacion = _configuracion_publicacion()
+
+# El entorno tiene prioridad sobre el archivo: así el flujo de pruebas y el
+# desarrollo pueden apuntar a otro servicio sin tocar los datos del usuario.
+IRCARS_URL_BOLETOS = os.environ.get("IRCARS_URL_BOLETOS") or _publicacion.get("url", "")
+IRCARS_TOKEN_PUBLICACION = os.environ.get("IRCARS_TOKEN_PUBLICACION") or _publicacion.get(
+    "token", ""
+)
+IRCARS_PUBLICAR_BOLETOS = bool(_publicacion.get("activo", False))
+if os.environ.get("IRCARS_PUBLICAR_BOLETOS"):
+    IRCARS_PUBLICAR_BOLETOS = os.environ["IRCARS_PUBLICAR_BOLETOS"].lower() in (
+        "1",
+        "true",
+        "si",
+        "sí",
+    )
+
+# Solo para pruebas en la máquina local: permite publicar contra un servicio
+# en http://localhost. En cualquier otro caso el publicador exige HTTPS,
+# porque el token viaja en la petición.
+IRCARS_PERMITIR_HTTP_BOLETOS = os.environ.get(
+    "IRCARS_PERMITIR_HTTP_BOLETOS", ""
+).lower() in ("1", "true", "si", "sí")
+
+# El archivo contiene una credencial: se restringe su lectura al propietario.
+# En Windows el modelo de permisos es distinto y la llamada es inocua.
+if ARCHIVO_PUBLICACION.exists():
+    try:
+        os.chmod(ARCHIVO_PUBLICACION, 0o600)
+    except OSError:
+        pass

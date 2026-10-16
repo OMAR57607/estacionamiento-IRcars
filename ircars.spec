@@ -38,6 +38,7 @@ hiddenimports = []
 # aplicación en tiempo de ejecución. Sin declararlas, el ejecutable arranca
 # contra una base de datos sin tablas.
 hiddenimports += collect_submodules("apps.estacionamiento.migrations")
+hiddenimports += collect_submodules("apps.boletos.migrations")
 hiddenimports += collect_submodules("django.contrib.auth.migrations")
 hiddenimports += collect_submodules("django.contrib.contenttypes.migrations")
 
@@ -60,6 +61,28 @@ hiddenimports += [
     "apps.estacionamiento.domain.exceptions",
     "apps.estacionamiento.management.commands.sembrar_demo",
 ]
+
+# Publicación de boletos. Se enumera con el mismo criterio que arriba: entran
+# el modelo, la señal y el publicador —lo que el ejecutable usa de verdad— y
+# quedan fuera `views.py`, `serializers.py`, `limites.py` y `urls*.py`, que
+# importan Django REST Framework y solo tienen sentido en el servicio de la
+# nube. Incluirlos arrastraría DRF al ejecutable sin ninguna utilidad.
+hiddenimports += [
+    "apps.boletos",
+    "apps.boletos.apps",
+    "apps.boletos.models",
+    "apps.boletos.dominio",
+    "apps.boletos.instantanea",
+    "apps.boletos.senales",
+    "apps.boletos.publicador",
+    "apps.boletos.qr",
+    "apps.boletos.management.commands.publicar_boletos",
+    "apps.boletos.management.commands.republicar_boletos",
+]
+
+# Generador de códigos QR. `segno` resuelve sus escritores de salida por
+# nombre —PNG, SVG— y PyInstaller no detecta esas importaciones indirectas.
+hiddenimports += collect_submodules("segno")
 
 # Backends y utilidades que Django importa por cadena de texto desde la
 # configuración, nunca con un `import` literal.
