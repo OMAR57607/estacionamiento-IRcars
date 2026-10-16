@@ -109,32 +109,6 @@ class CambiarClave(PasswordChangeView):
         return contexto
 
 
-@require_safe
-def inicio(request):
-    """
-    Raíz del sitio: caja para el operador, presentación para el cliente.
-
-    La caja vivía directamente en `/` porque es la pantalla que el operador
-    abre todo el día y no debe exigirle recordar una ruta. Ese criterio sigue
-    valiendo y se conserva: quien tiene sesión abierta llega a la caja sin
-    escribir nada más.
-
-    Lo que cambia es el otro visitante. Con el servicio publicado en internet,
-    un cliente que teclee el dominio —o que lleve un código QR dañado— recibía
-    el formulario de acceso del personal, que no le dice nada y además expone
-    el campo de contraseña en la dirección más previsible del sitio. Ahora ve
-    una página que le explica qué hacer.
-    """
-    if request.user.is_authenticated:
-        return redirect("web:caja")
-
-    return render(
-        request,
-        "estacionamiento/inicio.html",
-        {"nombre_comercial": getattr(settings, "IRCARS_NOMBRE_COMERCIAL", "Estacionamiento")},
-    )
-
-
 @login_required
 @require_http_methods(["GET", "POST"])
 def caja(request):

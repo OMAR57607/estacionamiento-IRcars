@@ -36,39 +36,24 @@ def cajero():
 
 
 class TestRaiz:
-    def test_un_visitante_ve_una_presentacion_y_no_el_acceso(self, client):
+    def test_la_caja_vive_en_la_raiz(self, client, cajero):
         """
-        Quien teclea el dominio es un cliente, no el personal.
+        Es la pantalla que el operador abre todo el día.
 
-        Antes recibía el formulario de contraseña, que no le dice nada y
-        además deja el campo en la dirección más previsible del sitio.
-        """
-        respuesta = client.get("/", secure=True)
-
-        assert respuesta.status_code == 200
-        contenido = respuesta.content.decode()
-        assert "escanee" in contenido.lower()
-        assert 'type="password"' not in contenido
-
-    def test_la_presentacion_ofrece_el_acceso_del_personal(self, client):
-        """Discreto, pero presente: el operador tiene que poder entrar."""
-        contenido = client.get("/", secure=True).content.decode()
-        assert reverse("login") in contenido
-
-    def test_el_operador_con_sesion_llega_a_la_caja(self, client, cajero):
-        """
-        Se conserva el criterio original: la caja es la pantalla que el
-        operador abre todo el día y no debe exigirle recordar una ruta.
+        No debe exigirle recordar una ruta: el servicio está publicado en su
+        propia dirección y esa dirección es la aplicación.
         """
         client.force_login(cajero)
         respuesta = client.get("/", secure=True)
 
-        assert respuesta.status_code == 302
-        assert respuesta["Location"] == reverse("web:caja")
+        assert respuesta.status_code == 200
+        assert "Vehículos dentro" in respuesta.content.decode()
 
-    def test_la_presentacion_no_se_indexa(self, client):
-        contenido = client.get("/", secure=True).content.decode()
-        assert "noindex" in contenido
+    def test_quien_llega_sin_sesion_va_al_acceso(self, client):
+        respuesta = client.get("/", secure=True)
+
+        assert respuesta.status_code == 302
+        assert reverse("login") in respuesta["Location"]
 
 
 class TestPanelDeAdministracion:

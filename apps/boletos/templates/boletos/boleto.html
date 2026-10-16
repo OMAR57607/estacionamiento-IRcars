@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-{# El boleto no debe indexarse. La cabecera HTTP `X-Robots-Tag` ya lo impide;
-   esta etiqueta la respalda para los rastreadores que solo leen el documento. #}
+{% comment %} El boleto no debe indexarse. La cabecera HTTP `X-Robots-Tag` ya lo impide;
+   esta etiqueta la respalda para los rastreadores que solo leen el documento. {% endcomment %}
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f172a">
 <title>Boleto {{ boleto.placa_enmascarada }} · {{ nombre_comercial }}</title>
-{# Estilos en línea y no en un archivo estático: el boleto se abre en la rampa
+{% comment %} Estilos en línea y no en un archivo estático: el boleto se abre en la rampa
    de salida, con una barra de señal y prisa detrás. Una sola petición HTTP es
-   la diferencia entre que cargue y que no. #}
+   la diferencia entre que cargue y que no. {% endcomment %}
 <style>
   :root {
     --fondo: #f1f5f9; --tarjeta: #ffffff; --texto: #0f172a; --tenue: #64748b;
@@ -84,8 +84,8 @@
 
   <section class="tarjeta">
     <p class="placa">{{ boleto.placa_enmascarada }}</p>
-    {# Se explica el enmascarado para que el cliente no crea que es un error de
-       captura. Sin esta línea, la duda llega a la caseta como una queja. #}
+    {% comment %} Se explica el enmascarado para que el cliente no crea que es un error de
+       captura. Sin esta línea, la duda llega a la caseta como una queja. {% endcomment %}
     <p class="nota-placa">Mostramos su placa parcialmente para proteger sus datos.</p>
 
     {% if boleto.estado == 'ABIERTO' %}
@@ -137,9 +137,9 @@
   </section>
 
   {% if boleto.estado == 'ABIERTO' %}
-    {# Enlace a la misma dirección en lugar de recarga automática: un
+    {% comment %} Enlace a la misma dirección en lugar de recarga automática: un
        `meta refresh` consumiría datos y batería del cliente sin pedírselo, y
-       la cifra solo le interesa cuando está por salir. #}
+       la cifra solo le interesa cuando está por salir. {% endcomment %}
     <a class="accion" href="">Actualizar importe</a>
   {% endif %}
 
@@ -176,9 +176,9 @@
   </section>
 
   <section class="tarjeta">
-    {# Leyenda exigible: el precio aplicable es el exhibido al momento de
+    {% comment %} Leyenda exigible: el precio aplicable es el exhibido al momento de
        ingresar, y es el que se reproduce arriba a partir de la copia grabada
-       en el folio. Un cambio de tarifa posterior no altera este boleto. #}
+       en el folio. Un cambio de tarifa posterior no altera este boleto. {% endcomment %}
     <p class="legal">
       El precio mostrado es el vigente al momento de su ingreso y es el que se
       aplicará al cobro, aunque la tarifa cambie durante su estancia.
