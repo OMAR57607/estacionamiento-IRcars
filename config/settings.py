@@ -273,6 +273,16 @@ IRCARS_HORAS_VIGENCIA_BOLETO = env.int("IRCARS_HORAS_VIGENCIA_BOLETO", default=2
 # atiende peticiones directamente, donde `X-Forwarded-For` no sería de fiar.
 IRCARS_TRAS_PROXY = env.bool("IRCARS_TRAS_PROXY", default=True)
 
+# El servicio está publicado detrás de Cloudflare. Cambia de qué cabecera se
+# toma la IP del cliente al aplicar los límites de tasa: con Cloudflare en
+# medio, la entrada derecha de `X-Forwarded-For` es la IP de su borde y no la
+# del cliente, de modo que todos los visitantes compartirían un puñado de
+# contadores. Ver `apps.boletos.limites.ip_cliente`.
+#
+# Desactivada por omisión: activarla sin estar realmente detrás de Cloudflare
+# haría confiable una cabecera que cualquiera podría inventar.
+IRCARS_TRAS_CLOUDFLARE = env.bool("IRCARS_TRAS_CLOUDFLARE", default=False)
+
 # Reduce el despliegue a la consulta e ingesta de boletos: sin panel de
 # administración, sin interfaz de caja y sin API del estacionamiento. Es la
 # configuración recomendada en la nube, donde la operación vive en el

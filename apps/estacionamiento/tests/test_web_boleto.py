@@ -23,21 +23,6 @@ pytestmark = pytest.mark.django_db
 CLAVE = "clave-de-prueba-1234"
 
 
-@pytest.fixture(autouse=True)
-def estaticos_sin_manifiesto(settings):
-    """
-    Estáticos por ruta directa: el manifiesto de `collectstatic` no existe en
-    el árbol de trabajo y cualquier plantilla que extienda la base fallaría por
-    un detalle de despliegue, no de comportamiento.
-    """
-    settings.STORAGES = {
-        **settings.STORAGES,
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
-        },
-    }
-
-
 @pytest.fixture
 def tarifa():
     return Tarifa.objects.create(

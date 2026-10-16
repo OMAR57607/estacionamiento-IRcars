@@ -23,3 +23,27 @@ def limpiar_cache():
     cache.clear()
     yield
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def estaticos_sin_manifiesto(settings):
+    """
+    Estáticos servidos por ruta directa durante las pruebas.
+
+    En producción se versionan por contenido y la plantilla resuelve
+    `{% static %}` contra el manifiesto que escribe `collectstatic`. Ese
+    manifiesto no existe en el árbol de trabajo, de modo que **cualquier
+    plantilla que extienda la base falla al dibujarse** con
+    `Missing staticfiles manifest entry`, por un detalle de despliegue y no
+    de comportamiento.
+
+    Vive aquí y no en cada suite porque el problema aparece en cuanto una
+    plantilla referencia un estático nuevo: estaba copiado en cinco archivos
+    y cada icono añadido obligaba a recordar cuál faltaba.
+    """
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        },
+    }

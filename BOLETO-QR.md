@@ -352,6 +352,77 @@ termine una republicación sería un cliente esperando en la rampa.
 
 ---
 
+## Publicar detrás de Cloudflare con dominio propio
+
+El orden importa: Railway es quien da el destino del registro DNS.
+
+**1. En Railway.** Servicio → *Settings → Networking → Custom Domain* → se
+escribe el dominio. Railway devuelve un destino `…up.railway.app`.
+
+**2. En Cloudflare.** *DNS → Records → Add record*:
+
+| Campo | Valor |
+|---|---|
+| Type | `CNAME` |
+| Name | el subdominio, o `@` para el dominio raíz |
+| Target | el destino que dio Railway |
+| Proxy status | **DNS only** (nube gris) *al principio* |
+
+El CNAME en el ápice funciona: Cloudflare lo aplana automáticamente.
+
+La nube se deja **gris al principio** porque Railway emite su certificado con
+Let's Encrypt y necesita validar el dominio; con el proxy activo desde el
+inicio, esa validación suele fallar. Una vez emitido, se cambia a naranja.
+
+**3. SSL/TLS: `Full (strict)`.** No es opcional. La configuración activa
+`SECURE_SSL_REDIRECT` fuera de depuración: con el modo `Flexible`, Cloudflare
+habla con el origen por HTTP, Django responde «redirige a HTTPS», y se entra
+en un **bucle infinito de redirecciones** cuyo síntoma —`ERR_TOO_MANY_REDIRECTS`—
+no apunta a su causa.
+
+**4. Variables en Railway.** La configuración añade sola el dominio de Railway,
+pero no sabe nada del dominio propio:
+
+```
+DJANGO_ALLOWED_HOSTS         = caja.midominio.mx
+DJANGO_CSRF_TRUSTED_ORIGINS  = https://caja.midominio.mx
+IRCARS_TRAS_CLOUDFLARE       = True
+```
+
+Sin la primera, **400 Bad Request** en todo el sitio. Sin la segunda, se llega
+a la pantalla de acceso pero **ningún formulario se envía** —ni acceso, ni
+entrada, ni cobro—, porque Django los rechaza por CSRF.
+
+El enlace del boleto no necesita configuración: se construye con
+`request.build_absolute_uri` y sigue al dominio con el que se abra la caja.
+
+### Por qué hace falta `IRCARS_TRAS_CLOUDFLARE`
+
+Con Cloudflare en medio, la cadena es cliente → Cloudflare → Railway →
+aplicación, y la entrada derecha de `X-Forwarded-For` pasa a ser la IP del
+**borde de Cloudflare**. Sin esta variable, los límites por IP agruparían a
+todos los visitantes en un puñado de contadores: el del formulario de acceso
+dejaría de ser por persona y **podría dejar fuera al propio operador** sin que
+nadie esté atacando nada, y el del boleto público dejaría de contener un
+sondeo real.
+
+Activada, se lee `CF-Connecting-IP`, que es la dirección real del cliente.
+
+Límite asumido: quien conozca la dirección `…up.railway.app` puede saltarse
+Cloudflare y enviar un `CF-Connecting-IP` inventado. Cerrarlo del todo no es
+cuestión de código sino de restringir el origen para que solo acepte tráfico
+de Cloudflare. Mientras tanto, el perjuicio de confiar en la cabecera es muy
+inferior al de no hacerlo.
+
+### Una advertencia sobre HSTS
+
+La configuración envía `Strict-Transport-Security` con un año,
+`includeSubDomains` y `preload`. Una vez servido desde el dominio propio, los
+navegadores **rechazarán HTTP en ese dominio y en todos sus subdominios**
+durante un año. Si hay subdominios que no sirven HTTPS, dejarán de abrirse.
+
+---
+
 ## Operación y diagnóstico
 
 | Síntoma | Causa probable | Qué hacer |

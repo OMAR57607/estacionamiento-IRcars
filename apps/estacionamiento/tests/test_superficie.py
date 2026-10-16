@@ -20,16 +20,6 @@ pytestmark = pytest.mark.django_db
 CLAVE = "clave-de-prueba-1234"
 
 
-@pytest.fixture(autouse=True)
-def estaticos_sin_manifiesto(settings):
-    settings.STORAGES = {
-        **settings.STORAGES,
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
-        },
-    }
-
-
 @pytest.fixture
 def cajero():
     return get_user_model().objects.create_user(username="cajero", password=CLAVE)

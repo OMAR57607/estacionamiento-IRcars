@@ -31,26 +31,6 @@ pytestmark = pytest.mark.django_db
 CLAVE = "clave-de-prueba-1234"
 
 
-@pytest.fixture(autouse=True)
-def estaticos_sin_manifiesto(settings):
-    """
-    Estáticos servidos por ruta directa mientras corren estas pruebas.
-
-    En producción los estáticos se versionan por contenido y la plantilla
-    resuelve `{% static %}` contra el manifiesto que escribe `collectstatic`.
-    Ese manifiesto no existe en el árbol de trabajo, de modo que cualquier
-    plantilla que extienda la base fallaría al renderizar por un detalle de
-    despliegue, no de comportamiento. Aquí se sustituye por el almacenamiento
-    simple: lo que se prueba es la pantalla, no el versionado del CSS.
-    """
-    settings.STORAGES = {
-        **settings.STORAGES,
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
-        },
-    }
-
-
 @pytest.fixture
 def vigente():
     """

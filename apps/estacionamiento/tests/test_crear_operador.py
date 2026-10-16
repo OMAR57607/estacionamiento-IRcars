@@ -132,15 +132,6 @@ class TestCambioDeContrasena:
     sea cierto.
     """
 
-    @pytest.fixture(autouse=True)
-    def estaticos_sin_manifiesto(self, settings):
-        settings.STORAGES = {
-            **settings.STORAGES,
-            "staticfiles": {
-                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
-            },
-        }
-
     @pytest.fixture
     def sesion(self, client, entorno):
         from django.urls import reverse
