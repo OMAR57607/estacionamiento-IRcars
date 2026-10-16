@@ -236,6 +236,7 @@ class TestMarcaEnLosBoletos:
             cuota_hora=Decimal("30.00"),
             minutos_cortesia=15,
             fraccion_minutos=1,
+            minutos_tolerancia=0,
             cobro_minimo=Decimal("0.00"),
             tope_diario=None,
             fin_de_ciclo=None,

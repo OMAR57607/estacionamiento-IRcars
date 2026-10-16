@@ -276,6 +276,18 @@ class TarifaForm(forms.Form):
         ),
         widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
     )
+    minutos_tolerancia = forms.IntegerField(
+        min_value=0,
+        max_value=59,
+        label="Tolerancia por hora (minutos)",
+        help_text=(
+            "Gracia sobre cada hora cumplida. Dentro de ella se cobra el tiempo "
+            "transcurrido; al rebasarla se cobra la hora completa. Ej. 15: a la "
+            "1:10 se cobra proporcional y a la 1:16, dos horas. "
+            "0 = sin salto, siempre proporcional."
+        ),
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
+    )
     cobro_minimo = forms.DecimalField(
         max_digits=10,
         decimal_places=2,

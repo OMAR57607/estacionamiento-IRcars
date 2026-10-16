@@ -346,6 +346,7 @@ def registrar_salida(
     folio.tarifa_cuota_hora = parametros.cuota_hora
     folio.tarifa_minutos_cortesia = parametros.minutos_cortesia
     folio.tarifa_fraccion_minutos = parametros.fraccion_minutos
+    folio.tarifa_minutos_tolerancia = parametros.minutos_tolerancia
     folio.tarifa_cobro_minimo = parametros.cobro_minimo
     folio.tarifa_tope_diario = parametros.tope_diario
     folio.estado = EstadoFolio.CERRADO

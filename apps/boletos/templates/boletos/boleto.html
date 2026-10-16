@@ -188,6 +188,14 @@
         {% endif %}
       </dd>
 
+      {% comment %} La tolerancia cambia el importe de forma escalonada, así que se
+         exhibe junto al resto del cuadro y no en letra pequeña: es la regla
+         que explica por qué 1:16 cuesta el doble que 1:10. {% endcomment %}
+      {% if boleto.minutos_tolerancia %}
+        <dt>Tolerancia</dt>
+        <dd>{{ boleto.minutos_tolerancia }} min por hora</dd>
+      {% endif %}
+
       {% if boleto.cobro_minimo %}
         <dt>Cobro mínimo</dt>
         <dd>{{ boleto.cobro_minimo|pesos }}</dd>
@@ -205,6 +213,11 @@
        ingresar, y es el que se reproduce arriba a partir de la copia grabada
        en el folio. Un cambio de tarifa posterior no altera este boleto. {% endcomment %}
     <p class="legal">
+      {% if boleto.minutos_tolerancia %}
+        Pasados {{ boleto.minutos_tolerancia }} minutos de tolerancia sobre cada
+        hora cumplida se cobra la hora completa; dentro de la tolerancia se
+        cobra el tiempo transcurrido.
+      {% endif %}
       El precio mostrado es el vigente al momento de su ingreso y es el que se
       aplicará al cobro, aunque la tarifa cambie durante su estancia.
       Esta consulta es informativa; el comprobante de pago se entrega en la

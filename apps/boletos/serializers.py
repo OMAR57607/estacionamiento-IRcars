@@ -43,6 +43,7 @@ class BoletoIngestaSerializer(serializers.ModelSerializer):
             "cuota_hora",
             "minutos_cortesia",
             "fraccion_minutos",
+            "minutos_tolerancia",
             "cobro_minimo",
             "tope_diario",
         ]

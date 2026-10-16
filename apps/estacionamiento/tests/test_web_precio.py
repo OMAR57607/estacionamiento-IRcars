@@ -87,6 +87,7 @@ class TestConsulta:
             "cuota_hora",
             "minutos_cortesia",
             "fraccion_minutos",
+            "minutos_tolerancia",
             "cobro_minimo",
             "tope_diario",
         ):
@@ -143,6 +144,7 @@ class TestSoloAdministrativo:
                 "cuota_hora": "1.00",
                 "minutos_cortesia": "0",
                 "fraccion_minutos": "1",
+                "minutos_tolerancia": "0",
                 "cobro_minimo": "0.00",
             },
         )
@@ -204,6 +206,7 @@ class TestDesbloqueo:
                 "cuota_hora": "1.00",
                 "minutos_cortesia": "0",
                 "fraccion_minutos": "1",
+                "minutos_tolerancia": "0",
                 "cobro_minimo": "0.00",
             },
         )
@@ -226,6 +229,7 @@ class TestDesbloqueo:
                 "cuota_hora": "50.00",
                 "minutos_cortesia": "20",
                 "fraccion_minutos": "15",
+                "minutos_tolerancia": "0",
                 "cobro_minimo": "12.00",
                 "tope_diario": "180.00",
             },
@@ -266,6 +270,86 @@ class TestDesbloqueo:
         assert "form" in respuesta.context
 
 
+class TestToleranciaPorHora:
+    """
+    La tolerancia se captura en la misma pantalla que el resto del precio.
+
+    No basta con que el motor la entienda: si no se puede teclear ni se ve en
+    la tabla de ejemplos, el dueño no tiene forma de comprobar qué cobrará su
+    caja antes de poner el precio en vigencia.
+    """
+
+    def test_se_guarda_con_el_precio(self, client, administrativo, vigente):
+        client.force_login(administrativo)
+        _desbloquear(client)
+
+        respuesta = client.post(
+            reverse("web:tarifa_cambiar"),
+            {
+                "accion": "guardar",
+                "cuota_hora": "30.00",
+                "minutos_cortesia": "0",
+                "fraccion_minutos": "1",
+                "minutos_tolerancia": "15",
+                "cobro_minimo": "0.00",
+            },
+        )
+
+        assert respuesta.status_code == 302
+        assert Tarifa.objects.get(activa=True).minutos_tolerancia == 15
+
+    def test_los_ejemplos_muestran_el_salto_de_precio(
+        self, client, administrativo, vigente
+    ):
+        """
+        Las dos filas que rodean la tolerancia son las que la hacen visible.
+
+        Con ejemplos solo en horas exactas, la tabla mostraría las mismas
+        cifras con tolerancia y sin ella, y quien fija el precio no vería la
+        consecuencia de lo que acaba de teclear.
+        """
+        Tarifa.objects.all().update(
+            cuota_hora=Decimal("30.00"),
+            minutos_cortesia=0,
+            fraccion_minutos=1,
+            minutos_tolerancia=15,
+            cobro_minimo=Decimal("0.00"),
+            tope_diario=None,
+        )
+        client.force_login(administrativo)
+
+        contenido = client.get(reverse("web:tarifa")).content.decode()
+
+        assert "1 h 10 min" in contenido
+        assert "$35.00" in contenido, "Dentro de la tolerancia: proporcional"
+        assert "1 h 16 min" in contenido
+        assert "$60.00" in contenido, "Al rebasarla: dos horas completas"
+
+    def test_una_tolerancia_de_una_hora_se_rechaza(
+        self, client, administrativo, vigente
+    ):
+        """
+        El formulario no deja guardar lo que el motor rechazaría.
+        """
+        client.force_login(administrativo)
+        _desbloquear(client)
+
+        respuesta = client.post(
+            reverse("web:tarifa_cambiar"),
+            {
+                "accion": "guardar",
+                "cuota_hora": "30.00",
+                "minutos_cortesia": "0",
+                "fraccion_minutos": "1",
+                "minutos_tolerancia": "60",
+                "cobro_minimo": "0.00",
+            },
+        )
+
+        assert respuesta.status_code == 200
+        assert Tarifa.objects.count() == 1
+
+
 class TestValoresIniciales:
     def test_el_formulario_llega_con_los_valores_en_uso(
         self, client, administrativo, vigente
@@ -277,6 +361,7 @@ class TestValoresIniciales:
             "cuota_hora": Decimal("42.00"),
             "minutos_cortesia": 20,
             "fraccion_minutos": 15,
+            "minutos_tolerancia": 0,
             "cobro_minimo": Decimal("12.00"),
             "tope_diario": Decimal("180.00"),
         }
@@ -360,6 +445,7 @@ class TestValoresIniciales:
                 "minutos_cortesia": "20",
                 # Fuera del rango que acepta el motor de tarifas.
                 "fraccion_minutos": "90",
+                "minutos_tolerancia": "0",
                 "cobro_minimo": "12.00",
             },
         )

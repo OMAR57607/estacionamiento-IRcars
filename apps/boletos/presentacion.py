@@ -58,6 +58,7 @@ class BoletoVista:
     cuota_hora: Decimal
     minutos_cortesia: int
     fraccion_minutos: int
+    minutos_tolerancia: int
     cobro_minimo: Decimal
     tope_diario: Decimal | None
 
@@ -75,6 +76,7 @@ class BoletoVista:
             cuota_hora=self.cuota_hora,
             minutos_cortesia=self.minutos_cortesia,
             fraccion_minutos=self.fraccion_minutos,
+            minutos_tolerancia=self.minutos_tolerancia,
             cobro_minimo=self.cobro_minimo,
             tope_diario=self.tope_diario,
         )
@@ -105,6 +107,7 @@ def desde_folio(folio) -> BoletoVista:
         cuota_hora=parametros.cuota_hora,
         minutos_cortesia=parametros.minutos_cortesia,
         fraccion_minutos=parametros.fraccion_minutos,
+        minutos_tolerancia=parametros.minutos_tolerancia,
         cobro_minimo=parametros.cobro_minimo,
         tope_diario=parametros.tope_diario,
         fin_de_ciclo=_fin_de_ciclo(folio.estado, folio.salida_en, folio.actualizado_en),
@@ -125,6 +128,7 @@ def desde_publicado(boleto) -> BoletoVista:
         cuota_hora=boleto.cuota_hora,
         minutos_cortesia=boleto.minutos_cortesia,
         fraccion_minutos=boleto.fraccion_minutos,
+        minutos_tolerancia=boleto.minutos_tolerancia,
         cobro_minimo=boleto.cobro_minimo,
         tope_diario=boleto.tope_diario,
         fin_de_ciclo=boleto.fin_de_ciclo,

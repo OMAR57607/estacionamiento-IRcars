@@ -78,6 +78,13 @@ CAMPOS = (
         "se cobra completo.",
     ),
     (
+        "minutos_tolerancia",
+        "Tolerancia por hora (minutos)",
+        "Gracia sobre cada hora cumplida. Dentro de ella se cobra el tiempo "
+        "transcurrido; al rebasarla se cobra la hora completa. Ej. 15: a la "
+        "1:10 se cobra proporcional y a la 1:16, dos horas. 0 = sin salto.",
+    ),
+    (
         "cobro_minimo",
         "Cobro mínimo",
         "Piso del importe, pasados los minutos gratis. 0 = sin mínimo.",
@@ -91,13 +98,8 @@ CAMPOS = (
 
 
 def _parametros(tarifa: Tarifa) -> ParametrosTarifa:
-    return ParametrosTarifa(
-        cuota_hora=tarifa.cuota_hora,
-        minutos_cortesia=tarifa.minutos_cortesia,
-        fraccion_minutos=tarifa.fraccion_minutos,
-        cobro_minimo=tarifa.cobro_minimo,
-        tope_diario=tarifa.tope_diario,
-    )
+    """Traducción al objeto de dominio, delegada en el propio modelo."""
+    return tarifa.a_parametros()
 
 
 class VistaTarifa(ttk.Frame):
@@ -368,6 +370,12 @@ class VistaTarifa(ttk.Frame):
             (
                 ("Minutos gratis al entrar", f"{vigente.minutos_cortesia} min"),
                 ("Se cobra en bloques de", f"{vigente.fraccion_minutos} min"),
+                (
+                    "Tolerancia por hora",
+                    f"{vigente.minutos_tolerancia} min"
+                    if vigente.minutos_tolerancia
+                    else "sin tolerancia",
+                ),
                 ("Cobro mínimo", formato.moneda(vigente.cobro_minimo)),
                 (
                     "Máximo por día",
@@ -414,6 +422,9 @@ class VistaTarifa(ttk.Frame):
                     formato.moneda(tarifa.cuota_hora),
                     f"{tarifa.minutos_cortesia} min",
                     f"{tarifa.fraccion_minutos} min",
+                    f"{tarifa.minutos_tolerancia} min"
+                    if tarifa.minutos_tolerancia
+                    else "—",
                     formato.moneda(tarifa.cobro_minimo),
                     formato.moneda(tarifa.tope_diario)
                     if tarifa.tope_diario is not None
@@ -620,6 +631,7 @@ class DialogoPrecio(tk.Toplevel):
                 "cuota_hora": "30.00",
                 "minutos_cortesia": "15",
                 "fraccion_minutos": "1",
+                "minutos_tolerancia": "0",
                 "cobro_minimo": "0.00",
                 "tope_diario": "250.00",
             }
@@ -627,6 +639,7 @@ class DialogoPrecio(tk.Toplevel):
             "cuota_hora": f"{self._vigente.cuota_hora:.2f}",
             "minutos_cortesia": str(self._vigente.minutos_cortesia),
             "fraccion_minutos": str(self._vigente.fraccion_minutos),
+            "minutos_tolerancia": str(self._vigente.minutos_tolerancia),
             "cobro_minimo": f"{self._vigente.cobro_minimo:.2f}",
             "tope_diario": (
                 f"{self._vigente.tope_diario:.2f}"
@@ -653,10 +666,11 @@ class DialogoPrecio(tk.Toplevel):
         try:
             cortesia = int(self.campos["minutos_cortesia"].get().strip() or 0)
             fraccion = int(self.campos["fraccion_minutos"].get().strip() or 1)
+            tolerancia = int(self.campos["minutos_tolerancia"].get().strip() or 0)
         except ValueError as exc:
             raise ValueError(
-                "Los minutos gratis y el bloque de cobro deben ser números "
-                "enteros de minutos."
+                "Los minutos gratis, el bloque de cobro y la tolerancia deben "
+                "ser números enteros de minutos."
             ) from exc
 
         texto_tope = self.campos["tope_diario"].get().strip()
@@ -666,6 +680,7 @@ class DialogoPrecio(tk.Toplevel):
             cuota_hora=cuota,
             minutos_cortesia=cortesia,
             fraccion_minutos=fraccion,
+            minutos_tolerancia=tolerancia,
             cobro_minimo=minimo,
             tope_diario=tope,
         )
@@ -745,6 +760,7 @@ class DialogoPrecio(tk.Toplevel):
                 cuota_hora=parametros.cuota_hora,
                 minutos_cortesia=parametros.minutos_cortesia,
                 fraccion_minutos=parametros.fraccion_minutos,
+                minutos_tolerancia=parametros.minutos_tolerancia,
                 cobro_minimo=parametros.cobro_minimo,
                 tope_diario=parametros.tope_diario,
                 activa=True,
