@@ -171,10 +171,24 @@ lectura al propietario en cada arranque.
 Al reiniciar, la caja publica en segundo plano y muestra el QR al registrar
 cada entrada.
 
-### 3. Verificación
+### 3. Primera carga y verificación
+
+Al encender el servicio, los vehículos **que ya están dentro** no tienen
+boleto publicado: nunca se publicó uno para ellos. Si no hace nada, su cliente
+vería «boleto no disponible» justo el primer día. Reconstruya la carga inicial:
 
 ```
-# En la caja: qué hay pendiente y por qué
+# Qué se republicaría, sin tocar nada
+python manage.py republicar_boletos --simular
+
+# Reencolar los vehículos dentro y enviarlos en el acto
+python manage.py republicar_boletos --publicar
+```
+
+Después, para el día a día:
+
+```
+# Qué hay pendiente y por qué
 python manage.py publicar_boletos --solo-listar
 
 # Forzar el envío de todo lo acumulado
@@ -195,6 +209,45 @@ vive en la caja, no aquí.
 
 ---
 
+## Reconstruir el servicio tras una pérdida
+
+La bandeja de salida es una **cola de trabajo, no un historial**: al entregarse
+una publicación, su fila desaparece. Es lo correcto para la operación diaria
+—acota la bandeja al trabajo pendiente— pero implica que **nada reenvía por su
+cuenta lo ya entregado**.
+
+Consecuencia práctica: si la base del servicio se vacía o se recrea, los folios
+abiertos no vuelven solos. Se corregirían al cobrarlos, pero mientras el auto
+está dentro su dueño no podría consultar nada.
+
+`republicar_boletos` cierra ese hueco:
+
+```
+# Solo los vehículos que siguen dentro (lo habitual)
+python manage.py republicar_boletos --publicar
+
+# Incluir también los liquidados cuya página siga vigente
+python manage.py republicar_boletos --incluir-cerrados --publicar
+
+# Ampliar la ventana, por ejemplo al migrar de proveedor
+python manage.py republicar_boletos --incluir-cerrados --horas 72 --publicar
+```
+
+Es seguro repetirlo: la ingesta es idempotente y el encolado es un *upsert*.
+Lo único que produce una repetición es trabajo de más.
+
+Por omisión no toca los folios cerrados, y con `--incluir-cerrados` se limita a
+los que siguen dentro de la vigencia del boleto público. Republicar uno más
+antiguo sería trabajo inútil: la vista lo contestaría con un 404 por vencido en
+cuanto llegara.
+
+Cada folio se encola en su propia transacción, nunca el lote entero: una
+transacción larga sobre SQLite retiene el bloqueo de escritura de toda la base,
+y el comando puede ejecutarse con la caseta operando. Un cobro esperando a que
+termine una republicación sería un cliente esperando en la rampa.
+
+---
+
 ## Operación y diagnóstico
 
 | Síntoma | Causa probable | Qué hacer |
@@ -205,6 +258,7 @@ vive en la caja, no aquí.
 | Pendientes con «debe usar https» | `url` con `http://` | Corrija a `https://` |
 | Pendientes con error HTTP 503 | Falta `IRCARS_TOKEN_PUBLICACION` en el servicio | Defínala y redespliegue |
 | La bandeja crece sin parar | Corte de red prolongado | Es normal; se vacía al volver. Lo de más de 3 días se descarta solo |
+| «Boleto no disponible» en autos que ya estaban dentro | Se publicaron antes de que existiera la base actual, o nunca | `republicar_boletos --publicar` |
 
 Las esperas entre reintentos crecen de 15 s hasta un techo de 10 minutos. Un
 rechazo del servicio (4xx) espera el máximo desde el primer intento: no se

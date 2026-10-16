@@ -112,7 +112,7 @@ def _verificar_transporte(url: str) -> None:
 # ------------------------------------------------------------------- Encolado
 
 
-def encolar(folio) -> None:
+def encolar(folio) -> bool:
     """
     Registra —o actualiza— la intención de publicar este folio.
 
@@ -124,9 +124,15 @@ def encolar(folio) -> None:
     Un fallo aquí **no debe tumbar la operación**. Registrar una entrada es la
     función esencial del sistema; publicar el boleto es una comodidad. Si lo
     segundo falla, se anota en bitácora y la caja continúa.
+
+    Devuelve si la intención quedó registrada. La señal descarta ese valor
+    —no hay nada que pueda hacer con él sin interrumpir la caja—, pero el
+    comando `republicar_boletos` lo necesita: sin un resultado que informar
+    tendría que suponer que todo salió bien, y un reporte que siempre dice
+    «listo» no sirve para diagnosticar nada.
     """
     if not publicacion_activa():
-        return
+        return False
 
     try:
         cuerpo = instantanea_publica(folio)
@@ -154,6 +160,9 @@ def encolar(folio) -> None:
             "caja no se interrumpe.",
             getattr(folio, "uuid", "?"),
         )
+        return False
+
+    return True
 
 
 # -------------------------------------------------------------------- Entrega

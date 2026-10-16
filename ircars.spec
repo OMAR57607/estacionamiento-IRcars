@@ -77,6 +77,7 @@ hiddenimports += [
     "apps.boletos.publicador",
     "apps.boletos.qr",
     "apps.boletos.management.commands.publicar_boletos",
+    "apps.boletos.management.commands.republicar_boletos",
 ]
 
 # Generador de códigos QR. `segno` resuelve sus escritores de salida por
