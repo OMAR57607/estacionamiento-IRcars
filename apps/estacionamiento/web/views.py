@@ -13,16 +13,21 @@ tarificación o en el control de caja se aplica una vez, en `services.py` o en
 from __future__ import annotations
 
 import csv
+import logging
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth import authenticate
+from django.conf import settings
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib.auth.views import PasswordChangeView
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.decorators.http import require_http_methods
+from django.utils.http import urlencode
+from django.views.decorators.http import require_http_methods, require_safe
 
 from .. import services, services_caja
 from ..domain.exceptions import ErrorDominio
@@ -43,6 +48,8 @@ from .forms import (
 # Límite de filas mostradas en pantalla. Un reporte de un año en una caseta no
 # se lee en el navegador: se exporta. Acotar protege el tiempo de respuesta.
 MAXIMO_FILAS = 500
+
+logger = logging.getLogger(__name__)
 
 
 def _es_administrativo(usuario) -> bool:
@@ -67,6 +74,65 @@ def _contexto_base(request) -> dict:
 
 
 # ---------------------------------------------------------------------- Caja
+
+
+class CambiarClave(PasswordChangeView):
+    """
+    Cambio de la propia contraseña, dentro de la aplicación.
+
+    Existe porque no hay otra vía: el panel de administración de Django no se
+    monta, de modo que sin esta pantalla la contraseña de una cuenta quedaría
+    fijada para siempre al valor con que se creó —y la del primer operador se
+    crea desde una variable de entorno del servidor, conocida por quien hizo
+    la instalación—.
+
+    `PasswordChangeView` exige la contraseña actual y aplica los validadores
+    configurados, así que no hace falta escribir nada de eso: lo que aporta
+    esta subclase es la plantilla propia y el destino al terminar.
+    """
+
+    template_name = "estacionamiento/clave.html"
+    success_url = reverse_lazy("web:caja")
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            "Contraseña actualizada. Su sesión sigue abierta en este equipo.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        # La barra de navegación necesita el turno y el perfil del operador,
+        # igual que en el resto de las pantallas.
+        contexto = super().get_context_data(**kwargs)
+        contexto.update(_contexto_base(self.request))
+        return contexto
+
+
+@require_safe
+def inicio(request):
+    """
+    Raíz del sitio: caja para el operador, presentación para el cliente.
+
+    La caja vivía directamente en `/` porque es la pantalla que el operador
+    abre todo el día y no debe exigirle recordar una ruta. Ese criterio sigue
+    valiendo y se conserva: quien tiene sesión abierta llega a la caja sin
+    escribir nada más.
+
+    Lo que cambia es el otro visitante. Con el servicio publicado en internet,
+    un cliente que teclee el dominio —o que lleve un código QR dañado— recibía
+    el formulario de acceso del personal, que no le dice nada y además expone
+    el campo de contraseña en la dirección más previsible del sitio. Ahora ve
+    una página que le explica qué hacer.
+    """
+    if request.user.is_authenticated:
+        return redirect("web:caja")
+
+    return render(
+        request,
+        "estacionamiento/inicio.html",
+        {"nombre_comercial": getattr(settings, "IRCARS_NOMBRE_COMERCIAL", "Estacionamiento")},
+    )
 
 
 @login_required
@@ -134,9 +200,81 @@ def _procesar_entrada(request):
         f"Entrada registrada: {folio.placa} a las "
         f"{timezone.localtime(folio.entrada_en):%H:%M}{ubicacion}.",
     )
-    # Redirección tras POST: evita que recargar la página registre una segunda
-    # entrada de la misma placa.
-    return redirect("web:caja")
+    # Se va al boleto y no de vuelta a la caja porque este es el único momento
+    # en que el cliente está delante: es cuando puede escanear el código o
+    # recibir el enlace. Pedirle que espere a que el operador navegue a otra
+    # pantalla equivale a que no lo haga.
+    #
+    # Sigue siendo una redirección tras POST, de modo que recargar no registra
+    # una segunda entrada de la misma placa.
+    return redirect("web:boleto", uuid=folio.uuid)
+
+
+@login_required
+@require_safe
+def boleto(request, uuid):
+    """
+    Boleto recién emitido, para enseñárselo al cliente o enviárselo.
+
+    Es la pantalla que el dependiente pone delante del cliente: un código QR
+    grande que se escanea desde el teléfono del propio cliente, y un botón
+    para mandarle el enlace por WhatsApp si prefiere recibirlo. Son las dos
+    formas en que un boleto llega hoy a alguien, y conviene que convivan: la
+    cámara falla con poca luz o con la pantalla sucia, y el mensaje no.
+
+    La dirección se construye con `build_absolute_uri` y no con una variable
+    de configuración. Así el enlace del QR es siempre el del servidor que
+    atiende la petición, sin que nadie tenga que mantener un dominio escrito
+    en dos sitios —y sin que un despliegue nuevo emita códigos que apuntan al
+    anterior—.
+
+    Solo lectura: emitir el folio ya ocurrió. Si esta vista aceptara un POST,
+    recargar la pantalla del boleto podría repetir una operación con efecto
+    económico.
+    """
+    folio = get_object_or_404(Folio, uuid=uuid)
+
+    url_publica = request.build_absolute_uri(
+        reverse("boletos:publico", kwargs={"uuid_folio": folio.uuid})
+    )
+
+    # El mensaje no lleva la placa. El enlace es lo único que el cliente
+    # necesita, y lo que no se escribe en un mensaje no viaja por WhatsApp.
+    texto = (
+        f"Su boleto de estacionamiento en "
+        f"{getattr(settings, 'IRCARS_NOMBRE_COMERCIAL', 'nuestro estacionamiento')}: "
+        f"{url_publica}"
+    )
+
+    contexto = _contexto_base(request)
+    contexto.update(
+        {
+            "seccion": "caja",
+            "folio": folio,
+            "url_publica": url_publica,
+            "url_whatsapp": f"https://wa.me/?{urlencode({'text': texto})}",
+            "texto_compartir": texto,
+            "qr": _qr_o_nada(url_publica),
+        }
+    )
+    return render(request, "estacionamiento/boleto.html", contexto)
+
+
+def _qr_o_nada(url: str):
+    """
+    Dibuja el código, o devuelve `None` si no se puede.
+
+    Un fallo del generador no debe dejar al operador sin pantalla: el folio ya
+    está emitido y el enlace sigue sirviendo para dictarlo o compartirlo. La
+    plantilla muestra un aviso en su lugar.
+    """
+    from apps.boletos.qr import QRNoDisponible, svg_qr
+
+    try:
+        return svg_qr(url, escala=6)
+    except QRNoDisponible:
+        logger.warning("No se pudo generar el código QR del boleto.")
+        return None
 
 
 def _procesar_cotizacion(request, contexto):

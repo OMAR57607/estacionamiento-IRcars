@@ -33,7 +33,8 @@ from apps.estacionamiento.domain.exceptions import ErrorDominio
 from apps.estacionamiento.domain.tarifas import cotizar, minutos_transcurridos
 
 from .limites import limitar_por_ip
-from .models import BoletoPublicado, EstadoBoleto
+from .models import BoletoPublicado
+from .presentacion import BoletoVista, desde_folio, desde_publicado
 from .serializers import BoletoIngestaSerializer
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ def _vigencia_horas() -> int:
     return int(getattr(settings, "IRCARS_HORAS_VIGENCIA_BOLETO", 24))
 
 
-def _esta_vencido(boleto: BoletoPublicado) -> bool:
+def _esta_vencido(boleto: BoletoVista) -> bool:
     """
     Un boleto que ya terminó su ciclo deja de consultarse pasada su vigencia.
 
@@ -178,7 +179,7 @@ def _nombre_comercial() -> str:
     return str(getattr(settings, "IRCARS_NOMBRE_COMERCIAL", "Estacionamiento"))
 
 
-def _calcular_presentacion(boleto: BoletoPublicado, ahora) -> dict:
+def _calcular_presentacion(boleto: BoletoVista, ahora) -> dict:
     """
     Resuelve qué cifras mostrar según el estado del boleto.
 
@@ -186,7 +187,7 @@ def _calcular_presentacion(boleto: BoletoPublicado, ahora) -> dict:
     se recalcula con el mismo motor que usa la caja. En uno liquidado se
     muestra lo efectivamente cobrado, que ya no depende del reloj.
     """
-    if boleto.estado == EstadoBoleto.CERRADO:
+    if boleto.estado == "CERRADO":
         return {
             "minutos": boleto.minutos or 0,
             "importe": boleto.importe,
@@ -194,7 +195,7 @@ def _calcular_presentacion(boleto: BoletoPublicado, ahora) -> dict:
             "cotizacion": None,
         }
 
-    if boleto.estado == EstadoBoleto.CANCELADO:
+    if boleto.estado == "CANCELADO":
         return {"minutos": None, "importe": None, "es_estimado": False, "cotizacion": None}
 
     try:
@@ -217,6 +218,38 @@ def _calcular_presentacion(boleto: BoletoPublicado, ahora) -> dict:
     }
 
 
+def _resolver(uuid_folio) -> BoletoVista | None:
+    """
+    Localiza el boleto en el origen que tenga este despliegue.
+
+    Se consulta primero el folio local y después la copia publicada, sin
+    ninguna variable de configuración que lo decida. El motivo es que una
+    bandera obligaría a acertar al desplegar, y equivocarse produciría un
+    «boleto no disponible» con todo correctamente guardado —el peor fallo de
+    diagnosticar—. Así, cada despliegue responde desde lo que realmente tiene:
+
+    * Aplicación web completa: la caja vive aquí, hay folios, y el boleto se
+      construye del folio enmascarando al presentar.
+    * Servicio de solo lectura: no hay folios, y responde la copia publicada,
+      que llegó ya enmascarada desde la caja.
+
+    Las dos ramas no pueden coexistir para un mismo identificador: un servicio
+    que tiene el folio es la caja y no se publica boletos a sí mismo.
+    """
+    from apps.estacionamiento.models import Folio
+
+    folio = (
+        Folio.objects.select_related("tarifa", "cajon")
+        .filter(uuid=uuid_folio)
+        .first()
+    )
+    if folio is not None:
+        return desde_folio(folio)
+
+    publicado = BoletoPublicado.objects.filter(uuid_folio=uuid_folio).first()
+    return None if publicado is None else desde_publicado(publicado)
+
+
 # 60 consultas por minuto y por IP. Holgado para que un cliente refresque su
 # boleto cuanto quiera, y suficiente para cortar un sondeo automatizado.
 @require_safe
@@ -229,7 +262,7 @@ def boleto_publico(request, uuid_folio):
     plantilla lleva sus estilos en línea. Un teléfono con mala señal en la
     rampa de salida debe poder abrirla en una sola petición.
     """
-    boleto = BoletoPublicado.objects.filter(uuid_folio=uuid_folio).first()
+    boleto = _resolver(uuid_folio)
     if boleto is None or _esta_vencido(boleto):
         return _no_encontrado(request)
 

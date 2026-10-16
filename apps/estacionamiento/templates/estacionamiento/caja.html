@@ -131,14 +131,20 @@
             <td>{{ fila.entrada_en|date:"d/m H:i" }}</td>
             <td class="numero">{{ fila.minutos|duracion }}</td>
             <td>
-              {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero
-                 el POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
-              <form method="post" style="margin:0">
-                {% csrf_token %}
-                <input type="hidden" name="accion" value="cotizar">
-                <input type="hidden" name="placa" value="{{ fila.placa }}">
-                <button type="submit" class="boton angosto" style="margin:0">Cobrar</button>
-              </form>
+              <div class="acciones-fila">
+                {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero
+                   el POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
+                <form method="post" style="margin:0">
+                  {% csrf_token %}
+                  <input type="hidden" name="accion" value="cotizar">
+                  <input type="hidden" name="placa" value="{{ fila.placa }}">
+                  <button type="submit" class="boton angosto" style="margin:0">Cobrar</button>
+                </form>
+                {% comment %} Reabrir el boleto: el caso frecuente es el cliente que
+                   perdió el enlace o quiere que se lo reenvíen. {% endcomment %}
+                <a class="boton secundario angosto"
+                   href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+              </div>
             </td>
           </tr>
         {% endfor %}

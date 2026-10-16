@@ -25,6 +25,20 @@ set -eu
 echo "==> Aplicando migraciones"
 python manage.py migrate --noinput
 
+# Alta del operador inicial. Solo actúa si se definió el usuario, y nunca
+# cambia la contraseña de una cuenta que ya exista. Es la única vía de dar de
+# alta al primer usuario: el panel de administración de Django no se monta, y
+# en un contenedor no hay terminal donde ejecutar `createsuperuser`.
+#
+# No usa `set -e` para abortar: si falla, el servicio debe arrancar igual y
+# servir los boletos ya emitidos. Lo que no se puede es entrar a la caja, y
+# eso se ve en el registro.
+if [ -n "${IRCARS_USUARIO_OPERADOR:-}" ]; then
+    echo "==> Verificando el operador inicial"
+    python manage.py crear_operador || \
+        echo "!! No se pudo crear el operador. El servicio continúa."
+fi
+
 # Los archivos estáticos ya se recolectaron durante la construcción de la
 # imagen, de modo que aquí no se repite el trabajo en cada arranque.
 

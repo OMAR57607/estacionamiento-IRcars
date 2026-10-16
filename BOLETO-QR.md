@@ -1,5 +1,17 @@
 # Boleto del cliente por código QR
 
+> **Arquitectura vigente: aplicación web única.** El operador trabaja desde su
+> teléfono (o cualquier dispositivo), registra la entrada y la pantalla le
+> muestra el código QR para que el cliente lo escane, o el enlace para
+> enviárselo por WhatsApp. El servicio en la nube es la fuente de verdad y el
+> boleto se sirve **leyendo el folio directamente**.
+>
+> El resto del documento describe además el despliegue con **caja local**, en
+> el que una aplicación de escritorio publica copias enmascaradas a un
+> servicio remoto de solo lectura. Las dos formas siguen soportadas y la vista
+> pública resuelve sola cuál le aplica (ver `apps/boletos/presentacion.py`),
+> pero lo que está en operación es la primera.
+
 El cliente escanea un código al entrar y consulta desde su teléfono su hora de
 ingreso, el tiempo transcurrido, el precio exhibido y el importe acumulado al
 instante. No instala nada, no se registra y no necesita estar conectado a la
@@ -114,6 +126,41 @@ tarifario es inmutable —un cambio crea una tarifa nueva y desactiva la
 anterior—, de modo que un aumento durante la estancia no altera el boleto ya
 emitido. Es lo que exige la normativa de PROFECO sobre precio exhibido, y hay
 una prueba que lo fija.
+
+---
+
+## El boleto en la aplicación web
+
+El recorrido del operador es de dos pasos y ninguno exige navegar:
+
+1. Registra la entrada en la caja.
+2. La pantalla salta al **boleto**: código QR grande para que el cliente lo
+   escanee con su cámara, botón de **compartir por WhatsApp**, el menú de
+   compartir del propio teléfono cuando el navegador lo ofrece, y el enlace
+   para copiar o dictar.
+
+Se va al boleto automáticamente porque ese es el único instante en que el
+cliente está delante. Cada vehículo de la lista del patio enlaza también a su
+boleto, para el caso frecuente del cliente que perdió el enlace y pide que se
+lo reenvíen.
+
+El enlace se construye con `request.build_absolute_uri`, es decir, del propio
+servidor que atiende la petición. No hay un dominio escrito en la
+configuración que pueda quedarse desfasado y emitir códigos que apunten a un
+despliegue anterior.
+
+El mensaje de WhatsApp **no lleva la placa**: el enlace es lo único que el
+cliente necesita, y lo que no se escribe en el mensaje no viaja por WhatsApp.
+
+### Superficie expuesta
+
+Con la caja publicada en internet, tres decisiones que conviene no revertir:
+
+| Decisión | Por qué |
+|---|---|
+| La raíz muestra una presentación al visitante, no el formulario de acceso | Quien teclea el dominio es un cliente. Antes recibía el campo de contraseña en la dirección más previsible del sitio |
+| El panel de administración **no se monta** salvo que se indique `IRCARS_RUTA_ADMIN` | La aplicación no lo necesita —precio, turnos, corte y reportes tienen pantallas propias con las salvaguardas del negocio— y `/admin/` es la ruta más sondeada de cualquier sitio Django |
+| El formulario de acceso limita los **envíos** por IP (10 cada 5 min) | Django no trae esa protección. Abrir la pantalla no cuenta, de modo que recargar no deja fuera al operador |
 
 ---
 

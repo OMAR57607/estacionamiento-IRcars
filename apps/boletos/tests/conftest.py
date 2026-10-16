@@ -95,24 +95,19 @@ def publicar():
         datos = instantanea_publica(folio)
         datos.pop("version")
         uuid_folio = datos.pop("uuid_folio")
-        return BoletoPublicado.objects.create(uuid_folio=uuid_folio, **datos)
+        boleto = BoletoPublicado.objects.create(uuid_folio=uuid_folio, **datos)
+
+        # Releer de la base no es un adorno. La instantánea transporta los
+        # importes como cadena —JSON no distingue decimal de flotante—, y un
+        # objeto creado en memoria **conserva esas cadenas** en sus campos.
+        # En producción eso nunca ocurre: la ingesta escribe y cualquier
+        # lectura posterior devuelve `Decimal`. Sin esta relectura el
+        # accesorio produciría objetos que no existen en el sistema real, y
+        # las pruebas que lo usen estarían comprobando otra cosa.
+        boleto.refresh_from_db()
+        return boleto
 
     return _publicar
 
-
-@pytest.fixture(autouse=True)
-def limpiar_cache():
-    """
-    Vacía el caché entre pruebas.
-
-    Los límites de tasa —el propio de las rutas públicas y el de Django REST
-    Framework— llevan su cuenta en el caché, que es un proceso compartido
-    durante toda la sesión de pruebas. Sin esta limpieza, una prueba que agota
-    el límite haría fallar a las siguientes por un motivo ajeno a lo que
-    examinan, y el orden de ejecución pasaría a importar.
-    """
-    from django.core.cache import cache
-
-    cache.clear()
-    yield
-    cache.clear()
+# La limpieza del caché entre pruebas vive en `apps/conftest.py`: afecta a
+# todas las suites, no solo a esta.

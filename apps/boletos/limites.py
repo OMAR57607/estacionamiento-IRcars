@@ -56,18 +56,36 @@ def ip_cliente(request) -> str:
     return request.META.get("REMOTE_ADDR", "") or "desconocida"
 
 
-def limitar_por_ip(peticiones: int, ventana_segundos: int, etiqueta: str):
+# Métodos que no modifican nada. Un límite pensado para intentos de acceso
+# debe ignorarlos: cargar el formulario no es un intento.
+METODOS_SEGUROS = ("GET", "HEAD", "OPTIONS")
+
+
+def limitar_por_ip(
+    peticiones: int,
+    ventana_segundos: int,
+    etiqueta: str,
+    solo_escrituras: bool = False,
+):
     """
     Limita a `peticiones` por `ventana_segundos` y dirección IP.
 
     Ventana fija, no deslizante: es menos precisa en los bordes y mucho más
     barata —una sola clave por IP y ventana—. Para contener abuso, la
     diferencia es irrelevante.
+
+    `solo_escrituras` cuenta únicamente los métodos que modifican algo. Es lo
+    que corresponde en un formulario de acceso: lo que hay que acotar son los
+    intentos de contraseña, no las veces que alguien abre la página. Contando
+    las lecturas, un operador que recargara la pantalla se quedaría fuera.
     """
 
     def decorador(vista):
         @functools.wraps(vista)
         def envoltura(request, *args, **kwargs):
+            if solo_escrituras and request.method in METODOS_SEGUROS:
+                return vista(request, *args, **kwargs)
+
             ip = ip_cliente(request)
             # La ventana forma parte de la clave: al cambiar de ventana la
             # clave cambia y el contador se reinicia solo, sin tarea de
