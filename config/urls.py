@@ -23,6 +23,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 
 from apps.boletos.limites import limitar_por_ip
+from apps.estacionamiento.web.forms import FormularioAcceso
 
 
 def salud(_request):
@@ -64,7 +65,12 @@ if not settings.IRCARS_SOLO_BOLETOS:
                 ventana_segundos=300,
                 etiqueta="acceso",
                 solo_escrituras=True,
-            )(LoginView.as_view(template_name="estacionamiento/acceso.html")),
+            )(
+                LoginView.as_view(
+                    template_name="estacionamiento/acceso.html",
+                    authentication_form=FormularioAcceso,
+                )
+            ),
             name="login",
         ),
         path("salir/", LogoutView.as_view(next_page="login"), name="logout"),

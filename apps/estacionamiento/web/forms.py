@@ -13,6 +13,8 @@ from datetime import date
 from decimal import Decimal
 
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import AuthenticationForm
 
 from ..models import TipoCajon
 
@@ -296,3 +298,39 @@ class TarifaForm(forms.Form):
             attrs={"step": "0.01", "class": "campo", "inputmode": "decimal"}
         ),
     )
+
+
+class FormularioAcceso(AuthenticationForm):
+    """
+    Acceso que no distingue mayúsculas en el nombre de usuario.
+
+    Los atributos del campo evitan que el teclado capitalice, pero no cubren
+    todo: el operador puede escribir «Omar» por costumbre, un gestor de
+    contraseñas puede guardarlo con otra caja, y en un teléfono nadie revisa
+    la primera letra. El síntoma es el peor posible —«usuario o contraseña
+    incorrectos» con la contraseña bien puesta— y lleva a creer que se perdió
+    el acceso.
+
+    **La contraseña sigue distinguiendo mayúsculas**: aquí no se relaja la
+    autenticación, solo se resuelve a qué cuenta se refiere el nombre escrito.
+
+    La resolución exige **una sola** coincidencia. Si hubiera dos cuentas que
+    difieren únicamente en la caja de las letras, adivinar cuál se quería
+    sería peor que fallar: se deja el valor tal cual y la autenticación sigue
+    su curso normal.
+    """
+
+    def clean_username(self) -> str:
+        escrito = self.cleaned_data.get("username", "")
+        if not escrito:
+            return escrito
+
+        Usuario = get_user_model()
+        coincidencias = list(
+            Usuario.objects.filter(username__iexact=escrito).values_list(
+                "username", flat=True
+            )[:2]
+        )
+        if len(coincidencias) == 1:
+            return coincidencias[0]
+        return escrito
