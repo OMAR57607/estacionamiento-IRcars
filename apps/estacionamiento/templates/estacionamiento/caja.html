@@ -16,7 +16,7 @@
 
 {# ------------------------------------------------- Cotización en curso #}
 {% if cotizacion and folio_cotizado %}
-<div class="tarjeta" style="border-color:#1b4f91;border-width:2px">
+<div class="tarjeta destacada">
   <h2>Cobro de {{ folio_cotizado.placa }}</h2>
 
   <p class="detalle-cobro">
@@ -99,9 +99,9 @@
     <div class="valor">{{ ocupacion.capacidad_total }}</div>
   </div>
   {% if ocupacion.lleno %}
-  <div class="indicador" style="border-color:#a01818">
+  <div class="indicador alerta">
     <div class="rotulo">Estado</div>
-    <div class="valor" style="color:#a01818;font-size:1.2rem">LLENO</div>
+    <div class="valor">LLENO</div>
   </div>
   {% endif %}
 </div>
@@ -112,45 +112,47 @@
   <h2>Vehículos dentro ({{ patio|length }})</h2>
 
   {% if patio %}
-    <div class="tabla-envoltura">
-      <table>
-        <thead>
-          <tr>
-            <th>Placa</th>
-            <th>Cajón</th>
-            <th>Entrada</th>
-            <th class="numero">Permanencia</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for fila in patio %}
-          <tr>
-            <td class="placa">{{ fila.placa }}</td>
-            <td>{{ fila.cajon }}</td>
-            <td>{{ fila.entrada_en|date:"d/m H:i" }}</td>
-            <td class="numero">{{ fila.minutos|duracion }}</td>
-            <td>
-              <div class="acciones-fila">
-                {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero
-                   el POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
-                <form method="post" style="margin:0">
-                  {% csrf_token %}
-                  <input type="hidden" name="accion" value="cotizar">
-                  <input type="hidden" name="placa" value="{{ fila.placa }}">
-                  <button type="submit" class="boton angosto" style="margin:0">Cobrar</button>
-                </form>
-                {% comment %} Reabrir el boleto: el caso frecuente es el cliente que
-                   perdió el enlace o quiere que se lo reenvíen. {% endcomment %}
-                <a class="boton secundario angosto"
-                   href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+    <div class="lista-encabezado" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
+      <span>Placa</span>
+      <span>Cajón</span>
+      <span>Entrada</span>
+      <span>Permanencia</span>
+      <span></span>
     </div>
+
+    <ul class="lista" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
+    {% for fila in patio %}
+      <li class="lista-fila">
+        <span class="celda-principal">{{ fila.placa }}</span>
+
+        {% comment %} Los tres datos van agrupados. En pantalla ancha el grupo se
+           disuelve con `display: contents` y cada dato ocupa su columna; al
+           estrecharse vuelve a ser una línea bajo la placa. Un solo marcado
+           para ambos casos: dos versiones del patio acabarían divergiendo.
+        {% endcomment %}
+        <span class="celda-datos">
+          <span class="celda-dato">{{ fila.cajon }}</span>
+          <span class="celda-dato">{{ fila.entrada_en|date:"d/m H:i" }}</span>
+          <span class="celda-dato">{{ fila.minutos|duracion }}</span>
+        </span>
+
+        <span class="celda-acciones">
+          {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero el
+             POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
+          <form method="post" style="margin:0">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="cotizar">
+            <input type="hidden" name="placa" value="{{ fila.placa }}">
+            <button type="submit" class="boton angosto">Cobrar</button>
+          </form>
+          {% comment %} Reabrir el boleto: el caso frecuente es el cliente que perdió el
+             enlace o quiere que se lo reenvíen. {% endcomment %}
+          <a class="boton secundario angosto"
+             href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+        </span>
+      </li>
+    {% endfor %}
+    </ul>
   {% else %}
     <p class="vacio">No hay vehículos dentro en este momento.</p>
   {% endif %}

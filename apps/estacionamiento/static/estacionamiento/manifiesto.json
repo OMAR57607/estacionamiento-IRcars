@@ -1,0 +1,17 @@
+{
+  "name": "Estacionamiento IRcars",
+  "short_name": "IRcars",
+  "description": "Caja de estacionamiento: entradas, cobros y corte de turno.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#1b4f91",
+  "lang": "es-MX",
+  "icons": [
+    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
