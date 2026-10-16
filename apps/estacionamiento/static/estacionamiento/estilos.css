@@ -264,3 +264,84 @@ tr.sobrante td { background: var(--alerta-fondo); }
   .tarjeta { border: 0; padding: 0; margin-bottom: 0.6rem; }
   .contenido { max-width: none; padding: 0; }
 }
+
+/* --------------------------------------------------------------------------
+   Boleto emitido: la pantalla que el dependiente pone delante del cliente.
+
+   Se diseña para un teléfono en la mano, no para un escritorio: el código
+   ocupa el ancho disponible hasta un tope legible, y las acciones son
+   objetivos grandes porque se pulsan con el pulgar y con prisa.
+   -------------------------------------------------------------------------- */
+
+.boleto-emitido { max-width: 460px; margin: 0 auto; text-align: center; }
+
+.qr-marco {
+  /* Fondo blanco explícito y margen alrededor: la «zona de silencio» del
+     símbolo. Sin ella, muchos lectores no lo reconocen contra un fondo
+     contiguo, y el QR dejaría de leerse sin motivo aparente. */
+  background: #fff;
+  padding: 12px;
+  border-radius: 10px;
+  display: inline-block;
+  margin: 0.75rem 0 0.25rem;
+  line-height: 0;
+}
+
+.qr-marco svg { width: 100%; max-width: 280px; height: auto; display: block; }
+
+.qr-instruccion { color: #475569; font-size: 0.95rem; margin: 0 0 1rem; }
+
+.boleto-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+/* En pantalla estrecha, cada acción ocupa su propia línea a ancho completo:
+   botones contiguos de medio ancho se pulsan mal con el pulgar. */
+.boleto-acciones .boton { flex: 1 1 180px; min-height: 48px; }
+
+.etiqueta-enlace {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  text-align: left;
+  margin-bottom: 0.25rem;
+}
+
+.campo-enlace {
+  width: 100%;
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 0.6rem;
+}
+
+/* Al imprimir, queda el código y el enlace; nada de botones. */
+@media print {
+  .boleto-emitido { max-width: none; }
+  .qr-marco { border: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Ajustes para uso con una sola mano en teléfono.
+   -------------------------------------------------------------------------- */
+@media (max-width: 560px) {
+  /* Objetivos táctiles de 48 px: es la altura por debajo de la cual el error
+     de pulsación crece de forma notoria. */
+  .boton { min-height: 48px; }
+
+  /* Los campos donde se teclea la placa o el importe, más grandes: a 16 px o
+     más, Safari en iOS no hace zoom automático al enfocar, y ese zoom
+     desplaza la pantalla y obliga a recolocarla en cada captura. */
+  input[type="text"], input[type="number"], input[type="password"], select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .contenido { padding: 0.75rem; }
+}
+
+.acciones-fila { display: flex; gap: 0.4rem; align-items: center; }
+.acciones-fila .boton { margin: 0; }

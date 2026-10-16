@@ -279,6 +279,12 @@ IRCARS_TRAS_PROXY = env.bool("IRCARS_TRAS_PROXY", default=True)
 # ejecutable local y exponer la caja no aportaría nada salvo superficie.
 IRCARS_SOLO_BOLETOS = env.bool("IRCARS_SOLO_BOLETOS", default=False)
 
+# Ruta del panel de administración de Django. Vacía —lo normal— significa que
+# el panel NO se monta en ninguna dirección. La aplicación no lo necesita para
+# operar, y `/admin/` es la ruta más sondeada de cualquier sitio Django.
+# Para habilitarlo puntualmente, use una cadena larga y aleatoria, sin barras.
+IRCARS_RUTA_ADMIN = env("IRCARS_RUTA_ADMIN", default="").strip("/")
+
 # Si esta instancia debe publicar los folios que registra. En el servicio de
 # la nube va en False —se publica a sí mismo no tiene sentido— y es el valor
 # por omisión. Se deja configurable porque la interfaz web de caja comparte

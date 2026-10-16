@@ -14,8 +14,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.boletos.dominio import RELLENO
-from apps.boletos.models import BoletoPublicado, EstadoBoleto
+from apps.boletos.models import BoletoPublicado
 from apps.estacionamiento import services
+from apps.estacionamiento.models import Folio
 
 pytestmark = pytest.mark.django_db
 
@@ -70,12 +71,15 @@ class TestConsulta:
         assert "estimado" not in contenido.lower()
 
     def test_un_boleto_cancelado_no_muestra_importe(
-        self, client, boleto, servicio_configurado
+        self, client, folio_abierto, operador, servicio_configurado
     ):
-        boleto.estado = EstadoBoleto.CANCELADO
-        boleto.save(update_fields=["estado"])
+        services.cancelar_folio(
+            uuid_folio=folio_abierto.uuid,
+            motivo="placa mal capturada en la prueba",
+            operador=operador,
+        )
 
-        contenido = client.get(ruta_de(boleto.uuid_folio), secure=True).content.decode()
+        contenido = client.get(ruta_de(folio_abierto.uuid), secure=True).content.decode()
         assert "Cancelado" in contenido
         assert "Importe estimado" not in contenido
 
@@ -225,7 +229,7 @@ class TestSuperficieDeAtaque:
         assert respuesta.status_code == 404
 
     def test_un_boleto_vencido_es_indistinguible_de_uno_inexistente(
-        self, client, boleto, servicio_configurado
+        self, client, folio_abierto, operador, servicio_configurado
     ):
         """
         Vencido e inexistente deben contestar igual.
@@ -233,15 +237,19 @@ class TestSuperficieDeAtaque:
         Si el servicio respondiera distinto, confirmaría a quien sondea
         direcciones cuáles llegaron a existir.
         """
-        boleto.estado = EstadoBoleto.CERRADO
-        boleto.salida_en = timezone.now() - timedelta(
-            hours=servicio_configurado.IRCARS_HORAS_VIGENCIA_BOLETO + 1
+        folio, _ = services.registrar_salida(
+            uuid_folio=folio_abierto.uuid,
+            pago_recibido=Decimal("500.00"),
+            operador=operador,
         )
-        boleto.importe = Decimal("30.00")
-        boleto.minutos = 60
-        boleto.save()
+        # Se retrasa la salida sin pasar por `save` del servicio: lo que se
+        # examina es la caducidad de la página, no el cobro.
+        Folio.objects.filter(pk=folio.pk).update(
+            salida_en=timezone.now()
+            - timedelta(hours=servicio_configurado.IRCARS_HORAS_VIGENCIA_BOLETO + 1)
+        )
 
-        vencido = client.get(ruta_de(boleto.uuid_folio), secure=True)
+        vencido = client.get(ruta_de(folio.uuid), secure=True)
         inexistente = client.get(ruta_de(modulo_uuid.uuid4()), secure=True)
 
         assert vencido.status_code == inexistente.status_code == 404
@@ -254,8 +262,9 @@ class TestSuperficieDeAtaque:
         Caducar un boleto abierto por antigüedad dejaría sin consulta al
         cliente que dejó el auto un fin de semana completo.
         """
-        boleto.entrada_en = timezone.now() - timedelta(days=30)
-        boleto.save(update_fields=["entrada_en"])
+        Folio.objects.filter(uuid=boleto.uuid_folio).update(
+            entrada_en=timezone.now() - timedelta(days=30)
+        )
         assert client.get(ruta_de(boleto.uuid_folio), secure=True).status_code == 200
 
     def test_el_sondeo_sostenido_se_corta(self, client, boleto, servicio_configurado):

@@ -1,0 +1,110 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Boleto {{ folio.placa }}{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta boleto-emitido">
+
+  <h2>Boleto de {{ folio.placa }}</h2>
+  <p class="ayuda">
+    Entrada {{ folio.entrada_en|date:"d/m/Y H:i" }}{% if folio.cajon %} · cajón {{ folio.cajon.codigo }}{% endif %}.
+  </p>
+
+  {% if qr %}
+    {# El SVG va incrustado, no como archivo: una petición menos y el boleto
+       se imprime igual aunque el navegador no tenga acceso a los estáticos. #}
+    <div class="qr-marco">{{ qr|safe }}</div>
+    <p class="qr-instruccion">
+      Pida al cliente que escanee este código con la cámara de su teléfono.
+    </p>
+  {% else %}
+    <p class="aviso warning no-imprimir">
+      No se pudo dibujar el código QR. Comparta el enlace de abajo; el boleto
+      funciona igual.
+    </p>
+  {% endif %}
+
+  <div class="boleto-acciones no-imprimir">
+    {# `wa.me` abre la aplicación instalada en el teléfono y, si no la hay,
+       la versión web. No requiere conocer el número del cliente: es él quien
+       elige el destinatario en su propia aplicación. #}
+    <a class="boton" href="{{ url_whatsapp }}" target="_blank" rel="noopener noreferrer">
+      Compartir por WhatsApp
+    </a>
+    <button type="button" class="boton secundario" id="compartir" hidden>
+      Compartir…
+    </button>
+    <button type="button" class="boton secundario" id="copiar">
+      Copiar enlace
+    </button>
+  </div>
+
+  <label class="etiqueta-enlace" for="enlace">Enlace del boleto</label>
+  <input id="enlace" class="campo-enlace" type="text" readonly
+         value="{{ url_publica }}">
+
+  <p class="ayuda no-imprimir">
+    El cliente verá su hora de entrada, el tiempo transcurrido y el importe
+    acumulado. Su placa se muestra parcialmente para proteger sus datos.
+  </p>
+
+  <div class="boleto-acciones no-imprimir">
+    <a class="boton secundario" href="{% url 'web:caja' %}">Registrar otra entrada</a>
+  </div>
+
+</div>
+
+{# `json_script` emite el valor ya escapado dentro de una etiqueta de datos.
+   Es la forma correcta de pasar una cadena de Django a JavaScript: interpolarla
+   dentro del script permitiría una inyección si el valor cambiara de origen. #}
+{{ texto_compartir|json_script:"texto-compartir" }}
+
+<script>
+(function () {
+  var enlace = document.getElementById("enlace");
+  var botonCopiar = document.getElementById("copiar");
+  var botonCompartir = document.getElementById("compartir");
+  var texto = JSON.parse(document.getElementById("texto-compartir").textContent);
+
+  function avisar(boton, mensaje) {
+    var original = boton.textContent;
+    boton.textContent = mensaje;
+    setTimeout(function () { boton.textContent = original; }, 2000);
+  }
+
+  botonCopiar.addEventListener("click", function () {
+    // `navigator.clipboard` no existe en contextos no seguros ni en
+    // navegadores antiguos. Seleccionar el campo funciona en todos y deja al
+    // operador a un paso de copiar a mano, que es mejor que un botón inerte.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(enlace.value).then(
+        function () { avisar(botonCopiar, "Copiado"); },
+        function () { enlace.select(); avisar(botonCopiar, "Seleccionado"); }
+      );
+    } else {
+      enlace.select();
+      enlace.setSelectionRange(0, 99999);
+      avisar(botonCopiar, "Seleccionado");
+    }
+  });
+
+  // El menú de compartir del propio teléfono, cuando el navegador lo ofrece.
+  // Se revela solo si existe: un botón que no hace nada es peor que ninguno.
+  if (navigator.share) {
+    botonCompartir.hidden = false;
+    botonCompartir.addEventListener("click", function () {
+      navigator.share({
+        title: "Boleto de estacionamiento",
+        text: texto,
+        url: enlace.value
+      }).catch(function () {
+        // El usuario cerró el menú. No es un error y no se le avisa de nada.
+      });
+    });
+  }
+})();
+</script>
+
+{% endblock %}

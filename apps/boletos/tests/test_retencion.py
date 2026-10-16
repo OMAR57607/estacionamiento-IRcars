@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.boletos.management.commands.depurar_boletos import DIAS_RETENCION
 from apps.boletos.models import BoletoPublicado, EstadoBoleto
+from apps.estacionamiento import services
 
 pytestmark = pytest.mark.django_db
 
@@ -71,7 +72,7 @@ class TestFinDeCiclo:
 
 class TestCaducidadPublica:
     def test_un_cancelado_antiguo_deja_de_consultarse(
-        self, client, folio_abierto, publicar, servicio_configurado
+        self, client, folio_abierto, operador, servicio_configurado
     ):
         """
         Caso que la primera versión no cubría: el cancelado no caducaba nunca.
@@ -79,27 +80,37 @@ class TestCaducidadPublica:
         Su página pública seguía respondiendo indefinidamente porque la regla
         miraba `salida_en`, que en una cancelación es nulo.
         """
-        boleto = publicar(folio_abierto)
-        boleto.estado = EstadoBoleto.CANCELADO
-        boleto.save(update_fields=["estado"])
-        _envejecer(boleto, dias=3)
+        from apps.estacionamiento.models import Folio
 
-        respuesta = client.get(ruta_de(boleto.uuid_folio), secure=True)
+        services.cancelar_folio(
+            uuid_folio=folio_abierto.uuid,
+            motivo="placa mal capturada en la prueba",
+            operador=operador,
+        )
+        # `actualizado_en` lleva `auto_now`; se retrasa con `update` para que
+        # un `save` no lo devuelva al presente.
+        Folio.objects.filter(uuid=folio_abierto.uuid).update(
+            actualizado_en=timezone.now() - timedelta(days=3)
+        )
+
+        respuesta = client.get(ruta_de(folio_abierto.uuid), secure=True)
         assert respuesta.status_code == 404
 
     def test_un_cancelado_reciente_sigue_consultandose(
-        self, client, folio_abierto, publicar, servicio_configurado
+        self, client, folio_abierto, operador, servicio_configurado
     ):
         """
         El cliente debe poder ver que su boleto fue cancelado.
 
         Es información que le concierne: explica por qué no se le cobró.
         """
-        boleto = publicar(folio_abierto)
-        boleto.estado = EstadoBoleto.CANCELADO
-        boleto.save(update_fields=["estado"])
+        services.cancelar_folio(
+            uuid_folio=folio_abierto.uuid,
+            motivo="placa mal capturada en la prueba",
+            operador=operador,
+        )
 
-        assert client.get(ruta_de(boleto.uuid_folio), secure=True).status_code == 200
+        assert client.get(ruta_de(folio_abierto.uuid), secure=True).status_code == 200
 
 
 class TestComandoDepurar:
