@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
+{% comment %} El icono de la pestaña. Sin estas etiquetas el navegador pide
+   `/favicon.ico` a la raíz del sitio y recibe un 404 —se vio en los registros
+   del servidor con un teléfono real—. El de 192 px es el mismo archivo que ya
+   muestra la cabecera de esta página, así que no cuesta una petición extra.
+   {% endcomment %}
+<link rel="icon" href="{% static 'estacionamiento/icono-32.png' %}" sizes="32x32" type="image/png">
+<link rel="icon" href="{% static 'estacionamiento/icono-192.png' %}" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
 <title>Boleto no disponible · {{ nombre_comercial }}</title>
 <style>
   :root { --fondo:#f1f5f9; --tarjeta:#fff; --texto:#0f172a; --tenue:#64748b; --borde:#e2e8f0; }
