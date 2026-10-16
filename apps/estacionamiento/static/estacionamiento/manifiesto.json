@@ -1,6 +1,6 @@
 {
-  "name": "Estacionamiento IRcars",
-  "short_name": "IRcars",
+  "name": "RJ Cars",
+  "short_name": "RJ Cars",
   "description": "Caja de estacionamiento: entradas, cobros y corte de turno.",
   "start_url": "/",
   "scope": "/",
