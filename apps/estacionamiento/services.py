@@ -33,7 +33,7 @@ from .domain.exceptions import (
     SinTurnoAbierto,
     VehiculoYaDentro,
 )
-from .domain.tarifas import Cotizacion, cotizar
+from .domain.tarifas import Cotizacion, cotizar, minutos_transcurridos
 from .models import Cajon, EstadoFolio, EstadoTurno, Folio, Tarifa, TipoCajon, Turno
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,6 @@ logger = logging.getLogger(__name__)
 # formato de forma permisiva a propósito: rechazar una placa válida impediría
 # el ingreso de un cliente, un costo operativo mayor que aceptar una atípica.
 PATRON_PLACA = re.compile(r"^[A-Z0-9\-]{3,15}$")
-
-SEGUNDOS_POR_MINUTO = 60
 
 
 def normalizar_placa(placa: str) -> str:
@@ -86,16 +84,14 @@ def _minutos_transcurridos(entrada: datetime, salida: datetime) -> int:
     """
     Minutos completos entre entrada y salida.
 
-    Los segundos se descartan (truncamiento, no redondeo) en beneficio del
-    cliente: no se cobra un minuto que no transcurrió por completo.
+    La aritmética vive en `domain.tarifas.minutos_transcurridos`, junto al
+    resto de la regla de cobro: así la consulta pública del boleto, que corre
+    en otro proceso y hasta en otra máquina, aplica exactamente el mismo
+    truncamiento y no puede mostrar al cliente un importe distinto del que se
+    le cobrará. Este alias se conserva porque es el nombre que usan los casos
+    de uso de este módulo.
     """
-    segundos = (salida - entrada).total_seconds()
-    if segundos < 0:
-        raise ErrorConfiguracion(
-            "La hora de salida es anterior a la de entrada. Verifique el reloj "
-            "del equipo: una desincronización produce cobros incorrectos."
-        )
-    return int(segundos // SEGUNDOS_POR_MINUTO)
+    return minutos_transcurridos(entrada, salida)
 
 
 def _asignar_cajon(tipo_cajon: str) -> Cajon | None:

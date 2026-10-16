@@ -52,6 +52,7 @@ from apps.estacionamiento.domain.tarifas import ParametrosTarifa, cotizar
 
 from .. import formato, tema
 from ..errores import operacion
+from . import boleto
 
 # Refresco de la lista. Treinta segundos es suficiente: los minutos que importan
 # se recalculan al cobrar, y un refresco agresivo robaría respuesta a la
@@ -435,6 +436,12 @@ class VistaCaja(ttk.Frame):
         )
         self.refrescar()
         self.contexto.notificar()
+
+        # El código QR se ofrece aquí y no en otra pantalla porque este es el
+        # único instante en que el cliente está frente a la caseta. La función
+        # comprueba por sí misma si la publicación está configurada y no
+        # interrumpe la operación si algo falla: la entrada ya quedó registrada.
+        boleto.ofrecer_boleto(self.winfo_toplevel(), folio)
 
     @operacion("Cobro")
     def cotizar(self) -> None:

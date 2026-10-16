@@ -34,6 +34,30 @@ cambio en el cobro o en el control de caja no se replica en tres lugares.
 
 ---
 
+## Boleto del cliente por código QR
+
+El operador registra la entrada y la caja muestra un código QR. El cliente lo
+escanea con la cámara de su teléfono y consulta, desde donde quiera y con sus
+propios datos móviles, su hora de ingreso, el tiempo transcurrido, el precio
+exhibido y el importe acumulado al instante.
+
+La arquitectura es **híbrida y preserva la operación local**:
+
+- La caja sigue siendo la **fuente de verdad** y opera igual sin internet. El
+  folio se registra en la base local y la publicación se encola para enviarse
+  cuando haya red.
+- Un servicio en la nube recibe una **copia mínima** de cada folio —con la
+  placa ya enmascarada— y la sirve en una dirección pública de solo lectura.
+  Si ese servicio se borra por completo, no se pierde ningún dato contable.
+- La placa se publica **enmascarada** (`ABC••••`): es un dato personal y la
+  dirección del boleto es pública y reenviable. No viajan el operador, el
+  turno, el efectivo ni la placa completa.
+
+Puesta en marcha, controles de seguridad y diagnóstico en
+[BOLETO-QR.md](BOLETO-QR.md).
+
+---
+
 ## Obtener el ejecutable de Windows
 
 PyInstaller no hace compilación cruzada, así que el `.exe` se compila en un
@@ -322,6 +346,16 @@ estacionamientos en México (PROFECO y normatividad local):
   es reproducible y auditable de forma permanente.
 - Cada cobro conserva un **desglose** del cálculo, base de un comprobante
   explicable ante una aclaración o una verificación.
+- El **boleto consultable por QR** exhibe el cuadro tarifario vigente al
+  ingresar, con la leyenda de que es el que se aplicará aunque el precio
+  cambie durante la estancia. El importe que ve el cliente sale del mismo
+  motor que usa la caja, de modo que no puede diferir del que se le cobre.
+
+En materia de datos personales (LFPDPPP), el boleto público aplica
+**minimización** —la placa se enmascara en el origen y la completa nunca viaja
+ni se almacena en la nube— y **temporalidad**: los boletos liquidados se
+depuran del servicio público a los siete días, mientras el historial contable
+permanece íntegro en la caja.
 
 ---
 
@@ -382,9 +416,12 @@ los mismos servicios, sin duplicar reglas de negocio:
   texto plano y se guarda en archivo; falta enviarlo a la impresora sin pasar
   por el explorador, y emitir boleto de entrada y recibo de cobro con el
   desglose que el folio ya persiste.
-- **Sincronización opcional a la nube** para respaldo y reportería central,
-  manteniendo la operación local como fuente de verdad.
+- **Respaldo y reportería central en la nube.** La publicación de boletos ya
+  estableció el camino —bandeja de salida transaccional, reintentos, operación
+  local como fuente de verdad—; falta extenderlo a los datos del corte, que
+  hoy no salen del equipo.
 
-Ya no figuran aquí dos puntos que sí están construidos: el **corte de caja**
-por turno y operador —con cierre ciego, conciliación e historial— y el **panel
-de caja**, que es la propia aplicación de escritorio.
+Ya no figuran aquí tres puntos que sí están construidos: el **corte de caja**
+por turno y operador —con cierre ciego, conciliación e historial—, el **panel
+de caja**, que es la propia aplicación de escritorio, y la **consulta del
+boleto por el cliente**, descrita arriba.

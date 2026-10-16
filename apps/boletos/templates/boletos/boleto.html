@@ -1,0 +1,194 @@
+{% load moneda %}<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{# El boleto no debe indexarse. La cabecera HTTP `X-Robots-Tag` ya lo impide;
+   esta etiqueta la respalda para los rastreadores que solo leen el documento. #}
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0f172a">
+<title>Boleto {{ boleto.placa_enmascarada }} · {{ nombre_comercial }}</title>
+{# Estilos en línea y no en un archivo estático: el boleto se abre en la rampa
+   de salida, con una barra de señal y prisa detrás. Una sola petición HTTP es
+   la diferencia entre que cargue y que no. #}
+<style>
+  :root {
+    --fondo: #f1f5f9; --tarjeta: #ffffff; --texto: #0f172a; --tenue: #64748b;
+    --borde: #e2e8f0; --acento: #1d4ed8; --exito: #15803d; --alerta: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #0f172a; --tarjeta: #1e293b; --texto: #f8fafc; --tenue: #94a3b8;
+      --borde: #334155; --acento: #60a5fa; --exito: #4ade80; --alerta: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: var(--fondo); color: var(--texto);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  .boleto { max-width: 420px; margin: 0 auto; }
+  .marca {
+    text-align: center; font-size: 0.8rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--tenue); margin-bottom: 12px;
+  }
+  .tarjeta {
+    background: var(--tarjeta); border: 1px solid var(--borde);
+    border-radius: 14px; padding: 20px; margin-bottom: 12px;
+  }
+  .placa {
+    font-size: 2rem; font-weight: 700; letter-spacing: 0.12em;
+    text-align: center; margin: 0; font-variant-numeric: tabular-nums;
+  }
+  .nota-placa { text-align: center; color: var(--tenue); font-size: 0.75rem; margin: 6px 0 0; }
+  .estado {
+    display: block; width: fit-content; margin: 14px auto 0;
+    padding: 4px 14px; border-radius: 999px;
+    font-size: 0.8rem; font-weight: 600;
+    border: 1px solid currentColor;
+  }
+  .estado.dentro { color: var(--acento); }
+  .estado.liquidado { color: var(--exito); }
+  .estado.cancelado { color: var(--alerta); }
+  .importe { text-align: center; }
+  .importe .rotulo { color: var(--tenue); font-size: 0.85rem; margin: 0; }
+  .importe .cifra {
+    font-size: 2.6rem; font-weight: 700; margin: 4px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .importe .pie { color: var(--tenue); font-size: 0.75rem; margin: 0; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+  dt { color: var(--tenue); font-size: 0.9rem; }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+       color: var(--tenue); margin: 0 0 12px; }
+  .accion {
+    display: block; text-align: center; text-decoration: none;
+    background: var(--acento); color: #fff; font-weight: 600;
+    padding: 14px; border-radius: 12px; margin-bottom: 12px;
+  }
+  @media (prefers-color-scheme: dark) { .accion { color: #0f172a; } }
+  .legal { color: var(--tenue); font-size: 0.75rem; margin: 0; }
+  .folio { text-align: center; color: var(--tenue); font-size: 0.7rem;
+           margin-top: 16px; font-family: ui-monospace, monospace; }
+  @media print { .accion { display: none; } body { background: #fff; } }
+</style>
+</head>
+<body>
+<main class="boleto">
+
+  <p class="marca">{{ nombre_comercial }}</p>
+
+  <section class="tarjeta">
+    <p class="placa">{{ boleto.placa_enmascarada }}</p>
+    {# Se explica el enmascarado para que el cliente no crea que es un error de
+       captura. Sin esta línea, la duda llega a la caseta como una queja. #}
+    <p class="nota-placa">Mostramos su placa parcialmente para proteger sus datos.</p>
+
+    {% if boleto.estado == 'ABIERTO' %}
+      <span class="estado dentro">En el estacionamiento</span>
+    {% elif boleto.estado == 'CERRADO' %}
+      <span class="estado liquidado">Liquidado</span>
+    {% else %}
+      <span class="estado cancelado">Cancelado</span>
+    {% endif %}
+  </section>
+
+  {% if boleto.estado != 'CANCELADO' %}
+  <section class="tarjeta importe">
+    {% if es_estimado %}
+      <p class="rotulo">Importe estimado a este momento</p>
+      <p class="cifra">{{ importe|pesos }}</p>
+      <p class="pie">
+        Calculado a las {{ consultado_en|time:"H:i:s" }}.
+        El importe definitivo se determina al registrar su salida en la caseta.
+      </p>
+    {% else %}
+      <p class="rotulo">Importe cobrado</p>
+      <p class="cifra">{{ importe|pesos }}</p>
+      <p class="pie">Salida registrada a las {{ boleto.salida_en|time:"H:i" }}.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="tarjeta">
+    <dl>
+      <dt>Entrada</dt>
+      <dd>{{ boleto.entrada_en|date:"d/m/Y H:i" }}</dd>
+
+      {% if boleto.salida_en %}
+        <dt>Salida</dt>
+        <dd>{{ boleto.salida_en|date:"d/m/Y H:i" }}</dd>
+      {% endif %}
+
+      {% if minutos is not None %}
+        <dt>Permanencia</dt>
+        <dd>{{ minutos|duracion }}</dd>
+      {% endif %}
+
+      {% if boleto.ubicacion %}
+        <dt>Cajón</dt>
+        <dd>{{ boleto.ubicacion }}</dd>
+      {% endif %}
+    </dl>
+  </section>
+
+  {% if boleto.estado == 'ABIERTO' %}
+    {# Enlace a la misma dirección en lugar de recarga automática: un
+       `meta refresh` consumiría datos y batería del cliente sin pedírselo, y
+       la cifra solo le interesa cuando está por salir. #}
+    <a class="accion" href="">Actualizar importe</a>
+  {% endif %}
+
+  <section class="tarjeta">
+    <h2>Precio exhibido al ingresar</h2>
+    <dl>
+      <dt>Cuota por hora</dt>
+      <dd>{{ boleto.cuota_hora|pesos }}</dd>
+
+      {% if boleto.minutos_cortesia %}
+        <dt>Cortesía</dt>
+        <dd>{{ boleto.minutos_cortesia }} min</dd>
+      {% endif %}
+
+      <dt>Se cobra por</dt>
+      <dd>
+        {% if boleto.fraccion_minutos == 1 %}
+          minuto exacto
+        {% else %}
+          bloques de {{ boleto.fraccion_minutos }} min
+        {% endif %}
+      </dd>
+
+      {% if boleto.cobro_minimo %}
+        <dt>Cobro mínimo</dt>
+        <dd>{{ boleto.cobro_minimo|pesos }}</dd>
+      {% endif %}
+
+      {% if boleto.tope_diario %}
+        <dt>Máximo por día</dt>
+        <dd>{{ boleto.tope_diario|pesos }}</dd>
+      {% endif %}
+    </dl>
+  </section>
+
+  <section class="tarjeta">
+    {# Leyenda exigible: el precio aplicable es el exhibido al momento de
+       ingresar, y es el que se reproduce arriba a partir de la copia grabada
+       en el folio. Un cambio de tarifa posterior no altera este boleto. #}
+    <p class="legal">
+      El precio mostrado es el vigente al momento de su ingreso y es el que se
+      aplicará al cobro, aunque la tarifa cambie durante su estancia.
+      Esta consulta es informativa; el comprobante de pago se entrega en la
+      caseta. Conserve su boleto para la salida.
+    </p>
+  </section>
+
+  <p class="folio">Folio {{ boleto.uuid_folio|stringformat:"s"|slice:":8" }}</p>
+
+</main>
+</body>
+</html>

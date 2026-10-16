@@ -15,6 +15,15 @@ psycopg[binary]==3.2.3          # Driver PostgreSQL
 gunicorn==23.0.0
 whitenoise[brotli]==6.8.2       # Archivos estáticos sin servidor web adicional
 
+# --- Boleto del cliente por código QR ---------------------------------------
+segno==1.6.6                    # Generador de códigos QR en Python puro. Se
+                                # prefiere a «qrcode» porque este último
+                                # depende de Pillow, que añadiría decenas de
+                                # megabytes al ejecutable de PyInstaller y una
+                                # superficie de decodificación de imágenes que
+                                # esta aplicación no necesita. segno escribe
+                                # PNG y SVG por sí mismo.
+
 # --- Calidad y pruebas -------------------------------------------------------
 pytest==8.3.4
 pytest-django==4.9.0

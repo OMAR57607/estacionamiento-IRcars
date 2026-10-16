@@ -74,6 +74,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "apps.estacionamiento",
+    # Publicación de boletos para consulta del cliente por código QR. Es una
+    # aplicación desacoplada: el estacionamiento no la importa en ningún punto,
+    # de modo que puede retirarse de esta lista sin tocar el núcleo.
+    "apps.boletos",
 ]
 
 MIDDLEWARE = [
@@ -215,9 +219,76 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     # Límite de tasa: contiene un operador o un script que dispare peticiones
     # en exceso por error o por abuso.
-    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"user": "600/min"},
+    #
+    # `UserRateThrottle` por sí solo **no cubre al tráfico anónimo**: solo
+    # cuenta peticiones de usuarios autenticados y deja sin tope cualquier
+    # ruta sin sesión. Mientras toda la API exigía autenticación eso no se
+    # notaba; con el servicio de boletos existen rutas que se consultan sin
+    # credenciales, y la omisión pasaría a ser una vía de agotamiento del
+    # servicio. `AnonRateThrottle` cierra ese hueco.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "600/min",
+        "anon": "60/min",
+        # Ingesta de boletos: la emite una caseta, no una persona. 120 por
+        # minuto es holgado para el volumen real —unas 30 operaciones al
+        # día— y acota el daño si un cliente mal configurado entra en un
+        # ciclo de reintentos.
+        "ingesta_boletos": "120/min",
+    },
 }
+
+# --- Servicio de boletos (consulta del cliente por QR) ----------------------
+#
+# Arquitectura: la caja local sigue siendo la fuente de verdad. Este servicio
+# recibe una copia mínima de cada folio y la sirve en una dirección pública
+# que el cliente abre con la cámara de su teléfono. Si se borra por completo,
+# no se pierde ningún dato contable.
+
+# Nombre que se muestra en el boleto del cliente.
+IRCARS_NOMBRE_COMERCIAL = env("IRCARS_NOMBRE_COMERCIAL", default="Estacionamiento")
+
+# Token compartido que autentica a la caja contra la ingesta. Sin valor, la
+# ruta de escritura responde 503 en lugar de aceptar cargas sin credencial.
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+IRCARS_TOKEN_PUBLICACION = env("IRCARS_TOKEN_PUBLICACION", default="")
+
+# Origen público del servicio. Es lo que se codifica en el QR, de modo que el
+# enlace impreso y el destino de la publicación no puedan divergir.
+IRCARS_URL_BOLETOS = env("IRCARS_URL_BOLETOS", default="")
+if not IRCARS_URL_BOLETOS and _dominio_publico:
+    IRCARS_URL_BOLETOS = f"https://{_dominio_publico}"
+
+# Horas que un boleto liquidado sigue consultándose. Mientras el vehículo está
+# dentro el enlace no caduca; una vez cobrado, deja de responder y reduce la
+# exposición de una dirección que vive en historiales y mensajes reenviados.
+IRCARS_HORAS_VIGENCIA_BOLETO = env.int("IRCARS_HORAS_VIGENCIA_BOLETO", default=24)
+
+# El servicio corre detrás del proxy de la plataforma, que termina el TLS. De
+# ello depende cómo se determina la IP del solicitante al aplicar límites de
+# tasa (ver `apps.boletos.limites.ip_cliente`). Póngase en False si el proceso
+# atiende peticiones directamente, donde `X-Forwarded-For` no sería de fiar.
+IRCARS_TRAS_PROXY = env.bool("IRCARS_TRAS_PROXY", default=True)
+
+# Reduce el despliegue a la consulta e ingesta de boletos: sin panel de
+# administración, sin interfaz de caja y sin API del estacionamiento. Es la
+# configuración recomendada en la nube, donde la operación vive en el
+# ejecutable local y exponer la caja no aportaría nada salvo superficie.
+IRCARS_SOLO_BOLETOS = env.bool("IRCARS_SOLO_BOLETOS", default=False)
+
+# Si esta instancia debe publicar los folios que registra. En el servicio de
+# la nube va en False —se publica a sí mismo no tiene sentido— y es el valor
+# por omisión. Se deja configurable porque la interfaz web de caja comparte
+# esta configuración: si algún día se desplegara como caja real, tendría que
+# poder publicar igual que el ejecutable local.
+IRCARS_PUBLICAR_BOLETOS = env.bool("IRCARS_PUBLICAR_BOLETOS", default=False)
+
+# Permite publicar contra un servicio sin cifrar. Solo para pruebas en la
+# máquina local: el token de publicación viaja en la petición.
+IRCARS_PERMITIR_HTTP_BOLETOS = env.bool("IRCARS_PERMITIR_HTTP_BOLETOS", default=False)
 
 # --- Observabilidad ---------------------------------------------------------
 # Los eventos de negocio (entrada, cobro, cierre) se registran con su folio

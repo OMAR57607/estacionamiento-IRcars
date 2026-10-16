@@ -30,6 +30,30 @@ CENTAVO = Decimal("0.01")
 
 MINUTOS_POR_HORA = 60
 MINUTOS_POR_DIA = 1_440
+SEGUNDOS_POR_MINUTO = 60
+
+
+def minutos_transcurridos(entrada, salida) -> int:
+    """
+    Minutos completos entre dos instantes. Trunca, no redondea.
+
+    Vive en el dominio —y no en `services`— porque es parte de la regla de
+    cobro, no del acceso a datos: determina cuánto se cobra tanto como la
+    cuota por hora. Al estar aquí, el motor de caja y la consulta pública del
+    boleto aplican literalmente la misma aritmética, y el importe que el
+    cliente ve en su teléfono no puede diferir del que le cobra el operador
+    por una discrepancia de redondeo.
+
+    El truncamiento favorece al cliente: un minuto que no transcurrió por
+    completo no se cobra.
+    """
+    segundos = (salida - entrada).total_seconds()
+    if segundos < 0:
+        raise ErrorConfiguracion(
+            "La hora de salida es anterior a la de entrada. Verifique el reloj "
+            "del equipo: una desincronización produce cobros incorrectos."
+        )
+    return int(segundos // SEGUNDOS_POR_MINUTO)
 
 
 def _redondear(monto: Decimal) -> Decimal:

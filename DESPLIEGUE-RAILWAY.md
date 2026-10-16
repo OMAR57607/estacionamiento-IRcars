@@ -1,10 +1,19 @@
 # Despliegue web (no activo)
 
-> **Estado: retirado.** El sistema opera hoy con el **ejecutable de escritorio**
-> (ver [README](README.md)). El servicio en Railway y su base de datos fueron
-> eliminados. Este documento se conserva porque el código de la interfaz web y
-> de la API REST sigue completo y funcional, y porque las trampas que
-> encontramos volverían a aparecer si algún día se retoma.
+> **Estado: la *caja* web sigue retirada.** La operación vive en el
+> **ejecutable de escritorio** (ver [README](README.md)), y desplegar la caja
+> en la nube volvería a tener el problema descrito más abajo: la caseta deja
+> de cobrar cuando se cae la red.
+>
+> **Hay ahora un despliegue que sí tiene sentido**, y es distinto: el
+> **servicio de boletos** del modo `IRCARS_SOLO_BOLETOS`, que no opera la caja
+> —no tiene panel de administración, ni interfaz de cobro, ni API del
+> estacionamiento— y solo sirve al cliente la consulta de su boleto. Ahí la
+> nube no es un riesgo para la operación, porque si se cae no se deja de
+> cobrar: ver **[BOLETO-QR.md](BOLETO-QR.md)**.
+>
+> Las tres trampas de este documento aplican igual a ese despliegue, en
+> particular la de **no compartir instancia de base de datos**.
 
 ---
 

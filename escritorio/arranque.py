@@ -48,8 +48,32 @@ def iniciar(aplicar_migraciones: bool = True) -> None:
             logger.exception("Falló la preparación de la base de datos")
             raise
 
+    _iniciar_publicacion_de_boletos()
+
     _inicializado = True
     logger.info("Aplicación iniciada | python=%s", sys.version.split()[0])
+
+
+def _iniciar_publicacion_de_boletos() -> None:
+    """
+    Arranca el envío de boletos al servicio de consulta, si está configurado.
+
+    Va después de las migraciones porque el hilo lee la bandeja de salida, y
+    esa tabla podría no existir todavía en un equipo que acaba de actualizarse.
+
+    Cualquier fallo aquí se registra y se ignora. El criterio es el mismo que
+    rige todo este subsistema: **la caja cobra con o sin boletos en la nube.**
+    Que no se pueda publicar no es razón para que el programa no abra.
+    """
+    try:
+        from apps.boletos.publicador import iniciar_hilo
+
+        iniciar_hilo()
+    except Exception:
+        logger.exception(
+            "No se pudo iniciar la publicación de boletos. La caja opera con "
+            "normalidad; los boletos quedarán en la bandeja de salida."
+        )
 
 
 def ruta_base_datos() -> str:
