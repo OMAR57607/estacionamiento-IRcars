@@ -37,22 +37,49 @@ def ip_cliente(request) -> str:
     """
     Dirección del solicitante, resistente a la suplantación de cabeceras.
 
-    Se toma la entrada **más a la derecha** de `X-Forwarded-For`, no la
-    primera. El motivo es el que suele pasarse por alto: un proxy añade la IP
-    que él observa al final de la cabecera, de modo que la última entrada es la
-    única que escribió infraestructura propia. Las anteriores pueden venir del
-    cliente, y confiar en la primera permitiría a cualquiera eludir el límite
-    rotando valores inventados.
+    Hay dos despliegues posibles y cada uno exige mirar una cabecera distinta.
 
-    Cuando el servicio no está detrás de un proxy, la cabecera no es de fiar en
-    absoluto y se ignora: en ese caso `REMOTE_ADDR` es el dato real.
+    **Detrás de Cloudflare.** La cadena es cliente → Cloudflare → Railway →
+    aplicación, y `X-Forwarded-For` deja de servir: su entrada derecha pasa a
+    ser la IP del **borde de Cloudflare**, no la del cliente. Usarla agruparía
+    a todo el mundo en un puñado de contadores —el límite del formulario de
+    acceso dejaría de ser por persona y podría dejar fuera al propio operador
+    sin que nadie esté atacando nada—. Cloudflare resuelve esto añadiendo
+    `CF-Connecting-IP` con la dirección real, y es la que se consulta.
+
+    **Solo detrás del proxy de la plataforma.** Se toma la entrada más a la
+    derecha de `X-Forwarded-For`, no la primera. El motivo suele pasarse por
+    alto: un proxy añade la IP que él observa al final de la cabecera, de modo
+    que la última entrada es la única que escribió infraestructura propia. Las
+    anteriores pueden venir del cliente, y confiar en la primera permitiría
+    eludir el límite rotando valores inventados.
+
+    **Sin proxy alguno**, ninguna cabecera es de fiar y manda `REMOTE_ADDR`.
+
+    Límite conocido y asumido: con `IRCARS_TRAS_CLOUDFLARE` activo, quien
+    conozca la dirección de Railway puede saltarse Cloudflare y enviar un
+    `CF-Connecting-IP` inventado para eludir el límite. Cerrarlo del todo no
+    es cuestión de código sino de configuración —restringir el origen para que
+    solo acepte tráfico de Cloudflare—, y mientras tanto el perjuicio de
+    confiar en la cabecera es mucho menor que el de no hacerlo: sin ella el
+    límite no protege a nadie y además estorba a los operadores legítimos.
     """
+    if getattr(settings, "IRCARS_TRAS_CLOUDFLARE", False):
+        del_borde = request.META.get("HTTP_CF_CONNECTING_IP", "").strip()
+        if del_borde:
+            return del_borde
+        # Ausente significa que esta petición no pasó por Cloudflare: alguien
+        # llamó directamente a la dirección de la plataforma. Ahí la entrada
+        # derecha de `X-Forwarded-For` sí es el cliente real, así que se sigue
+        # con el camino de abajo en lugar de descartarla.
+
     if getattr(settings, "IRCARS_TRAS_PROXY", True):
         reenviadas = request.META.get("HTTP_X_FORWARDED_FOR", "")
         if reenviadas:
             ultima = reenviadas.split(",")[-1].strip()
             if ultima:
                 return ultima
+
     return request.META.get("REMOTE_ADDR", "") or "desconocida"
 
 
