@@ -52,7 +52,7 @@ class TestIcono:
     @pytest.mark.parametrize("lado", [32, 180, 192, 512])
     def test_los_png_son_validos_y_del_tamano_declarado(self, lado):
         """
-        Se generan con `scripts/generar_iconos.py`, sin Pillow.
+        Se generan con `scripts/generar_iconos.py` a partir del original.
 
         Un icono que no sea un PNG válido o que mienta sobre su tamaño
         produce un hueco en la pantalla de inicio, sin ningún error visible.
@@ -224,6 +224,23 @@ class TestMarcaEnLosBoletos:
         contenido = sesion.get(ruta, secure=True).content.decode()
 
         assert "icono-192.png" in contenido
+
+    def test_el_boleto_del_cliente_declara_el_icono_de_la_pestana(self, client, folio_de_prueba):
+        """
+        La página del cliente no hereda de `base.html`: declara su propio head.
+
+        Cuando no declaraba icono, el teléfono pedía `/favicon.ico` a la raíz
+        del sitio y recibía un 404 —visible en los registros de producción—.
+        La pestaña quedaba con el icono genérico justo en la pantalla que el
+        cliente conserva hasta la salida.
+        """
+        from django.urls import reverse
+
+        ruta = reverse("boletos:publico", kwargs={"uuid_folio": folio_de_prueba.uuid})
+        contenido = client.get(ruta, secure=True).content.decode()
+
+        assert 'rel="icon"' in contenido
+        assert 'rel="apple-touch-icon"' in contenido
 
 
 @pytest.fixture

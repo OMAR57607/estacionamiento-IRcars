@@ -8,6 +8,14 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0f172a">
+{% comment %} El icono de la pestaña. Sin estas etiquetas el navegador pide
+   `/favicon.ico` a la raíz del sitio y recibe un 404 —se vio en los registros
+   del servidor con un teléfono real—. El de 192 px es el mismo archivo que ya
+   muestra la cabecera de esta página, así que no cuesta una petición extra.
+   {% endcomment %}
+<link rel="icon" href="{% static 'estacionamiento/icono-32.png' %}" sizes="32x32" type="image/png">
+<link rel="icon" href="{% static 'estacionamiento/icono-192.png' %}" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
 <title>Boleto {{ boleto.placa_enmascarada }} · {{ nombre_comercial }}</title>
 {% comment %} Estilos en línea y no en un archivo estático: el boleto se abre en la rampa
    de salida, con una barra de señal y prisa detrás. Una sola petición HTTP es
