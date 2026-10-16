@@ -23,7 +23,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.contrib.auth.views import PasswordChangeView
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_safe
@@ -73,6 +74,39 @@ def _contexto_base(request) -> dict:
 
 
 # ---------------------------------------------------------------------- Caja
+
+
+class CambiarClave(PasswordChangeView):
+    """
+    Cambio de la propia contraseña, dentro de la aplicación.
+
+    Existe porque no hay otra vía: el panel de administración de Django no se
+    monta, de modo que sin esta pantalla la contraseña de una cuenta quedaría
+    fijada para siempre al valor con que se creó —y la del primer operador se
+    crea desde una variable de entorno del servidor, conocida por quien hizo
+    la instalación—.
+
+    `PasswordChangeView` exige la contraseña actual y aplica los validadores
+    configurados, así que no hace falta escribir nada de eso: lo que aporta
+    esta subclase es la plantilla propia y el destino al terminar.
+    """
+
+    template_name = "estacionamiento/clave.html"
+    success_url = reverse_lazy("web:caja")
+
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            "Contraseña actualizada. Su sesión sigue abierta en este equipo.",
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        # La barra de navegación necesita el turno y el perfil del operador,
+        # igual que en el resto de las pantallas.
+        contexto = super().get_context_data(**kwargs)
+        contexto.update(_contexto_base(self.request))
+        return contexto
 
 
 @require_safe

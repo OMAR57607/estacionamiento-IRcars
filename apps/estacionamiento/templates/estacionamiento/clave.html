@@ -1,0 +1,43 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Cambiar contraseña{% endblock %}
+
+{% block contenido %}
+<div class="tarjeta" style="max-width:460px;margin:0 auto">
+  <h2>Cambiar su contraseña</h2>
+
+  <p class="ayuda">
+    Hágalo en cuanto entre por primera vez. Si su cuenta se creó con una
+    contraseña puesta en la configuración del servidor, esa contraseña es
+    conocida por quien hizo la instalación y debe dejar de ser válida.
+  </p>
+
+  {% if form.errors %}
+    <div class="aviso error">
+      {% for campo in form %}{% for error in campo.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
+      {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <label for="{{ form.old_password.id_for_label }}">Contraseña actual</label>
+    {{ form.old_password }}
+
+    <label for="{{ form.new_password1.id_for_label }}">Contraseña nueva</label>
+    {{ form.new_password1 }}
+    <p class="ayuda">
+      Al menos ocho caracteres, que no sea una contraseña común y que no se
+      parezca a su nombre de usuario.
+    </p>
+
+    <label for="{{ form.new_password2.id_for_label }}">Repita la contraseña nueva</label>
+    {{ form.new_password2 }}
+
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem">
+      <button type="submit" class="boton">Cambiar contraseña</button>
+      <a class="boton secundario" href="{% url 'web:caja' %}">Volver a la caja</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

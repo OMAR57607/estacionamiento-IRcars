@@ -13,6 +13,9 @@ urlpatterns = [
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     path("reportes/", views.reportes, name="reportes"),
+    # Cambio de la propia contraseña. Sin panel de administración, es la única
+    # vía de rotar la clave con que se creó una cuenta.
+    path("clave/", views.CambiarClave.as_view(), name="clave"),
     path("tarifa/", views.tarifa, name="tarifa"),
     # El cambio de precio vive en su propia dirección y no en un formulario de
     # la pantalla anterior: llegar aquí es un acto deliberado, y la vista exige
