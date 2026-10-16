@@ -645,3 +645,12 @@ tr.sobrante td { background: var(--alerta-fondo); }
   .boleto-emitido { max-width: none; }
   .qr-marco { border: none; }
 }
+
+/* La marca sobre el boleto que se enseña al cliente. */
+.boleto-emitido .marca-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  display: block;
+  margin: 0 auto 0.75rem;
+}

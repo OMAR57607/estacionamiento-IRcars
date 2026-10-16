@@ -1,4 +1,4 @@
-{% load moneda %}<!doctype html>
+{% load moneda static %}<!doctype html>
 <html lang="es-MX">
 <head>
 <meta charset="utf-8">
@@ -31,9 +31,14 @@
     line-height: 1.5;
   }
   .boleto { max-width: 420px; margin: 0 auto; }
-  .marca {
-    text-align: center; font-size: 0.8rem; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--tenue); margin-bottom: 12px;
+  .marca { text-align: center; margin-bottom: 14px; }
+  .marca-logo {
+    width: 72px; height: 72px; border-radius: 16px; display: block;
+    margin: 0 auto 8px;
+  }
+  .marca-nombre {
+    font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--tenue); margin: 0;
   }
   .tarjeta {
     background: var(--tarjeta); border: 1px solid var(--borde);
@@ -80,7 +85,19 @@
 <body>
 <main class="boleto">
 
-  <p class="marca">{{ nombre_comercial }}</p>
+  <header class="marca">
+    {% comment %} La marca se sirve como archivo estático y no incrustada en la página.
+       Esta página no se guarda en caché —el importe cambia cada minuto— y el
+       cliente la recarga para verlo subir; una imagen incrustada viajaría
+       entera en cada recarga, mientras que un archivo con nombre versionado
+       se descarga una vez y queda en el navegador.
+
+       Si no cargara, el nombre de debajo sigue identificando al
+       estacionamiento: la página no depende de ella. {% endcomment %}
+    <img class="marca-logo" src="{% static 'estacionamiento/icono-192.png' %}"
+         alt="" width="72" height="72">
+    <p class="marca-nombre">{{ nombre_comercial }}</p>
+  </header>
 
   <section class="tarjeta">
     <p class="placa">{{ boleto.placa_enmascarada }}</p>

@@ -32,19 +32,24 @@ def sesion(client):
 
 
 class TestIcono:
-    def test_existen_los_formatos_que_pide_cada_sistema(self):
+    def test_existen_los_tamanos_que_pide_cada_sistema(self):
         """
-        Tres tamaños y un SVG, y cada uno tiene su motivo.
+        Cuatro tamaños, y cada uno tiene su motivo.
 
-        iOS no admite SVG al añadir a la pantalla de inicio: exige un PNG de
-        180 px, y sin él muestra una captura de la página, ilegible a ese
-        tamaño. Android toma 192 y 512 del manifiesto. El SVG sirve al
-        navegador de escritorio, donde escala sin perder nitidez.
+        32 px para la pestaña del navegador, 180 porque es lo que exige iOS al
+        añadir a la pantalla de inicio —sin él muestra una captura de la
+        página, ilegible a ese tamaño— y 192 y 512 para el manifiesto de
+        Android.
+
+        No hay SVG: el logotipo es un mapa de bits. Declarar uno obligaría a
+        incrustar el mismo mapa dentro de un envoltorio vectorial, que no
+        gana nitidez y sí pesa más.
         """
-        for nombre in ("icono.svg", "icono-180.png", "icono-192.png", "icono-512.png"):
+        for lado in (32, 180, 192, 512):
+            nombre = f"icono-{lado}.png"
             assert (ESTATICOS / nombre).exists(), f"Falta {nombre}"
 
-    @pytest.mark.parametrize("lado", [180, 192, 512])
+    @pytest.mark.parametrize("lado", [32, 180, 192, 512])
     def test_los_png_son_validos_y_del_tamano_declarado(self, lado):
         """
         Se generan con `scripts/generar_iconos.py`, sin Pillow.
@@ -76,6 +81,10 @@ class TestIcono:
         assert 'rel="apple-touch-icon"' in contenido
         assert 'rel="manifest"' in contenido
         assert 'name="theme-color"' in contenido
+        assert ".svg" not in contenido, (
+            "El logotipo es un mapa de bits: un SVG aquí solo envolvería el mismo "
+            "dibujo con más peso"
+        )
 
 
 class TestNavegacion:
@@ -150,3 +159,89 @@ class TestTemaOscuro:
         css = (ESTATICOS / "estilos.css").read_text(encoding="utf-8")
         bloque = css[css.index(".qr-marco {") : css.index(".qr-marco svg")]
         assert "background: #fff" in bloque
+
+
+@pytest.mark.django_db
+class TestMarcaEnLosBoletos:
+    """
+    El logotipo va en las dos caras del boleto.
+
+    La del cliente, porque es lo que recibe por WhatsApp o abre al escanear y
+    debe reconocer de quién es. La del operador, porque esa pantalla se pone
+    delante del cliente y, si el código no se lee y hay que enseñar el
+    teléfono, lo que se ve tiene que identificar al estacionamiento.
+    """
+
+    def test_el_boleto_del_cliente_lleva_la_marca(self, client, settings):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+
+        from apps.boletos.presentacion import BoletoVista
+
+        ahora = timezone.now()
+        vista = BoletoVista(
+            uuid_folio="0a9f6b1c-0000-4000-8000-000000000000",
+            placa_enmascarada="ABC••••",
+            estado="ABIERTO",
+            ubicacion="A-01",
+            entrada_en=ahora - timedelta(hours=1),
+            salida_en=None,
+            minutos=None,
+            importe=None,
+            cuota_hora=Decimal("30.00"),
+            minutos_cortesia=15,
+            fraccion_minutos=1,
+            cobro_minimo=Decimal("0.00"),
+            tope_diario=None,
+            fin_de_ciclo=None,
+        )
+        dibujado = render_to_string(
+            "boletos/boleto.html",
+            {
+                "boleto": vista,
+                "nombre_comercial": "Pruebas",
+                "consultado_en": ahora,
+                "minutos": 60,
+                "importe": Decimal("30.00"),
+                "es_estimado": True,
+                "cotizacion": None,
+            },
+        )
+
+        assert "icono-192.png" in dibujado
+        assert "Pruebas" in dibujado, (
+            "El nombre se conserva: si la imagen no carga, la página sigue "
+            "identificando al estacionamiento"
+        )
+
+    def test_el_boleto_del_operador_lleva_la_marca(self, sesion, folio_de_prueba):
+        from django.urls import reverse
+
+        ruta = reverse("web:boleto", kwargs={"uuid": folio_de_prueba.uuid})
+        contenido = sesion.get(ruta, secure=True).content.decode()
+
+        assert "icono-192.png" in contenido
+
+
+@pytest.fixture
+def folio_de_prueba(db):
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.contrib.auth import get_user_model
+    from django.utils import timezone
+
+    from apps.estacionamiento import services
+    from apps.estacionamiento.models import Cajon, Tarifa, TipoCajon
+
+    Tarifa.objects.create(
+        nombre="General",
+        cuota_hora=Decimal("30.00"),
+        vigente_desde=timezone.now() - timedelta(days=1),
+    )
+    Cajon.objects.create(codigo="A-01", tipo=TipoCajon.AUTOMOVIL)
+    operador = get_user_model().objects.create_user(username="otro", password=CLAVE)
+    return services.registrar_entrada(placa="ABC1234", operador=operador)
