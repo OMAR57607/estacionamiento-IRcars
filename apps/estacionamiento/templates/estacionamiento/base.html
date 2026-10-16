@@ -2,36 +2,70 @@
 <html lang="es-MX">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block titulo %}Caja{% endblock %} · Estacionamiento IRcars</title>
+
+  {% comment %} Un sistema de caja no es contenido que deba aparecer en buscadores.
+     Mantenerlo fuera evita además el tráfico automatizado que sigue a
+     cualquier formulario de acceso indexado. {% endcomment %}
+  <meta name="robots" content="noindex, nofollow">
+
+  {% comment %} Color de la barra del navegador y de la ventana cuando la aplicación se
+     añade a la pantalla de inicio. Sin esto, el teléfono la enmarca en blanco
+     y se nota que es una página y no una aplicación. {% endcomment %}
+  <meta name="theme-color" content="#1b4f91" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1823" media="(prefers-color-scheme: dark)">
+
+  <link rel="icon" href="{% static 'estacionamiento/icono.svg' %}" type="image/svg+xml">
+  {% comment %} iOS no admite SVG como icono de pantalla de inicio: necesita un PNG de
+     180 px. Sin él, muestra una captura de la página, que se lee fatal a ese
+     tamaño. {% endcomment %}
+  <link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
+  <link rel="manifest" href="{% static 'estacionamiento/manifiesto.json' %}">
+  <meta name="apple-mobile-web-app-title" content="IRcars">
+
   <link rel="stylesheet" href="{% static 'estacionamiento/estilos.css' %}">
 </head>
 <body>
 
 {% if user.is_authenticated %}
-<nav class="barra no-imprimir">
-  <span class="marca">Estacionamiento IRcars</span>
-  <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>
-  <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
-  {% if es_administrativo %}
-    <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
-    <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>Operadores</a>
-  {% endif %}
-  {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el precio
-     se consulta y se cambia ahí. Es el mismo nombre que la pestaña del
-     ejecutable de escritorio. {% endcomment %}
-  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Precio</a>
-  <span class="operador">
-    <a href="{% url 'web:clave' %}" title="Cambiar mi contraseña">{{ user.get_username }}</a>
-    {% if turno_actual %}· turno {{ turno_actual.pk }} abierto{% else %}· sin turno{% endif %}
-  </span>
-  {% comment %} El cierre de sesión va por POST: un GET permitiría cerrar la sesión del
-     operador desde un enlace o una imagen incrustada en otra página. {% endcomment %}
-  <form method="post" action="{% url 'logout' %}" style="margin:0">
-    {% csrf_token %}
-    <button type="submit" class="boton secundario angosto" style="margin:0">Salir</button>
-  </form>
-</nav>
+{% comment %} Cabecera compacta y pegada arriba. En un teléfono, la navegación
+   completa ocupaba dos o tres renglones en todas las pantallas; aquí queda la
+   identidad y lo propio del operador, y las secciones bajan a la barra
+   inferior, al alcance del pulgar. {% endcomment %}
+<header class="barra no-imprimir">
+  <span class="marca">IRcars</span>
+
+  <nav class="barra-secciones">
+    <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>
+    <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
+    {% if es_administrativo %}
+      <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
+      <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>Operadores</a>
+    {% endif %}
+    {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el
+       precio se consulta y se cambia ahí. {% endcomment %}
+    <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Precio</a>
+  </nav>
+
+  <div class="barra-operador">
+    <a class="operador" href="{% url 'web:clave' %}" title="Cambiar mi contraseña">
+      <span class="operador-nombre">{{ user.get_username }}</span>
+      {% if turno_actual %}
+        <span class="operador-turno turno-abierto">Turno {{ turno_actual.pk }}</span>
+      {% else %}
+        <span class="operador-turno">Sin turno</span>
+      {% endif %}
+    </a>
+    {% comment %} El cierre de sesión va por POST: un GET permitiría cerrar la sesión
+       del operador desde un enlace o una imagen incrustada en otra
+       página. {% endcomment %}
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="boton-salir" title="Cerrar sesión">Salir</button>
+    </form>
+  </div>
+</header>
 {% endif %}
 
 <main class="contenido">
@@ -43,6 +77,76 @@
 
   {% block contenido %}{% endblock %}
 </main>
+
+{% if user.is_authenticated %}
+{% comment %} Navegación inferior, solo en pantallas estrechas. El operador sostiene
+   el teléfono con una mano mientras atiende: la parte baja de la pantalla es
+   la única zona que el pulgar alcanza sin recolocar el aparato. {% endcomment %}
+{% comment %} Iconos dibujados en línea y no con caracteres Unicode. Los glifos
+   geométricos («▣», «◧») los resuelve cada teléfono con la fuente que tenga,
+   de modo que el mismo icono sale de un tamaño y un grosor distintos en cada
+   aparato, y en algunos no existe. Un trazo propio se ve igual en todos y
+   hereda el color del enlace activo. {% endcomment %}
+<nav class="barra-inferior no-imprimir">
+  <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>
+    <span class="icono" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="5" width="18" height="14" rx="2"/>
+        <path d="M3 10h18M8 15h3"/>
+      </svg>
+    </span>
+    <span>Caja</span>
+  </a>
+
+  <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>
+    <span class="icono" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="8.5"/>
+        <path d="M12 7v5l3.5 2"/>
+      </svg>
+    </span>
+    <span>Turno</span>
+  </a>
+
+  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>
+    <span class="icono" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v18"/>
+        <path d="M16.5 7.5C16.5 5.8 14.5 4.8 12 4.8S7.5 5.8 7.5 7.8s2 2.7 4.5 3.2
+                 S16.5 12.7 16.5 14.7s-2 3-4.5 3-4.5-1-4.5-2.7"/>
+      </svg>
+    </span>
+    <span>Precio</span>
+  </a>
+
+  {% if es_administrativo %}
+    <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>
+      <span class="icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
+        </svg>
+      </span>
+      <span>Reportes</span>
+    </a>
+
+    <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>
+      <span class="icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="8" r="3.2"/>
+          <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>
+          <path d="M16 11.2a3.2 3.2 0 1 0 0-6.4M17 14.3c2.2.5 3.8 2.3 3.8 4.7"/>
+        </svg>
+      </span>
+      <span>Equipo</span>
+    </a>
+  {% endif %}
+</nav>
+{% endif %}
 
 </body>
 </html>

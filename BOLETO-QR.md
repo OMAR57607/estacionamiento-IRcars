@@ -152,6 +152,35 @@ despliegue anterior.
 El mensaje de WhatsApp **no lleva la placa**: el enlace es lo único que el
 cliente necesita, y lo que no se escribe en el mensaje no viaja por WhatsApp.
 
+### Interfaz
+
+La aplicación está pensada para un teléfono en una mano, con un cliente
+delante:
+
+- **Las secciones viven en una barra inferior** en pantalla estrecha. La zona
+  baja es la única que el pulgar alcanza sin recolocar el aparato; arriba solo
+  quedan la identidad y el estado del turno, que condiciona lo que se puede
+  hacer —sin turno abierto no se cobra—.
+- **Claro y oscuro**, según lo que el operador tenga configurado. Una caseta de
+  madrugada con la pantalla en blanco deslumbra; la misma pantalla de día con
+  tema oscuro no se lee bajo el sol. Todo el color pasa por tokens, que es lo
+  que permite que el tema oscuro sea un bloque de redefiniciones y no una
+  segunda hoja que se desincroniza. En tema oscuro la cabecera **no** lleva el
+  color de marca: una franja del acento aclarado sería lo más luminoso de la
+  pantalla, justo lo que el tema oscuro evita.
+- **Las listas no son tablas.** Vehículos en el patio y operadores comparten un
+  componente de rejilla: en pantalla ancha se alinea como una tabla y al
+  estrecharse se apila, con el dato que se busca —la placa, el nombre— grande
+  arriba. Mismo marcado en ambos casos, de modo que no hay dos versiones que
+  puedan divergir.
+- **Objetivos táctiles de 48 px** y campos de 16 px, que es el umbral por
+  debajo del cual Safari en iOS amplía la página al enfocar y desplaza todo.
+- **El icono** se genera con `scripts/generar_iconos.py`, sin dependencias
+  externas. Hay SVG para el navegador, PNG de 180 px porque iOS no admite SVG
+  al añadir a la pantalla de inicio, y 192/512 para el manifiesto de Android.
+  Con el manifiesto, la aplicación se añade a la pantalla de inicio y se abre
+  sin barra de navegador.
+
 ### Operadores
 
 «Operadores», en la barra superior, sustituye al panel de administración:

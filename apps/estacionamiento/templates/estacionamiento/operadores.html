@@ -9,41 +9,40 @@
   <div class="tarjeta">
     <h2>Operadores ({{ operadores|length }})</h2>
 
-    <div class="tabla-envoltura">
-      <table>
-        <thead>
-          <tr>
-            <th>Usuario</th>
-            <th>Permisos</th>
-            <th>Estado</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for fila in operadores %}
-          <tr>
-            <td class="placa">{{ fila.objeto.get_username }}</td>
-            <td>
-              {% if fila.objeto.is_staff %}Administrativo{% else %}Solo cobro{% endif %}
-            </td>
-            <td>
-              {% if not fila.objeto.is_active %}
-                <span class="etiqueta-inactivo">Desactivado</span>
-              {% elif fila.turno_abierto %}
-                Turno {{ fila.turno_abierto.pk }} abierto
-              {% else %}
-                Activo
-              {% endif %}
-            </td>
-            <td>
-              <a class="boton secundario angosto"
-                 href="{% url 'web:operador' pk=fila.objeto.pk %}">Abrir</a>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+    <div class="lista-encabezado" style="--columnas:9rem 1fr 1fr auto">
+      <span>Usuario</span>
+      <span>Permisos</span>
+      <span>Estado</span>
+      <span></span>
     </div>
+
+    <ul class="lista" style="--columnas:9rem 1fr 1fr auto">
+    {% for fila in operadores %}
+      <li class="lista-fila">
+        <span class="celda-principal">{{ fila.objeto.get_username }}</span>
+
+        <span class="celda-datos">
+          <span class="celda-dato">
+            {% if fila.objeto.is_staff %}Administrativo{% else %}Solo cobro{% endif %}
+          </span>
+          <span class="celda-dato">
+            {% if not fila.objeto.is_active %}
+              <span class="etiqueta-inactivo">Desactivado</span>
+            {% elif fila.turno_abierto %}
+              Turno {{ fila.turno_abierto.pk }} abierto
+            {% else %}
+              Activo
+            {% endif %}
+          </span>
+        </span>
+
+        <span class="celda-acciones">
+          <a class="boton secundario angosto"
+             href="{% url 'web:operador' pk=fila.objeto.pk %}">Abrir</a>
+        </span>
+      </li>
+    {% endfor %}
+    </ul>
 
     <p class="ayuda">
       Un operador no se borra: se desactiva. Sus folios y sus cortes siguen
