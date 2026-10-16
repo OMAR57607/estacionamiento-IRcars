@@ -350,6 +350,48 @@ class TestToleranciaPorHora:
         assert Tarifa.objects.count() == 1
 
 
+class TestReglaEnPalabras:
+    """
+    La pantalla del precio dice cómo se cobra, además de mostrarlo.
+
+    Un precio con «bloques de 15 minutos» y otro con «15 de tolerancia»
+    producen tablas de ejemplos parecidas y ninguno de los dos es inválido.
+    Así se configuró mal en producción. La frase los distingue.
+    """
+
+    def test_la_pantalla_declara_la_tolerancia_vigente(self, client, cajero, vigente):
+        Tarifa.objects.all().update(
+            cuota_hora=Decimal("15.00"),
+            minutos_cortesia=0,
+            fraccion_minutos=1,
+            minutos_tolerancia=15,
+            cobro_minimo=Decimal("15.00"),
+            tope_diario=None,
+        )
+        client.force_login(cajero)
+
+        contenido = client.get(reverse("web:tarifa")).content.decode()
+
+        assert "15 minutos de tolerancia" in contenido
+        assert "la hora completa" in contenido
+
+    def test_la_pantalla_avisa_cuando_no_hay_tolerancia(self, client, cajero, vigente):
+        Tarifa.objects.all().update(
+            cuota_hora=Decimal("15.00"),
+            minutos_cortesia=0,
+            fraccion_minutos=15,
+            minutos_tolerancia=0,
+            cobro_minimo=Decimal("15.00"),
+            tope_diario=None,
+        )
+        client.force_login(cajero)
+
+        contenido = client.get(reverse("web:tarifa")).content.decode()
+
+        assert "No hay tolerancia por hora" in contenido
+        assert "bloques de 15 minutos" in contenido
+
+
 class TestValoresIniciales:
     def test_el_formulario_llega_con_los_valores_en_uso(
         self, client, administrativo, vigente

@@ -265,26 +265,27 @@ class TarifaForm(forms.Form):
         ),
         widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
     )
-    fraccion_minutos = forms.IntegerField(
-        min_value=1,
-        max_value=60,
-        label="Se cobra en bloques de (minutos)",
-        help_text=(
-            "1 = se paga el tiempo exacto, proporcionalidad estricta conforme al "
-            "criterio de cobro proporcional de PROFECO. 15 = todo bloque de 15 "
-            "minutos iniciado se cobra completo."
-        ),
-        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
-    )
     minutos_tolerancia = forms.IntegerField(
         min_value=0,
         max_value=59,
-        label="Tolerancia por hora (minutos)",
+        label="Tolerancia por hora: después se cobra la hora completa (minutos)",
         help_text=(
             "Gracia sobre cada hora cumplida. Dentro de ella se cobra el tiempo "
-            "transcurrido; al rebasarla se cobra la hora completa. Ej. 15: a la "
-            "1:10 se cobra proporcional y a la 1:16, dos horas. "
+            "transcurrido; al rebasarla, la hora completa. Ej. 15 con cuota de "
+            "$15: a la 1:10 se cobra $17.50 y a la 1:16, $30.00. "
             "0 = sin salto, siempre proporcional."
+        ),
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
+    )
+    fraccion_minutos = forms.IntegerField(
+        min_value=1,
+        max_value=60,
+        label="Redondeo del tiempo cobrado (minutos)",
+        help_text=(
+            "No es la tolerancia: esto solo redondea el tiempo hacia arriba. "
+            "1 = se paga el tiempo exacto, proporcionalidad estricta conforme al "
+            "criterio de cobro proporcional de PROFECO. 15 = una estancia de 1:01 "
+            "se cobra como 1:15."
         ),
         widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
     )
