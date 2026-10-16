@@ -345,3 +345,12 @@ tr.sobrante td { background: var(--alerta-fondo); }
 
 .acciones-fila { display: flex; gap: 0.4rem; align-items: center; }
 .acciones-fila .boton { margin: 0; }
+
+.etiqueta-inactivo {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: #9a6200;
+  border: 1px solid currentColor;
+}

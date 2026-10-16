@@ -1,0 +1,114 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}{{ objetivo.get_username }}{% endblock %}
+
+{% block contenido %}
+
+<p class="no-imprimir"><a href="{% url 'web:operadores' %}">‹ Volver a operadores</a></p>
+
+<div class="rejilla-doble">
+
+  <div class="tarjeta">
+    <h2>Datos de {{ objetivo.get_username }}</h2>
+
+    {% if turno_abierto %}
+      <div class="aviso warning">
+        Tiene el turno {{ turno_abierto.pk }} abierto desde
+        {{ turno_abierto.abierto_en|date:"d/m H:i" }}.
+      </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="datos">
+
+      <label for="{{ form.usuario.id_for_label }}">Nombre de usuario</label>
+      {{ form.usuario }}
+      <p class="ayuda">
+        Cambiarlo no afecta a su historial: los folios y los cortes se guardan
+        contra la persona, no contra el texto del nombre.
+      </p>
+
+      <p style="margin-top:.8rem">
+        <label style="display:flex;gap:.5rem;align-items:flex-start">
+          {{ form.administrativo }}
+          <span>{{ form.administrativo.label }}</span>
+        </label>
+      </p>
+
+      {% if es_ultimo_administrativo and objetivo.is_staff %}
+        <p class="ayuda">
+          Es el último operador con permiso administrativo. No se le puede
+          retirar hasta que otra persona lo tenga: nadie podría devolvérselo.
+        </p>
+      {% endif %}
+
+      <button type="submit" class="boton">Guardar</button>
+    </form>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Contraseña</h2>
+    <p class="ayuda">
+      Para cuando el operador la olvidó. No se le pide la actual, así que
+      entréguesela en persona y pídale que la cambie al entrar.
+      {% if es_uno_mismo %}
+        Para la suya propia es mejor la pantalla de cambio de contraseña, que
+        sí pide la actual.
+      {% endif %}
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="clave">
+
+      <label for="{{ form_clave.clave.id_for_label }}">Contraseña nueva</label>
+      {{ form_clave.clave }}
+
+      <label for="{{ form_clave.clave_repetida.id_for_label }}">Repítala</label>
+      {{ form_clave.clave_repetida }}
+
+      <button type="submit" class="boton secundario">Restablecer contraseña</button>
+    </form>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Acceso</h2>
+
+    {% if objetivo.is_active %}
+      <p class="ayuda">
+        Desactivarlo le impide entrar. No borra nada: sus folios y sus cortes
+        siguen siendo suyos.
+      </p>
+
+      {% if es_uno_mismo %}
+        <p class="aviso warning">
+          No puede desactivarse a sí mismo: perdería el acceso en el acto.
+        </p>
+      {% elif turno_abierto %}
+        <p class="aviso warning">
+          Cierre primero el turno {{ turno_abierto.pk }}: desactivarlo dejaría
+          ese efectivo sin corte y sin responsable.
+        </p>
+      {% else %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="estado">
+          <input type="hidden" name="activo" value="0">
+          <button type="submit" class="boton peligro">Desactivar acceso</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <p class="ayuda">Este operador no puede entrar.</p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="estado">
+        <input type="hidden" name="activo" value="1">
+        <button type="submit" class="boton">Reactivar acceso</button>
+      </form>
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}

@@ -152,6 +152,34 @@ despliegue anterior.
 El mensaje de WhatsApp **no lleva la placa**: el enlace es lo único que el
 cliente necesita, y lo que no se escribe en el mensaje no viaja por WhatsApp.
 
+### Operadores
+
+«Operadores», en la barra superior, sustituye al panel de administración:
+alta, cambio de nombre, permisos, restablecimiento de contraseña y
+activación. Solo la ven los operadores administrativos.
+
+Tres impedimentos que no son advertencias, porque **no hay red de seguridad**
+—si el último administrador se deja fuera, nadie puede rescatarlo—:
+
+| No se permite | Por qué |
+|---|---|
+| Quitarse el permiso administrativo siendo el último que lo tiene | Nadie podría volver a concederlo |
+| Desactivarse a uno mismo | Se pierde el acceso en el acto |
+| Desactivar a quien tiene un turno abierto | Ese efectivo quedaría sin corte y sin responsable |
+
+Y **no se puede borrar un operador**. No es una omisión: folios y turnos lo
+referencian con `PROTECT`, de modo que borrar a quien tiene historial
+rompería la trazabilidad de movimientos con efecto económico. Lo que
+corresponde es desactivarlo; su historial sigue atribuido.
+
+Cambiar el nombre de usuario **no afecta al historial**: folios y turnos se
+guardan contra la persona, no contra el texto del nombre.
+
+Dos nombres que solo difieran en mayúsculas se rechazan. Es lo que sostiene
+que el acceso no distinga mayúsculas —necesario para que el teclado de un
+teléfono no deje fuera al operador—: con «omar» y «Omar» a la vez, entrar se
+volvería ambiguo.
+
 ### Superficie expuesta
 
 Con la caja publicada en internet, tres decisiones que conviene no revertir:
