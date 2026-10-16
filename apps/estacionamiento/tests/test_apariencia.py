@@ -41,12 +41,21 @@ class TestIcono:
         página, ilegible a ese tamaño— y 192 y 512 para el manifiesto de
         Android.
 
+        Los dos mascarables son los que Android recorta con la forma del
+        teléfono. Sin ellos, el lanzador mete el icono en un círculo blanco y
+        lo encoge: la pantalla de inicio acaba mostrando el logotipo pequeño
+        sobre una placa que no es de la marca.
+
         No hay SVG: el logotipo es un mapa de bits. Declarar uno obligaría a
         incrustar el mismo mapa dentro de un envoltorio vectorial, que no
         gana nitidez y sí pesa más.
         """
         for lado in (32, 180, 192, 512):
             nombre = f"icono-{lado}.png"
+            assert (ESTATICOS / nombre).exists(), f"Falta {nombre}"
+
+        for lado in (192, 512):
+            nombre = f"icono-mascarable-{lado}.png"
             assert (ESTATICOS / nombre).exists(), f"Falta {nombre}"
 
     @pytest.mark.parametrize("lado", [32, 180, 192, 512])
@@ -65,14 +74,76 @@ class TestIcono:
         ancho, alto = struct.unpack(">II", datos[16:24])
         assert (ancho, alto) == (lado, lado)
 
-    def test_el_manifiesto_es_json_valido_y_apunta_a_los_iconos(self):
-        manifiesto = json.loads((ESTATICOS / "manifiesto.json").read_text(encoding="utf-8"))
+    @pytest.mark.parametrize("lado", [192, 512])
+    def test_el_mascarable_llega_hasta_el_borde(self, lado):
+        """
+        A sangre y sin canal alfa: las esquinas las recorta el sistema.
 
+        Un mascarable con las esquinas transparentes —como los demás iconos—
+        quedaría recortado dos veces: por el dibujo y por el lanzador, que
+        además rellena de blanco lo que falta.
+
+        Se comprueba sobre el byte de tipo de color del PNG (2 = color
+        verdadero sin alfa, 6 = con alfa) en lugar de inspeccionar píxeles:
+        es la propiedad del archivo, no una muestra de cuatro esquinas que
+        podría pasar con el resto del borde transparente.
+        """
+        import struct
+
+        datos = (ESTATICOS / f"icono-mascarable-{lado}.png").read_bytes()
+        ancho, alto = struct.unpack(">II", datos[16:24])
+
+        assert (ancho, alto) == (lado, lado)
+        assert datos[25] == 2, "El icono mascarable no debe tener canal alfa"
+
+    @pytest.mark.parametrize("lado", [32, 180, 192, 512])
+    def test_los_iconos_normales_conservan_las_esquinas_redondeadas(self, lado):
+        """
+        Los demás sí llevan alfa: en la pestaña del navegador nadie los
+        enmascara, y sin el redondeo propio se verían como un cuadro.
+        """
+        datos = (ESTATICOS / f"icono-{lado}.png").read_bytes()
+        assert datos[25] == 6, "El icono debe conservar su canal alfa"
+
+    def test_el_manifiesto_es_json_valido_y_apunta_a_los_iconos(self, client):
+        """
+        El manifiesto lo genera una vista, no es un archivo servido.
+
+        Así el nombre sale de la configuración y los iconos llevan la huella
+        de su contenido: una dirección fija haría que el teléfono que ya la
+        tenía en caché siguiera mostrando el icono anterior.
+        """
+        respuesta = client.get(reverse("web:manifiesto"), secure=True)
+
+        assert respuesta.status_code == 200
+        manifiesto = respuesta.json()
         assert manifiesto["start_url"] == "/"
         assert manifiesto["display"] == "standalone"
 
+        propositos = {icono["purpose"] for icono in manifiesto["icons"]}
+        assert propositos == {"any", "maskable"}
+
         for icono in manifiesto["icons"]:
-            assert (ESTATICOS / icono["src"]).exists(), icono["src"]
+            nombre = icono["src"].rsplit("/", 1)[-1]
+            assert (ESTATICOS / nombre).exists(), icono["src"]
+
+    def test_el_manifiesto_no_exige_sesion(self, client):
+        """
+        El navegador lo pide antes de que nadie entre a la caja.
+
+        Si respondiera con una redirección al acceso, el teléfono no podría
+        instalar la aplicación ni actualizar su icono.
+        """
+        respuesta = client.get(reverse("web:manifiesto"), secure=True)
+        assert respuesta.status_code == 200
+
+    def test_el_manifiesto_usa_el_nombre_configurado(self, client, settings):
+        settings.IRCARS_NOMBRE_COMERCIAL = "Pensión Centenario"
+
+        manifiesto = client.get(reverse("web:manifiesto"), secure=True).json()
+
+        assert manifiesto["name"] == "Pensión Centenario"
+        assert manifiesto["short_name"] == "Pensión Centenario"
 
     def test_la_plantilla_declara_el_icono_y_el_manifiesto(self, sesion):
         contenido = sesion.get(reverse("web:caja"), secure=True).content.decode()

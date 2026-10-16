@@ -22,7 +22,8 @@ from django.contrib.auth import authenticate
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import HttpResponse
+from django.contrib.staticfiles.storage import staticfiles_storage
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.views import PasswordChangeView
 from django.urls import reverse, reverse_lazy
@@ -30,7 +31,7 @@ from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_safe
 
-from .. import services, services_caja
+from .. import marca, services, services_caja
 from ..domain.exceptions import ErrorDominio
 from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
@@ -111,6 +112,65 @@ class CambiarClave(PasswordChangeView):
         contexto = super().get_context_data(**kwargs)
         contexto.update(_contexto_base(self.request))
         return contexto
+
+
+@require_safe
+def manifiesto(request):
+    """
+    Manifiesto de la aplicación instalable, generado y no servido como archivo.
+
+    Dos motivos, los dos comprobados en producción:
+
+    El nombre. Era la última copia del nombre comercial escrita a mano; aquí
+    sale de `marca.nombre_comercial()`, como el resto.
+
+    Los iconos. Un archivo estático solo puede nombrarlos por su ruta fija, y
+    esa ruta no cambia cuando cambia el dibujo: el teléfono que ya la tenía en
+    caché sigue mostrando el icono viejo. `staticfiles_storage.url` devuelve
+    la ruta con la huella del contenido, de modo que un icono nuevo es una
+    dirección nueva.
+
+    No exige sesión: el navegador lo pide antes de que nadie entre, y un
+    manifiesto solo describe cómo mostrar la aplicación.
+    """
+    nombre = marca.nombre_comercial()
+
+    def icono(nombre_archivo: str, lado: int, proposito: str) -> dict:
+        return {
+            "src": staticfiles_storage.url(f"estacionamiento/{nombre_archivo}"),
+            "sizes": f"{lado}x{lado}",
+            "type": "image/png",
+            "purpose": proposito,
+        }
+
+    return JsonResponse(
+        {
+            # `id` fija la identidad de la aplicación instalada: sin él, el
+            # navegador la deduce de `start_url` y un cambio de ruta crearía
+            # un acceso directo distinto en lugar de actualizar el existente.
+            "id": "/",
+            "name": nombre,
+            "short_name": nombre,
+            "description": "Caja de estacionamiento: entradas, cobros y corte de turno.",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#f4f6f8",
+            "theme_color": "#1b4f91",
+            "lang": "es-MX",
+            "icons": [
+                icono("icono-192.png", 192, "any"),
+                icono("icono-512.png", 512, "any"),
+                # Mascarables: el lanzador de Android recorta con la forma del
+                # teléfono. Sin una versión declarada así, mete el icono en un
+                # círculo blanco y lo encoge, y la pantalla de inicio muestra
+                # el logotipo pequeño sobre una placa que no es de la marca.
+                icono("icono-mascarable-192.png", 192, "maskable"),
+                icono("icono-mascarable-512.png", 512, "maskable"),
+            ],
+        }
+    )
 
 
 @login_required

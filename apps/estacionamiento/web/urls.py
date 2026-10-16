@@ -11,6 +11,10 @@ urlpatterns = [
     # el formulario de acceso, que es el comportamiento esperado de un
     # sistema de caja publicado en su propia dirección.
     path("", views.caja, name="caja"),
+    # Manifiesto de la aplicación instalable. Se genera en lugar de servirse
+    # como archivo: así el nombre sale de la configuración y los iconos
+    # llevan la huella de su contenido.
+    path("manifiesto.json", views.manifiesto, name="manifiesto"),
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     path("reportes/", views.reportes, name="reportes"),
