@@ -182,6 +182,9 @@ class BoletoPublicado(models.Model):
     fraccion_minutos = models.PositiveSmallIntegerField(
         "fracción de cobro (minutos)", default=1
     )
+    minutos_tolerancia = models.PositiveSmallIntegerField(
+        "tolerancia por hora (minutos)", default=0
+    )
     cobro_minimo = models.DecimalField(
         "cobro mínimo", max_digits=10, decimal_places=2, default=Decimal("0.00")
     )
@@ -220,6 +223,7 @@ class BoletoPublicado(models.Model):
             cuota_hora=self.cuota_hora,
             minutos_cortesia=self.minutos_cortesia,
             fraccion_minutos=self.fraccion_minutos,
+            minutos_tolerancia=self.minutos_tolerancia,
             cobro_minimo=self.cobro_minimo,
             tope_diario=self.tope_diario,
         )

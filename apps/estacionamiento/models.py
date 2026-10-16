@@ -179,6 +179,16 @@ class Tarifa(models.Model):
             "(proporcionalidad estricta). Un valor mayor redondea hacia arriba."
         ),
     )
+    minutos_tolerancia = models.PositiveSmallIntegerField(
+        "tolerancia por hora (minutos)",
+        default=0,
+        help_text=(
+            "Minutos de gracia sobre cada hora cumplida. Dentro de ellos se "
+            "cobra el tiempo real; al rebasarlos se cobra la hora completa. "
+            "Ej. 15: a la 1:10 se cobra proporcional y a la 1:16, dos horas. "
+            "0 = sin salto, cobro proporcional siempre."
+        ),
+    )
     cobro_minimo = models.DecimalField(
         "cobro mínimo",
         max_digits=10,
@@ -218,6 +228,7 @@ class Tarifa(models.Model):
             cuota_hora=self.cuota_hora,
             minutos_cortesia=self.minutos_cortesia,
             fraccion_minutos=self.fraccion_minutos,
+            minutos_tolerancia=self.minutos_tolerancia,
             cobro_minimo=self.cobro_minimo,
             tope_diario=self.tope_diario,
         )
@@ -324,6 +335,9 @@ class Folio(models.Model):
     )
     tarifa_fraccion_minutos = models.PositiveSmallIntegerField(
         "fracción aplicada (min)", null=True, blank=True
+    )
+    tarifa_minutos_tolerancia = models.PositiveSmallIntegerField(
+        "tolerancia aplicada (min)", null=True, blank=True
     )
     tarifa_cobro_minimo = models.DecimalField(
         "cobro mínimo aplicado", max_digits=10, decimal_places=2, null=True, blank=True

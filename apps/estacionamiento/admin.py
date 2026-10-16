@@ -18,6 +18,7 @@ class TarifaAdmin(admin.ModelAdmin):
         "cuota_hora",
         "fraccion_minutos",
         "minutos_cortesia",
+        "minutos_tolerancia",
         "cobro_minimo",
         "tope_diario",
         "activa",

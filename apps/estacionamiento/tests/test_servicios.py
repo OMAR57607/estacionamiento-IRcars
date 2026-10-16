@@ -131,6 +131,46 @@ class TestRegistrarSalida:
         nuevo = services.registrar_entrada(placa="XYZ789")
         assert nuevo.cajon == cajon
 
+    def test_la_tolerancia_por_hora_se_cobra_y_se_conserva(self, tarifa, cajones):
+        """
+        La regla del negocio llega hasta el cobro, no solo hasta el motor.
+
+        Se comprueba el camino completo —tarifa vigente, entrada, salida,
+        copia en el folio— porque un parámetro que el motor entiende pero que
+        el servicio no copia produce un importe irreproducible: el folio
+        quedaría sin poder explicar su propio cobro.
+        """
+        tarifa.minutos_cortesia = 0
+        tarifa.minutos_tolerancia = 15
+        tarifa.tope_diario = None
+        tarifa.save()
+
+        entrada = timezone.now() - timedelta(hours=1, minutes=16)
+        folio = services.registrar_entrada(placa="ABC123", momento=entrada)
+        folio, cot = services.registrar_salida(uuid_folio=folio.uuid)
+
+        # 1:16 rebasa la tolerancia: dos horas a $30.
+        assert cot.importe == Decimal("60.00")
+        assert cot.hora_completa_aplicada is True
+
+        folio.refresh_from_db()
+        assert folio.tarifa_minutos_tolerancia == 15
+        assert folio.desglose["hora_completa_aplicada"] is True
+
+    def test_dentro_de_la_tolerancia_se_cobra_el_tiempo_real(self, tarifa, cajones):
+        tarifa.minutos_cortesia = 0
+        tarifa.minutos_tolerancia = 15
+        tarifa.tope_diario = None
+        tarifa.save()
+
+        entrada = timezone.now() - timedelta(hours=1, minutes=10)
+        folio = services.registrar_entrada(placa="XYZ789", momento=entrada)
+        folio, cot = services.registrar_salida(uuid_folio=folio.uuid)
+
+        # 1:10 no la rebasa: una hora más diez minutos.
+        assert cot.importe == Decimal("35.00")
+        assert cot.hora_completa_aplicada is False
+
     def test_se_conserva_la_tarifa_aplicada_para_auditoria(self, tarifa, cajones):
         folio = services.registrar_entrada(
             placa="ABC123", momento=timezone.now() - timedelta(hours=1)

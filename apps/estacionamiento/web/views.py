@@ -575,6 +575,13 @@ EJEMPLOS_PERMANENCIA = (
     (15, "15 minutos"),
     (30, "Media hora"),
     (60, "1 hora"),
+    # Las dos filas siguientes rodean la tolerancia por hora. Sin ellas, todos
+    # los ejemplos caen en horas exactas y el salto de precio —que es lo que
+    # más reclama un cliente— quedaría invisible justo para quien fija el
+    # precio. Con tolerancia en cero, las dos muestran el proporcional y no
+    # estorban.
+    (70, "1 h 10 min"),
+    (76, "1 h 16 min"),
     (120, "2 horas"),
     (480, "8 horas"),
     (1440, "24 horas"),
@@ -594,6 +601,7 @@ PRECIO_DE_ARRANQUE = {
     "cuota_hora": Decimal("30.00"),
     "minutos_cortesia": 15,
     "fraccion_minutos": 1,
+    "minutos_tolerancia": 0,
     "cobro_minimo": Decimal("0.00"),
     "tope_diario": Decimal("250.00"),
 }
@@ -863,13 +871,15 @@ def _tarifa_vigente_o_nada() -> Tarifa | None:
 
 
 def _parametros_de(tarifa: Tarifa) -> ParametrosTarifa:
-    return ParametrosTarifa(
-        cuota_hora=tarifa.cuota_hora,
-        minutos_cortesia=tarifa.minutos_cortesia,
-        fraccion_minutos=tarifa.fraccion_minutos,
-        cobro_minimo=tarifa.cobro_minimo,
-        tope_diario=tarifa.tope_diario,
-    )
+    """
+    Traducción al objeto de dominio, delegada en el propio modelo.
+
+    Copiaba los campos uno a uno, y esa copia era la tercera de cuatro en el
+    repositorio: al añadir la tolerancia por hora, una tarifa correcta en base
+    de datos habría cotizado aquí sin ella, y la tabla de ejemplos de esta
+    misma pantalla habría mostrado precios que la caja no cobra.
+    """
+    return tarifa.a_parametros()
 
 
 def _ejemplos(parametros: ParametrosTarifa | None) -> list[dict]:
@@ -907,6 +917,7 @@ def _valores_vigentes(vigente: Tarifa | None) -> dict:
         "cuota_hora": vigente.cuota_hora,
         "minutos_cortesia": vigente.minutos_cortesia,
         "fraccion_minutos": vigente.fraccion_minutos,
+        "minutos_tolerancia": vigente.minutos_tolerancia,
         "cobro_minimo": vigente.cobro_minimo,
         "tope_diario": vigente.tope_diario,
     }
@@ -1021,6 +1032,7 @@ def tarifa_cambiar(request):
                     cuota_hora=datos["cuota_hora"],
                     minutos_cortesia=datos["minutos_cortesia"],
                     fraccion_minutos=datos["fraccion_minutos"],
+                    minutos_tolerancia=datos["minutos_tolerancia"],
                     cobro_minimo=datos["cobro_minimo"],
                     tope_diario=datos.get("tope_diario"),
                 )
@@ -1062,6 +1074,7 @@ def _poner_precio_en_vigencia(parametros: ParametrosTarifa) -> Tarifa:
         cuota_hora=parametros.cuota_hora,
         minutos_cortesia=parametros.minutos_cortesia,
         fraccion_minutos=parametros.fraccion_minutos,
+        minutos_tolerancia=parametros.minutos_tolerancia,
         cobro_minimo=parametros.cobro_minimo,
         tope_diario=parametros.tope_diario,
         activa=True,

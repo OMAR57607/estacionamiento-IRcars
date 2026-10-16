@@ -98,6 +98,53 @@ class TestConsulta:
         assert "15 min" in contenido
 
 
+    def test_exhibe_la_tolerancia_por_hora_cuando_la_tarifa_la_tiene(
+        self, client, tarifa, cajones, operador, publicar, servicio_configurado
+    ):
+        """
+        La tolerancia explica un salto de precio, así que se exhibe.
+
+        Sin ella a la vista, el cliente que ve $60 tras una hora y cuarto no
+        tiene cómo verificar el cobro, y la leyenda de precio exhibido pierde
+        su respaldo: el cuadro tarifario mostraría una cuota por hora que no
+        basta para reconstruir el importe.
+        """
+        tarifa.minutos_cortesia = 0
+        tarifa.minutos_tolerancia = 15
+        tarifa.save()
+
+        folio = services.registrar_entrada(placa="ABC1234", operador=operador)
+        folio.entrada_en = timezone.now() - timedelta(hours=1, minutes=16)
+        folio.save(update_fields=["entrada_en"])
+
+        contenido = client.get(ruta_de(publicar(folio).uuid_folio), secure=True).content.decode()
+
+        assert "Tolerancia" in contenido
+        assert "15 min por hora" in contenido
+        # 1:16 con cuota de $30 son dos horas completas.
+        assert "$60.00" in contenido
+
+    def test_la_tolerancia_viaja_en_la_copia_publicada(
+        self, tarifa, cajones, operador, publicar
+    ):
+        """
+        El parámetro debe sobrevivir al viaje a la nube.
+
+        Si se quedara en la caja, la copia publicada cotizaría sin él y el
+        teléfono del cliente mostraría un importe menor al que se le cobra en
+        la caseta: exactamente el conflicto que esta pantalla existe para
+        evitar.
+        """
+        tarifa.minutos_tolerancia = 15
+        tarifa.save()
+
+        folio = services.registrar_entrada(placa="ABC1234", operador=operador)
+        boleto = publicar(folio)
+
+        assert boleto.minutos_tolerancia == 15
+        assert boleto.a_parametros().minutos_tolerancia == 15
+
+
 class TestNoFiltraDatos:
     def test_nunca_aparece_la_placa_completa(self, client, boleto, servicio_configurado):
         contenido = client.get(ruta_de(boleto.uuid_folio), secure=True).content.decode()

@@ -22,7 +22,10 @@ from .dominio import enmascarar_placa
 # Versión del contrato. Viaja en la carga para que el servicio pueda rechazar
 # con un mensaje claro a una caja demasiado antigua, en lugar de fallar con un
 # error de validación que no explica nada.
-VERSION_CONTRATO = 1
+# v2: añade `minutos_tolerancia`. Un servicio v1 rechaza una carga v2 en
+# lugar de aceptarla descartando la tolerancia en silencio, que habría
+# hecho que el cliente leyera en su teléfono un precio distinto al cobrado.
+VERSION_CONTRATO = 2
 
 
 def _texto(valor: Decimal | None) -> str | None:
@@ -70,6 +73,7 @@ def parametros_exhibidos(folio):
             cuota_hora=folio.tarifa_cuota_hora,
             minutos_cortesia=folio.tarifa_minutos_cortesia or 0,
             fraccion_minutos=folio.tarifa_fraccion_minutos or 1,
+            minutos_tolerancia=folio.tarifa_minutos_tolerancia or 0,
             cobro_minimo=folio.tarifa_cobro_minimo or Decimal("0.00"),
             tope_diario=folio.tarifa_tope_diario,
         )
@@ -107,6 +111,7 @@ def instantanea_publica(folio) -> dict:
         "cuota_hora": _texto(parametros.cuota_hora),
         "minutos_cortesia": parametros.minutos_cortesia,
         "fraccion_minutos": parametros.fraccion_minutos,
+        "minutos_tolerancia": parametros.minutos_tolerancia,
         "cobro_minimo": _texto(parametros.cobro_minimo),
         "tope_diario": _texto(parametros.tope_diario),
     }

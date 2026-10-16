@@ -48,7 +48,7 @@ from tkinter import messagebox, ttk
 
 from apps.estacionamiento import services
 from apps.estacionamiento.domain.exceptions import SinTurnoAbierto
-from apps.estacionamiento.domain.tarifas import ParametrosTarifa, cotizar
+from apps.estacionamiento.domain.tarifas import cotizar
 
 from .. import formato, tema
 from ..errores import operacion
@@ -862,14 +862,10 @@ class VistaCaja(ttk.Frame):
     def _parametros_tarifa(self):
         """Parámetros del precio vigente, o `None` si todavía no hay ninguno."""
         try:
-            tarifa = services.obtener_tarifa_vigente()
-            return ParametrosTarifa(
-                cuota_hora=tarifa.cuota_hora,
-                minutos_cortesia=tarifa.minutos_cortesia,
-                fraccion_minutos=tarifa.fraccion_minutos,
-                cobro_minimo=tarifa.cobro_minimo,
-                tope_diario=tarifa.tope_diario,
-            )
+            # La traducción la hace el modelo: una copia campo por campo aquí
+            # cotizaría la columna «acumulado» con una tarifa incompleta en
+            # cuanto el cuadro tarifario ganara un parámetro.
+            return services.obtener_tarifa_vigente().a_parametros()
         except Exception:
             # Sin precio vigente la columna queda en blanco; la banda de guía
             # de la ventana ya reclama la configuración pendiente.
