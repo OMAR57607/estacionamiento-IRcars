@@ -14,6 +14,10 @@ urlpatterns = [
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     path("reportes/", views.reportes, name="reportes"),
+    # Alta y gobierno de operadores. Sustituye al panel de administración de
+    # Django, que no se monta.
+    path("operadores/", views.operadores, name="operadores"),
+    path("operadores/<int:pk>/", views.operador, name="operador"),
     # Cambio de la propia contraseña. Sin panel de administración, es la única
     # vía de rotar la clave con que se creó una cuenta.
     path("clave/", views.CambiarClave.as_view(), name="clave"),

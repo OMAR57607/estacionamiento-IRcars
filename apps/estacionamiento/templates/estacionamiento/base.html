@@ -15,6 +15,7 @@
   <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
   {% if es_administrativo %}
     <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
+    <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>Operadores</a>
   {% endif %}
   {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el precio
      se consulta y se cambia ahí. Es el mismo nombre que la pestaña del

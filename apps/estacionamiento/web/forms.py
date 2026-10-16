@@ -15,6 +15,8 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 from ..models import TipoCajon
 
@@ -334,3 +336,140 @@ class FormularioAcceso(AuthenticationForm):
         if len(coincidencias) == 1:
             return coincidencias[0]
         return escrito
+
+
+# --------------------------------------------------------------- Operadores
+
+
+def _validar_nombre_disponible(nombre: str, excluyendo_pk=None) -> str:
+    """
+    Comprueba que el nombre no choque con otro **sin distinguir mayúsculas**.
+
+    No es una preferencia estética. El acceso resuelve el nombre de usuario
+    sin distinguir mayúsculas, para que el teclado de un teléfono no deje
+    fuera al operador. Esa comodidad solo es segura mientras no existan dos
+    cuentas que difieran únicamente en la caja de las letras: con «omar» y
+    «Omar» a la vez, el acceso se vuelve ambiguo y, por diseño, deja de
+    entrar a ninguna. Impedir el choque aquí es lo que sostiene aquello.
+    """
+    Usuario = get_user_model()
+    colisiones = Usuario.objects.filter(username__iexact=nombre)
+    if excluyendo_pk is not None:
+        colisiones = colisiones.exclude(pk=excluyendo_pk)
+
+    if colisiones.exists():
+        existente = colisiones.first().username
+        raise forms.ValidationError(
+            f"Ya existe el operador «{existente}». Dos nombres que solo "
+            "difieran en mayúsculas impedirían entrar a ambos."
+        )
+    return nombre
+
+
+class _ClaveMixin:
+    """Validación compartida de la contraseña nueva."""
+
+    def clean(self):
+        datos = super().clean()
+        clave, repetida = datos.get("clave"), datos.get("clave_repetida")
+
+        if clave and repetida and clave != repetida:
+            raise forms.ValidationError("Las dos contraseñas no coinciden.")
+
+        if clave:
+            try:
+                # La misma política que la aplicación exige en cualquier otro
+                # cambio de contraseña. Una cuenta creada desde aquí no debe
+                # poder saltársela.
+                validate_password(clave)
+            except DjangoValidationError as exc:
+                raise forms.ValidationError(exc.messages) from exc
+
+        return datos
+
+
+class OperadorNuevoForm(_ClaveMixin, forms.Form):
+    """Alta de un operador."""
+
+    usuario = forms.CharField(
+        max_length=150,
+        label="Nombre de usuario",
+        widget=forms.TextInput(
+            attrs={
+                "class": "campo",
+                "autocapitalize": "none",
+                "autocorrect": "off",
+                "spellcheck": "false",
+                "autocomplete": "off",
+                "placeholder": "nombre.apellido",
+            }
+        ),
+    )
+    clave = forms.CharField(
+        label="Contraseña inicial",
+        widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "new-password"}),
+    )
+    clave_repetida = forms.CharField(
+        label="Repita la contraseña",
+        widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "new-password"}),
+    )
+    administrativo = forms.BooleanField(
+        required=False,
+        label="Puede ver reportes y cambiar el precio",
+        help_text=(
+            "Déjelo sin marcar para quien solo cobra. El precio es lo que más "
+            "conviene restringir: cobrar de menos empieza por poder bajarlo."
+        ),
+    )
+
+    def clean_usuario(self) -> str:
+        nombre = self.cleaned_data["usuario"].strip()
+        return _validar_nombre_disponible(nombre)
+
+
+class OperadorEditarForm(forms.Form):
+    """Cambio de nombre y de permisos de un operador existente."""
+
+    usuario = forms.CharField(
+        max_length=150,
+        label="Nombre de usuario",
+        widget=forms.TextInput(
+            attrs={
+                "class": "campo",
+                "autocapitalize": "none",
+                "autocorrect": "off",
+                "spellcheck": "false",
+            }
+        ),
+    )
+    administrativo = forms.BooleanField(
+        required=False, label="Puede ver reportes y cambiar el precio"
+    )
+
+    def __init__(self, *args, operador=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._operador = operador
+
+    def clean_usuario(self) -> str:
+        nombre = self.cleaned_data["usuario"].strip()
+        pk = getattr(self._operador, "pk", None)
+        return _validar_nombre_disponible(nombre, excluyendo_pk=pk)
+
+
+class ClaveOperadorForm(_ClaveMixin, forms.Form):
+    """
+    Restablecimiento de la contraseña de otro operador.
+
+    No pide la contraseña actual —quien la restablece es precisamente quien no
+    la conoce— y por eso la pantalla deja constancia de para quién es el
+    cambio antes de aplicarlo.
+    """
+
+    clave = forms.CharField(
+        label="Contraseña nueva",
+        widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "new-password"}),
+    )
+    clave_repetida = forms.CharField(
+        label="Repita la contraseña",
+        widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "new-password"}),
+    )

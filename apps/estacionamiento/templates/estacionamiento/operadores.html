@@ -1,0 +1,88 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Operadores{% endblock %}
+
+{% block contenido %}
+
+<div class="rejilla-doble">
+
+  <div class="tarjeta">
+    <h2>Operadores ({{ operadores|length }})</h2>
+
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Permisos</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for fila in operadores %}
+          <tr>
+            <td class="placa">{{ fila.objeto.get_username }}</td>
+            <td>
+              {% if fila.objeto.is_staff %}Administrativo{% else %}Solo cobro{% endif %}
+            </td>
+            <td>
+              {% if not fila.objeto.is_active %}
+                <span class="etiqueta-inactivo">Desactivado</span>
+              {% elif fila.turno_abierto %}
+                Turno {{ fila.turno_abierto.pk }} abierto
+              {% else %}
+                Activo
+              {% endif %}
+            </td>
+            <td>
+              <a class="boton secundario angosto"
+                 href="{% url 'web:operador' pk=fila.objeto.pk %}">Abrir</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="ayuda">
+      Un operador no se borra: se desactiva. Sus folios y sus cortes siguen
+      atribuidos a él, que es lo que permite reconstruir cualquier movimiento
+      meses después.
+    </p>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Dar de alta</h2>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <label for="{{ form.usuario.id_for_label }}">Nombre de usuario</label>
+      {{ form.usuario }}
+      <p class="ayuda">
+        En minúsculas y sin espacios. Al entrar no se distinguen mayúsculas,
+        así que no puede haber dos nombres que solo difieran en eso.
+      </p>
+
+      <label for="{{ form.clave.id_for_label }}">Contraseña inicial</label>
+      {{ form.clave }}
+
+      <label for="{{ form.clave_repetida.id_for_label }}">Repita la contraseña</label>
+      {{ form.clave_repetida }}
+
+      <p style="margin-top:.8rem">
+        <label style="display:flex;gap:.5rem;align-items:flex-start">
+          {{ form.administrativo }}
+          <span>{{ form.administrativo.label }}</span>
+        </label>
+      </p>
+      <p class="ayuda">{{ form.administrativo.help_text }}</p>
+
+      <button type="submit" class="boton">Crear operador</button>
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}

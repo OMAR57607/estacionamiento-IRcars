@@ -20,6 +20,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import authenticate
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -35,12 +36,15 @@ from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
 from .forms import (
     AbrirTurnoForm,
+    ClaveOperadorForm,
     BuscarPlacaForm,
     CancelarFolioForm,
     CerrarTurnoForm,
     CobroForm,
     DesbloqueoPrecioForm,
     EntradaForm,
+    OperadorEditarForm,
+    OperadorNuevoForm,
     RangoFechasForm,
     TarifaForm,
 )
@@ -593,6 +597,256 @@ PRECIO_DE_ARRANQUE = {
     "cobro_minimo": Decimal("0.00"),
     "tope_diario": Decimal("250.00"),
 }
+
+
+# ---------------------------------------------------------------- Operadores
+#
+# Esta pantalla existe porque el panel de administración de Django no se monta:
+# sin ella, dar de alta a alguien exigiría tocar variables de entorno y
+# desplegar, y cambiar un nombre de usuario sería imposible.
+#
+# Lo que más condiciona su diseño es que **no hay red de seguridad**. Si el
+# último administrador se quita los permisos o se desactiva, nadie puede
+# devolvérselos: no hay panel desde donde rescatar la instalación. De ahí que
+# las comprobaciones de abajo no sean advertencias sino impedimentos.
+
+
+def _es_ultimo_administrativo(usuario) -> bool:
+    """Indica si quitarle los permisos dejaría la instalación sin gobierno."""
+    Usuario = get_user_model()
+    otros = Usuario.objects.filter(is_staff=True, is_active=True).exclude(pk=usuario.pk)
+    return not otros.exists()
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def operadores(request):
+    """
+    Listado y alta de operadores.
+
+    Restringida a los administrativos: quien puede crear cuentas puede crear
+    una cuenta que cobre, y eso tiene el mismo peso que cambiar el precio.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "operadores"
+    form = OperadorNuevoForm()
+
+    if request.method == "POST":
+        form = OperadorNuevoForm(request.POST)
+        if form.is_valid():
+            creado = get_user_model().objects.create_user(
+                username=form.cleaned_data["usuario"],
+                password=form.cleaned_data["clave"],
+                is_staff=form.cleaned_data["administrativo"],
+            )
+            logger.info(
+                "Operador creado | usuario=%s administrativo=%s por=%s",
+                creado.username,
+                creado.is_staff,
+                request.user.get_username(),
+            )
+            messages.success(
+                request,
+                f"Operador «{creado.username}» creado. Pídale que cambie su "
+                "contraseña la primera vez que entre.",
+            )
+            return redirect("web:operadores")
+        messages.error(request, "Revise los datos del operador.")
+
+    contexto["form"] = form
+    contexto["operadores"] = _listado_de_operadores()
+    return render(request, "estacionamiento/operadores.html", contexto)
+
+
+def _listado_de_operadores() -> list[dict]:
+    """
+    Operadores con lo que hace falta para decidir sobre ellos.
+
+    El turno abierto se incluye porque condiciona la desactivación: apagar a
+    quien tiene caja abierta dejaría ese efectivo sin corte y sin responsable.
+    """
+    Usuario = get_user_model()
+    filas = []
+    for usuario in Usuario.objects.order_by("-is_active", "username"):
+        filas.append(
+            {
+                "objeto": usuario,
+                "turno_abierto": services.obtener_turno_abierto(usuario),
+                "es_uno_mismo": False,
+            }
+        )
+    return filas
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def operador(request, pk: int):
+    """
+    Ficha de un operador: nombre, permisos, estado y contraseña.
+
+    Nótese lo que **no** ofrece: borrar. No es una omisión. Los folios y los
+    turnos referencian al operador con `PROTECT`, de modo que un operador con
+    historial no puede eliminarse sin romper la trazabilidad de movimientos
+    con efecto económico. Lo que corresponde es desactivarlo: deja de entrar y
+    su historial permanece atribuido.
+    """
+    objetivo = get_object_or_404(get_user_model(), pk=pk)
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "operadores"
+
+    form = OperadorEditarForm(
+        operador=objetivo,
+        initial={
+            "usuario": objetivo.get_username(),
+            "administrativo": objetivo.is_staff,
+        },
+    )
+    form_clave = ClaveOperadorForm()
+
+    if request.method == "POST":
+        accion = request.POST.get("accion")
+        try:
+            if accion == "datos":
+                return _guardar_datos_operador(request, objetivo)
+            if accion == "clave":
+                return _restablecer_clave_operador(request, objetivo)
+            if accion == "estado":
+                return _cambiar_estado_operador(request, objetivo)
+            messages.error(request, "Acción no reconocida.")
+        except ErrorDeGobierno as exc:
+            messages.error(request, str(exc))
+        return redirect("web:operador", pk=objetivo.pk)
+
+    contexto.update(
+        {
+            "objetivo": objetivo,
+            "form": form,
+            "form_clave": form_clave,
+            "turno_abierto": services.obtener_turno_abierto(objetivo),
+            "es_uno_mismo": objetivo.pk == request.user.pk,
+            "es_ultimo_administrativo": _es_ultimo_administrativo(objetivo),
+        }
+    )
+    return render(request, "estacionamiento/operador.html", contexto)
+
+
+class ErrorDeGobierno(Exception):
+    """Impedimento que protege el acceso a la propia instalación."""
+
+
+def _guardar_datos_operador(request, objetivo):
+    form = OperadorEditarForm(request.POST, operador=objetivo)
+    if not form.is_valid():
+        for errores in form.errors.values():
+            for error in errores:
+                messages.error(request, error)
+        return redirect("web:operador", pk=objetivo.pk)
+
+    administrativo = form.cleaned_data["administrativo"]
+
+    # Quitarse a uno mismo los permisos, siendo el último administrativo, deja
+    # la instalación sin nadie que pueda devolvérselos: no hay panel de
+    # administración desde donde rescatarla.
+    if (
+        objetivo.is_staff
+        and not administrativo
+        and _es_ultimo_administrativo(objetivo)
+    ):
+        raise ErrorDeGobierno(
+            "No puede quitarse el permiso administrativo al último operador "
+            "que lo tiene: nadie podría volver a concederlo. Primero "
+            "concédaselo a otra persona."
+        )
+
+    anterior = objetivo.get_username()
+    objetivo.username = form.cleaned_data["usuario"]
+    objetivo.is_staff = administrativo
+    objetivo.save(update_fields=["username", "is_staff"])
+
+    logger.info(
+        "Operador modificado | de=%s a=%s administrativo=%s por=%s",
+        anterior,
+        objetivo.username,
+        objetivo.is_staff,
+        request.user.get_username(),
+    )
+    if anterior != objetivo.username:
+        messages.success(
+            request,
+            f"«{anterior}» pasa a llamarse «{objetivo.username}». Su historial "
+            "y sus cortes siguen siendo suyos.",
+        )
+    else:
+        messages.success(request, "Datos del operador actualizados.")
+    return redirect("web:operador", pk=objetivo.pk)
+
+
+def _restablecer_clave_operador(request, objetivo):
+    form = ClaveOperadorForm(request.POST)
+    if not form.is_valid():
+        for errores in form.errors.values():
+            for error in errores:
+                messages.error(request, error)
+        return redirect("web:operador", pk=objetivo.pk)
+
+    objetivo.set_password(form.cleaned_data["clave"])
+    objetivo.save(update_fields=["password"])
+
+    # Queda en bitácora porque restablecer la contraseña de otra persona es el
+    # acto con más alcance de esta pantalla: permite entrar como ella.
+    logger.warning(
+        "Contraseña restablecida | usuario=%s por=%s",
+        objetivo.get_username(),
+        request.user.get_username(),
+    )
+    messages.success(
+        request,
+        f"Contraseña de «{objetivo.get_username()}» restablecida. Entréguesela "
+        "en persona y pídale que la cambie.",
+    )
+    return redirect("web:operador", pk=objetivo.pk)
+
+
+def _cambiar_estado_operador(request, objetivo):
+    activar = request.POST.get("activo") == "1"
+
+    if not activar:
+        if objetivo.pk == request.user.pk:
+            raise ErrorDeGobierno(
+                "No puede desactivarse a sí mismo: perdería el acceso en el acto."
+            )
+        # Aquí NO se comprueba si es el último administrativo, y conviene
+        # explicar por qué no hace falta: quien ejecuta esta acción es
+        # forzosamente un administrativo activo —lo exige el decorador— y es
+        # distinto del objetivo, porque el caso de uno mismo ya se rechazó
+        # arriba. Luego siempre queda al menos un administrativo en pie. Una
+        # comprobación adicional nunca se cumpliría, y el código muerto que
+        # aparenta proteger algo es peor que su ausencia: induce a confiar.
+        turno = services.obtener_turno_abierto(objetivo)
+        if turno is not None:
+            raise ErrorDeGobierno(
+                f"«{objetivo.get_username()}» tiene el turno {turno.pk} abierto. "
+                "Debe cerrarse primero: desactivarlo dejaría ese efectivo sin "
+                "corte y sin responsable."
+            )
+
+    objetivo.is_active = activar
+    objetivo.save(update_fields=["is_active"])
+
+    logger.info(
+        "Operador %s | usuario=%s por=%s",
+        "activado" if activar else "desactivado",
+        objetivo.get_username(),
+        request.user.get_username(),
+    )
+    messages.success(
+        request,
+        f"«{objetivo.get_username()}» "
+        + ("puede volver a entrar." if activar else "ya no puede entrar."),
+    )
+    return redirect("web:operador", pk=objetivo.pk)
 
 
 def _tarifa_vigente_o_nada() -> Tarifa | None:
