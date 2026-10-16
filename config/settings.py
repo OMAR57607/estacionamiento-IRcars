@@ -128,6 +128,9 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                # El nombre comercial se resuelve en un solo lugar: sin esto,
+                # cada plantilla lo escribía a mano y se desincronizaban.
+                "apps.estacionamiento.marca.contexto",
             ],
         },
     },

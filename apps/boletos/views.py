@@ -29,6 +29,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from apps.estacionamiento import marca
 from apps.estacionamiento.domain.exceptions import ErrorDominio
 from apps.estacionamiento.domain.tarifas import cotizar, minutos_transcurridos
 
@@ -176,7 +177,14 @@ def _no_encontrado(request) -> HttpResponse:
 
 
 def _nombre_comercial() -> str:
-    return str(getattr(settings, "IRCARS_NOMBRE_COMERCIAL", "Estacionamiento"))
+    """
+    Delega en `apps.estacionamiento.marca`: un solo origen para el nombre.
+
+    Se conserva la función como envoltura, y no se llama a la del módulo de
+    marca en cada punto de uso, para que esta vista siga sin depender de la
+    forma en que se resuelve el nombre.
+    """
+    return marca.nombre_comercial()
 
 
 def _calcular_presentacion(boleto: BoletoVista, ahora) -> dict:

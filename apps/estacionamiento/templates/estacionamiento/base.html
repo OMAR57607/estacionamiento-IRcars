@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{% block titulo %}Caja{% endblock %} · Estacionamiento IRcars</title>
+  <title>{% block titulo %}Caja{% endblock %} · {{ nombre_comercial }}</title>
 
   {% comment %} Un sistema de caja no es contenido que deba aparecer en buscadores.
      Mantenerlo fuera evita además el tráfico automatizado que sigue a
@@ -27,7 +27,7 @@
      tamaño. {% endcomment %}
   <link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
   <link rel="manifest" href="{% static 'estacionamiento/manifiesto.json' %}">
-  <meta name="apple-mobile-web-app-title" content="IRcars">
+  <meta name="apple-mobile-web-app-title" content="{{ nombre_comercial }}">
 
   <link rel="stylesheet" href="{% static 'estacionamiento/estilos.css' %}">
 </head>
@@ -39,7 +39,7 @@
    identidad y lo propio del operador, y las secciones bajan a la barra
    inferior, al alcance del pulgar. {% endcomment %}
 <header class="barra no-imprimir">
-  <span class="marca">IRcars</span>
+  <span class="marca">{{ nombre_comercial }}</span>
 
   <nav class="barra-secciones">
     <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>

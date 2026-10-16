@@ -87,6 +87,48 @@ class TestIcono:
         )
 
 
+class TestNombreComercial:
+    """
+    El nombre del negocio sale de la configuración, no de las plantillas.
+
+    Estaba escrito a mano en la barra de la caja y en el título, y cuando se
+    cambió la marca esas dos copias se quedaron atrás: el cliente leía un
+    nombre en su boleto y el operador otro en la misma aplicación. Ninguna
+    prueba funcional se entera de eso.
+    """
+
+    def test_la_caja_muestra_el_nombre_configurado(self, sesion, settings):
+        settings.IRCARS_NOMBRE_COMERCIAL = "Pensión Centenario"
+
+        contenido = sesion.get(reverse("web:caja"), secure=True).content.decode()
+
+        assert "Pensión Centenario" in contenido
+        assert "IRcars" not in contenido, (
+            "Queda una copia del nombre escrita a mano en la plantilla"
+        )
+
+    def test_sin_configuracion_usa_un_nombre_generico(self, sesion, settings):
+        """
+        Un despliegue sin configurar no debe anunciar el nombre de otro negocio.
+        """
+        settings.IRCARS_NOMBRE_COMERCIAL = ""
+
+        contenido = sesion.get(reverse("web:caja"), secure=True).content.decode()
+
+        assert "Estacionamiento" in contenido
+
+    def test_el_boleto_del_cliente_usa_la_misma_fuente(self, client, folio_de_prueba, settings):
+        """
+        Las dos caras del boleto no pueden anunciar negocios distintos.
+        """
+        settings.IRCARS_NOMBRE_COMERCIAL = "Pensión Centenario"
+
+        ruta = reverse("boletos:publico", kwargs={"uuid_folio": folio_de_prueba.uuid})
+        contenido = client.get(ruta, secure=True).content.decode()
+
+        assert "Pensión Centenario" in contenido
+
+
 class TestNavegacion:
     def test_hay_navegacion_al_alcance_del_pulgar(self, sesion):
         """
