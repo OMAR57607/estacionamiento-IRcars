@@ -6,10 +6,11 @@ from . import views
 app_name = "web"
 
 urlpatterns = [
-    # La raíz decide según quién llame: el operador va a la caja, el cliente
-    # ve una presentación. Ver `views.inicio`.
-    path("", views.inicio, name="inicio"),
-    path("caja/", views.caja, name="caja"),
+    # La caja vive en la raíz: es la pantalla que el operador abre todo el día
+    # y no debe exigirle recordar una ruta. Quien llegue sin sesión acaba en
+    # el formulario de acceso, que es el comportamiento esperado de un
+    # sistema de caja publicado en su propia dirección.
+    path("", views.caja, name="caja"),
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     path("reportes/", views.reportes, name="reportes"),

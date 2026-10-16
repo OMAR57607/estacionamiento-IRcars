@@ -13,8 +13,8 @@
   </p>
 
   {% if qr %}
-    {# El SVG va incrustado, no como archivo: una petición menos y el boleto
-       se imprime igual aunque el navegador no tenga acceso a los estáticos. #}
+    {% comment %} El SVG va incrustado, no como archivo: una petición menos y el boleto
+       se imprime igual aunque el navegador no tenga acceso a los estáticos. {% endcomment %}
     <div class="qr-marco">{{ qr|safe }}</div>
     <p class="qr-instruccion">
       Pida al cliente que escanee este código con la cámara de su teléfono.
@@ -27,9 +27,9 @@
   {% endif %}
 
   <div class="boleto-acciones no-imprimir">
-    {# `wa.me` abre la aplicación instalada en el teléfono y, si no la hay,
+    {% comment %} `wa.me` abre la aplicación instalada en el teléfono y, si no la hay,
        la versión web. No requiere conocer el número del cliente: es él quien
-       elige el destinatario en su propia aplicación. #}
+       elige el destinatario en su propia aplicación. {% endcomment %}
     <a class="boton" href="{{ url_whatsapp }}" target="_blank" rel="noopener noreferrer">
       Compartir por WhatsApp
     </a>
@@ -56,9 +56,9 @@
 
 </div>
 
-{# `json_script` emite el valor ya escapado dentro de una etiqueta de datos.
+{% comment %} `json_script` emite el valor ya escapado dentro de una etiqueta de datos.
    Es la forma correcta de pasar una cadena de Django a JavaScript: interpolarla
-   dentro del script permitiría una inyección si el valor cambiara de origen. #}
+   dentro del script permitiría una inyección si el valor cambiara de origen. {% endcomment %}
 {{ texto_compartir|json_script:"texto-compartir" }}
 
 <script>
