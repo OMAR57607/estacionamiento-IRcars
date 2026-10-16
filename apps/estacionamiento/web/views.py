@@ -31,7 +31,7 @@ from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_safe
 
-from .. import marca, services, services_caja
+from .. import marca, reglas, services, services_caja
 from ..domain.exceptions import ErrorDominio
 from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
@@ -1024,7 +1024,13 @@ def tarifa(request):
     contexto = _contexto_base(request)
     contexto["seccion"] = "tarifa"
     contexto["vigente"] = vigente
-    contexto["ejemplos"] = _ejemplos(_parametros_de(vigente) if vigente else None)
+    parametros = _parametros_de(vigente) if vigente else None
+    contexto["ejemplos"] = _ejemplos(parametros)
+    # La regla dicha en palabras. La tabla de ejemplos obliga a deducirla a
+    # partir de ocho importes, y así se coló en producción un precio con
+    # «bloques de 15 minutos» donde iba «15 minutos de tolerancia»: ninguna
+    # de las dos capturas es inválida, solo cobran cosas distintas.
+    contexto["reglas"] = reglas.en_palabras(parametros) if parametros else []
     contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
     return render(request, "estacionamiento/tarifa.html", contexto)
 
@@ -1059,7 +1065,13 @@ def tarifa_cambiar(request):
     contexto = _contexto_base(request)
     contexto["seccion"] = "tarifa"
     contexto["vigente"] = vigente
-    contexto["ejemplos"] = _ejemplos(_parametros_de(vigente) if vigente else None)
+    parametros = _parametros_de(vigente) if vigente else None
+    contexto["ejemplos"] = _ejemplos(parametros)
+    # La regla dicha en palabras. La tabla de ejemplos obliga a deducirla a
+    # partir de ocho importes, y así se coló en producción un precio con
+    # «bloques de 15 minutos» donde iba «15 minutos de tolerancia»: ninguna
+    # de las dos capturas es inválida, solo cobran cosas distintas.
+    contexto["reglas"] = reglas.en_palabras(parametros) if parametros else []
 
     # Primera configuración: no hay precio que proteger todavía, y el operador
     # acaba de teclear su contraseña para entrar. Pedirla otra vez sería un

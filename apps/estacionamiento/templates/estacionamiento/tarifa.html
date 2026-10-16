@@ -75,6 +75,16 @@
 
   <div class="tarjeta">
     <h2>Así se cobra</h2>
+    {% if reglas %}
+      {% comment %} La regla en palabras, antes de la tabla. Deducirla a partir de ocho
+         importes es justo lo que no funcionó: un precio con «bloques de 15
+         minutos» y otro con «15 de tolerancia» producen tablas parecidas, y
+         ninguno de los dos es inválido. Leído en una frase, el desvío salta.
+         {% endcomment %}
+      <ul class="reglas">
+        {% for regla in reglas %}<li>{{ regla }}</li>{% endfor %}
+      </ul>
+    {% endif %}
     {% if ejemplos %}
       <p class="ayuda" style="margin-top:0">
         Lo que pagaría un vehículo según el tiempo que se quede, con el precio

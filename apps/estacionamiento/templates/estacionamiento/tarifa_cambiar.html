@@ -80,6 +80,11 @@
           por hora
           <span class="ayuda">· desde el {{ vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
         </p>
+        {% if reglas %}
+          <ul class="reglas">
+            {% for regla in reglas %}<li>{{ regla }}</li>{% endfor %}
+          </ul>
+        {% endif %}
         <table>
           <tbody>
           {% for ejemplo in ejemplos %}
