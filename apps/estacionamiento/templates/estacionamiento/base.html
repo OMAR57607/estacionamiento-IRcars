@@ -26,7 +26,7 @@
      180 px. Sin él, muestra una captura de la página, que se lee fatal a ese
      tamaño. {% endcomment %}
   <link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
-  <link rel="manifest" href="{% static 'estacionamiento/manifiesto.json' %}">
+  <link rel="manifest" href="{% url 'web:manifiesto' %}">
   <meta name="apple-mobile-web-app-title" content="{{ nombre_comercial }}">
 
   <link rel="stylesheet" href="{% static 'estacionamiento/estilos.css' %}">
