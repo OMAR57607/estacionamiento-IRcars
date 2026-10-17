@@ -125,7 +125,7 @@ class AbrirTurnoForm(forms.Form):
         decimal_places=2,
         min_value=Decimal("0.00"),
         initial=Decimal("0.00"),
-        label="Fondo inicial (cambio en caja)",
+        label="Cambio con que abre la caja",
         widget=forms.NumberInput(
             attrs={
                 "step": "0.01",
@@ -149,7 +149,7 @@ class CerrarTurnoForm(forms.Form):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
-        label="Efectivo contado en caja (incluye el fondo inicial)",
+        label="Cuente el efectivo que hay en caja e inclúyalo todo, también el cambio con que abrió",
         widget=forms.NumberInput(
             attrs={
                 "step": "0.01",
