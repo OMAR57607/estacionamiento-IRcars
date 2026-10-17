@@ -11,9 +11,9 @@ def _configurar_sqlite(sender, connection, **kwargs):
     """
     Ajusta SQLite en cada conexión nueva.
 
-    Se aplica a cualquier despliegue que use SQLite —la aplicación de
-    escritorio y el servicio desplegado con base de datos local— sin duplicar
-    la configuración en cada módulo de ajustes.
+    Se aplica a cualquier despliegue que use SQLite —hoy, el entorno de
+    desarrollo y las pruebas— sin duplicar la configuración en cada módulo de
+    ajustes. En la nube la base es PostgreSQL y esta función no se dispara.
 
     * **WAL**: registro de escritura anticipada. Ante un apagón o un reinicio
       abrupto del contenedor, la base se recupera de forma consistente en lugar

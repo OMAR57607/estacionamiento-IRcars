@@ -7,7 +7,7 @@ lugar de recortar a mano una imagen que nadie recuerda de dónde salió.
 
 Pillow se usa **solo aquí**. Está en `requirements-build.txt`, junto a
 PyInstaller, porque es una herramienta de preparación: ni el servidor ni el
-ejecutable de escritorio la necesitan en ningún momento. Los archivos que
+proceso que atiende peticiones la necesitan en ningún momento. Los archivos que
 produce se versionan ya listos.
 
 Uso:

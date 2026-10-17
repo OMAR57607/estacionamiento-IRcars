@@ -114,27 +114,6 @@ def desde_folio(folio) -> BoletoVista:
     )
 
 
-def desde_publicado(boleto) -> BoletoVista:
-    """Construye la vista a partir de una copia ya publicada y enmascarada."""
-    return BoletoVista(
-        uuid_folio=str(boleto.uuid_folio),
-        placa_enmascarada=boleto.placa_enmascarada,
-        estado=boleto.estado,
-        ubicacion=boleto.ubicacion,
-        entrada_en=boleto.entrada_en,
-        salida_en=boleto.salida_en,
-        minutos=boleto.minutos,
-        importe=boleto.importe,
-        cuota_hora=boleto.cuota_hora,
-        minutos_cortesia=boleto.minutos_cortesia,
-        fraccion_minutos=boleto.fraccion_minutos,
-        minutos_tolerancia=boleto.minutos_tolerancia,
-        cobro_minimo=boleto.cobro_minimo,
-        tope_diario=boleto.tope_diario,
-        fin_de_ciclo=boleto.fin_de_ciclo,
-    )
-
-
 def _fin_de_ciclo(estado: str, salida_en, actualizado_en):
     """
     Momento en que el boleto dejó de estar en curso.

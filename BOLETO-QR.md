@@ -1,474 +1,69 @@
 # Boleto del cliente por código QR
 
-> **Arquitectura vigente: aplicación web única.** El operador trabaja desde su
-> teléfono (o cualquier dispositivo), registra la entrada y la pantalla le
-> muestra el código QR para que el cliente lo escane, o el enlace para
-> enviárselo por WhatsApp. El servicio en la nube es la fuente de verdad y el
-> boleto se sirve **leyendo el folio directamente**.
->
-> El resto del documento describe además el despliegue con **caja local**, en
-> el que una aplicación de escritorio publica copias enmascaradas a un
-> servicio remoto de solo lectura. Las dos formas siguen soportadas y la vista
-> pública resuelve sola cuál le aplica (ver `apps/boletos/presentacion.py`),
-> pero lo que está en operación es la primera.
+El operador registra la entrada y la pantalla muestra un código QR. El cliente
+lo escanea con la cámara de su teléfono y consulta, con sus propios datos
+móviles, su hora de ingreso, el tiempo transcurrido, el precio que se le
+exhibió al entrar y el importe acumulado al instante. El enlace también puede
+enviarse por WhatsApp.
 
-El cliente escanea un código al entrar y consulta desde su teléfono su hora de
-ingreso, el tiempo transcurrido, el precio exhibido y el importe acumulado al
-instante. No instala nada, no se registra y no necesita estar conectado a la
-red del estacionamiento.
+> Este documento describió durante un tiempo una arquitectura partida: una
+> caja local que publicaba copias hacia un servicio de boletos en la nube.
+> Esa arquitectura se retiró. Hoy la caja **es** el servicio: el boleto se
+> construye leyendo el folio, que vive en la misma base.
 
 ---
 
-## La decisión de arquitectura
-
-Se evaluaron cuatro caminos antes de escribir código:
-
-| Opción | Cómo funciona | Por qué no se eligió |
-|---|---|---|
-| QR autocontenido | El QR lleva el texto del boleto; la cámara lo muestra sin red | No puede mostrar el importe acumulado en vivo |
-| Servidor en la red local | El teléfono consulta al equipo de la caseta por Wi-Fi | Exige que el cliente se conecte a la red; el aislamiento de clientes del router lo rompe; sin HTTPS posible |
-| Todo en la nube | La caja entera corre en un servidor | **La caseta deja de cobrar cuando se cae la red.** Es la razón documentada por la que el despliegue anterior se retiró |
-| **Híbrida (la implementada)** | La caja local es autoritativa y **publica** una copia mínima a un servicio de solo lectura | — |
-
-### Lo que la opción híbrida preserva
-
-* **La caja cobra con o sin internet.** El folio se registra en SQLite local y
-  la publicación se encola. Si no hay red, la caseta opera con normalidad y
-  los boletos se publican cuando vuelva.
-* **La nube no es la fuente de verdad.** Si el servicio se borra por completo,
-  no se pierde un peso ni un folio ni un corte. Se repuebla publicando de
-  nuevo.
-* **El cliente consulta con datos móviles**, desde cualquier lugar, con
-  HTTPS y certificado válido.
+## Cómo se construye
 
 ```
-   CASETA (fuente de verdad)                    NUBE (solo lectura)
-┌──────────────────────────────┐          ┌──────────────────────────┐
-│  Ejecutable IRcars           │          │  Servicio de boletos     │
-│                              │          │                          │
-│  Folio ──┬──► SQLite         │          │  POST /api/v1/boletos/   │
-│          │                   │  HTTPS   │   · token compartido     │
-│          └──► Bandeja de  ───┼─────────►│   · idempotente          │
-│               salida         │  (async) │          │               │
-│               (reintentos)   │          │          ▼               │
-│                              │          │  GET /t/<uuid>/          │
-│  QR ──► https://.../t/<uuid> │          │   · público, solo lectura│
-└──────────────────────────────┘          └──────────────────────────┘
-                                                      ▲
-                                            teléfono del cliente
+Entrada registrada  →  /folio/<uuid>/boleto/   (operador: QR y enlace)
+                       /t/<uuid>/              (cliente: la página del boleto)
 ```
 
----
+La dirección pública es corta a propósito: el contenido del QR determina su
+densidad, y una ruta larga produce un símbolo con más módulos, más difícil de
+leer para una cámara de gama baja.
 
-## Qué se publica y qué no
-
-El principio es **minimizar en el origen**, no en el destino: lo que nunca
-viaja no puede filtrarse aunque el servicio se vea comprometido.
-
-**Sí viaja:** el UUID del folio, la placa **enmascarada**, el estado, el cajón,
-la hora de entrada, la de salida si ya se liquidó, y los parámetros de la
-tarifa exhibida al ingresar.
-
-**Nunca viaja:** la placa completa, el operador de entrada o salida, el turno,
-el pago recibido, el cambio entregado, las observaciones internas, el desglose
-del corte ni el identificador secuencial del folio.
-
-### La placa va enmascarada
-
-`ABC1234` se publica como `ABC••••`. La placa es un dato personal en los
-términos de la LFPDPPP —identifica indirectamente al titular del vehículo— y
-la dirección del boleto es pública y reenviable.
-
-El enmascarado conserva la longitud, para que el cliente reconozca su boleto,
-y garantiza un invariante: **nunca revela más de la mitad de los caracteres**.
-Se aplica en la caja, antes de enviar, y el servicio además **rechaza** una
-carga con la placa íntegra: la base de la nube no puede llegar a contenerla.
-
-### El identificador es un UUID v4, no un consecutivo
-
-Son 122 bits de aleatoriedad. Publicar el `id` autoincremental permitiría
-recorrer todos los boletos del día a partir de uno solo.
+El identificador es un **UUID versión 4**, aleatorio. No es el número de folio
+ni se deriva de él: una dirección enumerable permitiría recorrer los boletos
+del estacionamiento cambiando un dígito.
 
 ---
 
-## Controles de seguridad
+## Qué protege la página
 
-| Control | Dónde | Qué previene |
-|---|---|---|
-| Ninguna ruta pública escribe | `urls.py` / `urls_ingesta.py` separados | Alteración del contenido desde la cara pública |
-| Token con comparación de tiempo constante | `views.IngestaBoletosView` | Inyección de boletos falsos; fuga por temporización |
-| Falla cerrado sin token configurado (503) | `views.IngestaBoletosView` | Un despliegue a medio configurar que acepte cualquier escritura |
-| HTTPS obligatorio al publicar | `publicador._verificar_transporte` | Que el token viaje en claro |
-| Límite por IP, con la entrada *derecha* de `X-Forwarded-For` | `limites.ip_cliente` | Sondeo y agotamiento; elusión por cabecera suplantada |
-| `AnonRateThrottle` en DRF | `config/settings.py` | Rutas sin sesión quedaban **sin tope** antes de este cambio |
-| `no-store`, `noindex`, `no-referrer` | `views._blindar` | Cifras vencidas en caché; boletos en buscadores; fuga de la dirección por `Referer` |
-| Respuesta idéntica para inexistente y vencido | `views._no_encontrado` | Confirmar qué identificadores existieron |
-| Vigencia tras la salida | `views._esta_vencido` | Que la dirección siga viva en historiales y reenvíos para siempre |
-| Modo «solo boletos» | `config/urls.py` | Exponer el panel y el formulario de acceso a internet sin necesidad |
-
-El token **jamás** se registra en bitácora, ni al diagnosticar un 401. Hay una
-prueba que lo verifica.
-
----
-
-## Coherencia del importe con la caja
-
-El requisito es que la cifra del teléfono y la de la caseta sean la misma: si
-el cliente ve $30.00 y el operador le cobra $35.00, la función no es inútil,
-es una fuente de conflicto.
-
-Para garantizarlo, la regla de truncamiento de minutos se promovió a la capa
-de dominio pura (`domain.tarifas.minutos_transcurridos`), y tanto `services`
-como el servicio de boletos la invocan. No hay aritmética duplicada.
-
-El boleto exhibe **el precio vigente al ingresar**, no el actual. El cuadro
-tarifario es inmutable —un cambio crea una tarifa nueva y desactiva la
-anterior—, de modo que un aumento durante la estancia no altera el boleto ya
-emitido. Es lo que exige la normativa de PROFECO sobre precio exhibido, y hay
-una prueba que lo fija.
-
----
-
-## El boleto en la aplicación web
-
-El recorrido del operador es de dos pasos y ninguno exige navegar:
-
-1. Registra la entrada en la caja.
-2. La pantalla salta al **boleto**: código QR grande para que el cliente lo
-   escanee con su cámara, botón de **compartir por WhatsApp**, el menú de
-   compartir del propio teléfono cuando el navegador lo ofrece, y el enlace
-   para copiar o dictar.
-
-Se va al boleto automáticamente porque ese es el único instante en que el
-cliente está delante. Cada vehículo de la lista del patio enlaza también a su
-boleto, para el caso frecuente del cliente que perdió el enlace y pide que se
-lo reenvíen.
-
-El enlace se construye con `request.build_absolute_uri`, es decir, del propio
-servidor que atiende la petición. No hay un dominio escrito en la
-configuración que pueda quedarse desfasado y emitir códigos que apunten a un
-despliegue anterior.
-
-El mensaje de WhatsApp **no lleva la placa**: el enlace es lo único que el
-cliente necesita, y lo que no se escribe en el mensaje no viaja por WhatsApp.
-
-### Interfaz
-
-La aplicación está pensada para un teléfono en una mano, con un cliente
-delante:
-
-- **Las secciones viven en una barra inferior** en pantalla estrecha. La zona
-  baja es la única que el pulgar alcanza sin recolocar el aparato; arriba solo
-  quedan la identidad y el estado del turno, que condiciona lo que se puede
-  hacer —sin turno abierto no se cobra—.
-- **Claro y oscuro**, según lo que el operador tenga configurado. Una caseta de
-  madrugada con la pantalla en blanco deslumbra; la misma pantalla de día con
-  tema oscuro no se lee bajo el sol. Todo el color pasa por tokens, que es lo
-  que permite que el tema oscuro sea un bloque de redefiniciones y no una
-  segunda hoja que se desincroniza. En tema oscuro la cabecera **no** lleva el
-  color de marca: una franja del acento aclarado sería lo más luminoso de la
-  pantalla, justo lo que el tema oscuro evita.
-- **Las listas no son tablas.** Vehículos en el patio y operadores comparten un
-  componente de rejilla: en pantalla ancha se alinea como una tabla y al
-  estrecharse se apila, con el dato que se busca —la placa, el nombre— grande
-  arriba. Mismo marcado en ambos casos, de modo que no hay dos versiones que
-  puedan divergir.
-- **Objetivos táctiles de 48 px** y campos de 16 px, que es el umbral por
-  debajo del cual Safari en iOS amplía la página al enfocar y desplaza todo.
-- **El icono** se genera con `scripts/generar_iconos.py`, sin dependencias
-  externas. Hay SVG para el navegador, PNG de 180 px porque iOS no admite SVG
-  al añadir a la pantalla de inicio, y 192/512 para el manifiesto de Android.
-  Con el manifiesto, la aplicación se añade a la pantalla de inicio y se abre
-  sin barra de navegador.
-
-### Operadores
-
-«Operadores», en la barra superior, sustituye al panel de administración:
-alta, cambio de nombre, permisos, restablecimiento de contraseña y
-activación. Solo la ven los operadores administrativos.
-
-Tres impedimentos que no son advertencias, porque **no hay red de seguridad**
-—si el último administrador se deja fuera, nadie puede rescatarlo—:
-
-| No se permite | Por qué |
+| Control | Cómo |
 |---|---|
-| Quitarse el permiso administrativo siendo el último que lo tiene | Nadie podría volver a concederlo |
-| Desactivarse a uno mismo | Se pierde el acceso en el acto |
-| Desactivar a quien tiene un turno abierto | Ese efectivo quedaría sin corte y sin responsable |
+| **Solo lectura** | No existe ninguna ruta pública que escriba. Un fallo en esta página no puede alterar nada. |
+| **Placa enmascarada** | `ABC••••`. La regla nunca revela más de la mitad de los caracteres, y se aplica al presentar. |
+| **Sin datos de caja** | Lo que la página recibe es un objeto de presentación sin campos para el operador, el turno, el efectivo ni la placa completa: una plantilla futura no puede exponerlos aunque su autor quiera. |
+| **Caducidad** | Un boleto liquidado deja de responder pasadas `IRCARS_HORAS_VIGENCIA_BOLETO` horas (24 por omisión). Mientras el vehículo está dentro, el enlace no caduca. |
+| **Indistinguible** | Un identificador inexistente y uno vencido responden lo mismo: contestar distinto confirmaría cuáles existieron. |
+| **Sin rastro** | Cabeceras `no-store`, `noindex` y `no-referrer`. La dirección no se indexa ni se filtra al navegar. |
+| **Límite de tasa** | 60 consultas por minuto y por IP. Holgado para que el cliente refresque, suficiente para cortar un sondeo. |
 
-Y **no se puede borrar un operador**. No es una omisión: folios y turnos lo
-referencian con `PROTECT`, de modo que borrar a quien tiene historial
-rompería la trazabilidad de movimientos con efecto económico. Lo que
-corresponde es desactivarlo; su historial sigue atribuido.
+El importe lo calcula **el mismo motor** que cobra la caja, con los parámetros
+que se exhibieron al ingresar. La cifra del teléfono no puede diferir de la de
+la caseta: es el requisito funcional central de la función.
 
-Cambiar el nombre de usuario **no afecta al historial**: folios y turnos se
-guardan contra la persona, no contra el texto del nombre.
+---
 
-Dos nombres que solo difieran en mayúsculas se rechazan. Es lo que sostiene
-que el acceso no distinga mayúsculas —necesario para que el teclado de un
-teléfono no deje fuera al operador—: con «omar» y «Omar» a la vez, entrar se
-volvería ambiguo.
+## Variables
 
-### Superficie expuesta
-
-Con la caja publicada en internet, tres decisiones que conviene no revertir:
-
-| Decisión | Por qué |
+| Variable | Para qué |
 |---|---|
-| La raíz muestra una presentación al visitante, no el formulario de acceso | Quien teclea el dominio es un cliente. Antes recibía el campo de contraseña en la dirección más previsible del sitio |
-| El panel de administración **no se monta** salvo que se indique `IRCARS_RUTA_ADMIN` | La aplicación no lo necesita —precio, turnos, corte y reportes tienen pantallas propias con las salvaguardas del negocio— y `/admin/` es la ruta más sondeada de cualquier sitio Django |
-| El formulario de acceso limita los **envíos** por IP (10 cada 5 min) | Django no trae esa protección. Abrir la pantalla no cuenta, de modo que recargar no deja fuera al operador |
+| `IRCARS_NOMBRE_COMERCIAL` | Nombre del negocio en el boleto y en la caja. |
+| `IRCARS_URL_BOLETOS` | Origen que se codifica en el QR. Si no se define, se deduce del dominio público de la plataforma. |
+| `IRCARS_HORAS_VIGENCIA_BOLETO` | Horas que un boleto liquidado sigue consultándose. |
+| `IRCARS_DOMINIO_CANONICO` | Dominio propio. Lo que llegue por otra dirección se redirige aquí, de modo que los QR ya emitidos sigan funcionando. |
+| `IRCARS_TRAS_CLOUDFLARE` | De qué cabecera se toma la IP del cliente al aplicar límites de tasa. |
 
 ---
 
-## Puesta en marcha
+## Diagnóstico
 
-### 1. El servicio en la nube
-
-Un servicio web con su **base PostgreSQL dedicada** (nunca compartida: ver
-`DESPLIEGUE-RAILWAY.md`). Variables:
-
-```
-DJANGO_SECRET_KEY=<propia de este entorno>
-DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=boletos.mi-estacionamiento.mx
-DJANGO_TIME_ZONE=America/Mexico_City
-DATABASE_URL=<referencia al servicio PostgreSQL>
-
-IRCARS_SOLO_BOLETOS=True
-IRCARS_NOMBRE_COMERCIAL=Estacionamiento IRcars
-IRCARS_TOKEN_PUBLICACION=<token generado>
-IRCARS_HORAS_VIGENCIA_BOLETO=24
-IRCARS_TRAS_PROXY=True
-```
-
-Genere el token con:
-
-```
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
-
-`IRCARS_URL_BOLETOS` se deduce de `RAILWAY_PUBLIC_DOMAIN` y no hace falta
-fijarla, salvo con dominio propio.
-
-Sondas: `/healthz` responde si el proceso vive. En modo «solo boletos» la
-sonda de base de datos de la aplicación no está montada, así que vigile
-`/healthz` y los registros.
-
-### 2. La caja
-
-Cree `%LOCALAPPDATA%\IRcars\boletos.json`:
-
-```json
-{
-  "activo": true,
-  "url": "https://boletos.mi-estacionamiento.mx",
-  "token": "<el MISMO valor que IRCARS_TOKEN_PUBLICACION>"
-}
-```
-
-Se usa un archivo y no variables de entorno porque en la caseta el programa se
-abre con un doble clic y nadie va a definir variables ahí; un archivo se edita
-con el Bloc de notas. Contiene una credencial: el programa restringe su
-lectura al propietario en cada arranque.
-
-Al reiniciar, la caja publica en segundo plano y muestra el QR al registrar
-cada entrada.
-
-### 3. Primera carga y verificación
-
-Al encender el servicio, los vehículos **que ya están dentro** no tienen
-boleto publicado: nunca se publicó uno para ellos. Si no hace nada, su cliente
-vería «boleto no disponible» justo el primer día. Reconstruya la carga inicial:
-
-```
-# Qué se republicaría, sin tocar nada
-python manage.py republicar_boletos --simular
-
-# Reencolar los vehículos dentro y enviarlos en el acto
-python manage.py republicar_boletos --publicar
-```
-
-Después, para el día a día:
-
-```
-# Qué hay pendiente y por qué
-python manage.py publicar_boletos --solo-listar
-
-# Forzar el envío de todo lo acumulado
-python manage.py publicar_boletos
-```
-
-### 4. Retención (obligatoria)
-
-Programe a diario en la nube:
-
-```
-python manage.py depurar_boletos
-```
-
-Borra los boletos liquidados o cancelados con más de siete días. Es la
-aplicación del principio de temporalidad de la LFPDPPP: el historial contable
-vive en la caja, no aquí.
-
----
-
-## Reconstruir el servicio tras una pérdida
-
-La bandeja de salida es una **cola de trabajo, no un historial**: al entregarse
-una publicación, su fila desaparece. Es lo correcto para la operación diaria
-—acota la bandeja al trabajo pendiente— pero implica que **nada reenvía por su
-cuenta lo ya entregado**.
-
-Consecuencia práctica: si la base del servicio se vacía o se recrea, los folios
-abiertos no vuelven solos. Se corregirían al cobrarlos, pero mientras el auto
-está dentro su dueño no podría consultar nada.
-
-`republicar_boletos` cierra ese hueco:
-
-```
-# Solo los vehículos que siguen dentro (lo habitual)
-python manage.py republicar_boletos --publicar
-
-# Incluir también los liquidados cuya página siga vigente
-python manage.py republicar_boletos --incluir-cerrados --publicar
-
-# Ampliar la ventana, por ejemplo al migrar de proveedor
-python manage.py republicar_boletos --incluir-cerrados --horas 72 --publicar
-```
-
-Es seguro repetirlo: la ingesta es idempotente y el encolado es un *upsert*.
-Lo único que produce una repetición es trabajo de más.
-
-Por omisión no toca los folios cerrados, y con `--incluir-cerrados` se limita a
-los que siguen dentro de la vigencia del boleto público. Republicar uno más
-antiguo sería trabajo inútil: la vista lo contestaría con un 404 por vencido en
-cuanto llegara.
-
-Cada folio se encola en su propia transacción, nunca el lote entero: una
-transacción larga sobre SQLite retiene el bloqueo de escritura de toda la base,
-y el comando puede ejecutarse con la caseta operando. Un cobro esperando a que
-termine una republicación sería un cliente esperando en la rampa.
-
----
-
-## Publicar detrás de Cloudflare con dominio propio
-
-El orden importa: Railway es quien da el destino del registro DNS.
-
-**1. En Railway.** Servicio → *Settings → Networking → Custom Domain* → se
-escribe el dominio. Railway devuelve un destino `…up.railway.app`.
-
-**2. En Cloudflare.** *DNS → Records → Add record*:
-
-| Campo | Valor |
+| Síntoma | Causa probable |
 |---|---|
-| Type | `CNAME` |
-| Name | el subdominio, o `@` para el dominio raíz |
-| Target | el destino que dio Railway |
-| Proxy status | **DNS only** (nube gris) *al principio* |
-
-El CNAME en el ápice funciona: Cloudflare lo aplana automáticamente.
-
-La nube se deja **gris al principio** porque Railway emite su certificado con
-Let's Encrypt y necesita validar el dominio; con el proxy activo desde el
-inicio, esa validación suele fallar. Una vez emitido, se cambia a naranja.
-
-**3. SSL/TLS: `Full (strict)`.** No es opcional. La configuración activa
-`SECURE_SSL_REDIRECT` fuera de depuración: con el modo `Flexible`, Cloudflare
-habla con el origen por HTTP, Django responde «redirige a HTTPS», y se entra
-en un **bucle infinito de redirecciones** cuyo síntoma —`ERR_TOO_MANY_REDIRECTS`—
-no apunta a su causa.
-
-**4. Variables en Railway.** La configuración añade sola el dominio de Railway,
-pero no sabe nada del dominio propio:
-
-```
-DJANGO_ALLOWED_HOSTS         = caja.midominio.mx
-DJANGO_CSRF_TRUSTED_ORIGINS  = https://caja.midominio.mx
-IRCARS_TRAS_CLOUDFLARE       = True
-```
-
-Sin la primera, **400 Bad Request** en todo el sitio. Sin la segunda, se llega
-a la pantalla de acceso pero **ningún formulario se envía** —ni acceso, ni
-entrada, ni cobro—, porque Django los rechaza por CSRF.
-
-El enlace del boleto no necesita configuración: se construye con
-`request.build_absolute_uri` y sigue al dominio con el que se abra la caja.
-
-### Por qué hace falta `IRCARS_TRAS_CLOUDFLARE`
-
-Con Cloudflare en medio, la cadena es cliente → Cloudflare → Railway →
-aplicación, y la entrada derecha de `X-Forwarded-For` pasa a ser la IP del
-**borde de Cloudflare**. Sin esta variable, los límites por IP agruparían a
-todos los visitantes en un puñado de contadores: el del formulario de acceso
-dejaría de ser por persona y **podría dejar fuera al propio operador** sin que
-nadie esté atacando nada, y el del boleto público dejaría de contener un
-sondeo real.
-
-Activada, se lee `CF-Connecting-IP`, que es la dirección real del cliente.
-
-Límite asumido: quien conozca la dirección `…up.railway.app` puede saltarse
-Cloudflare y enviar un `CF-Connecting-IP` inventado. Cerrarlo del todo no es
-cuestión de código sino de restringir el origen para que solo acepte tráfico
-de Cloudflare. Mientras tanto, el perjuicio de confiar en la cabecera es muy
-inferior al de no hacerlo.
-
-### Redirigir la dirección anterior
-
-`IRCARS_DOMINIO_CANONICO` lleva al dominio propio toda lectura que llegue por
-otra dirección. No es cosmético: **los códigos QR ya emitidos llevan grabado
-el dominio con el que se generaron**, y un boleto impreso o compartido por
-WhatsApp antes del cambio seguirá apuntando ahí durante días. Es el cliente,
-no el operador, quien se quedaría sin poder consultarlo.
-
-No puede resolverse en Cloudflare: Cloudflare solo ve el tráfico de la zona
-que administra, y la dirección de la plataforma no pertenece a ella. Lo decide
-la aplicación, que es quien recibe ambas.
-
-Tres decisiones del middleware (`config/middleware.py`):
-
-| Decisión | Por qué |
-|---|---|
-| **302**, no 301 | Un 301 queda cacheado en el navegador de cada operador y no hay forma de retirarlo en remoto: un dominio canónico mal configurado dejaría a todos apuntando a una dirección equivocada. El sistema no se indexa, así que el 301 no aporta nada que lo compense |
-| Solo **lecturas** | Un POST redirigido hace que el navegador descarte el cuerpo y repita como GET. Aquí sería un cobro que el operador da por hecho y que nunca llegó |
-| `/healthz` **exento** | La plataforma lo consulta contra la dirección interna; un 302 podría leerse como caída |
-
-### Una advertencia sobre HSTS
-
-La configuración envía `Strict-Transport-Security` con un año,
-`includeSubDomains` y `preload`. Una vez servido desde el dominio propio, los
-navegadores **rechazarán HTTP en ese dominio y en todos sus subdominios**
-durante un año. Si hay subdominios que no sirven HTTPS, dejarán de abrirse.
-
----
-
-## Operación y diagnóstico
-
-| Síntoma | Causa probable | Qué hacer |
-|---|---|---|
-| El QR no aparece al dar entrada | `activo` en `false`, o falta `url` o `token` | Revise `boletos.json` y reinicie |
-| «Boleto no disponible» al escanear | Aún no se publicó, o la bandeja falla | `publicar_boletos --solo-listar` |
-| Pendientes con error HTTP 401 | Los tokens no coinciden | Iguálelos en los dos extremos |
-| Pendientes con «debe usar https» | `url` con `http://` | Corrija a `https://` |
-| Pendientes con error HTTP 503 | Falta `IRCARS_TOKEN_PUBLICACION` en el servicio | Defínala y redespliegue |
-| La bandeja crece sin parar | Corte de red prolongado | Es normal; se vacía al volver. Lo de más de 3 días se descarta solo |
-| «Boleto no disponible» en autos que ya estaban dentro | Se publicaron antes de que existiera la base actual, o nunca | `republicar_boletos --publicar` |
-
-Las esperas entre reintentos crecen de 15 s hasta un techo de 10 minutos. Un
-rechazo del servicio (4xx) espera el máximo desde el primer intento: no se
-arregla reintentando, lo arregla una persona.
-
----
-
-## Lo que **no** incluye este trabajo
-
-* **La interfaz web de caja no muestra el QR.** El código está en
-  `apps/boletos/qr.py` y es reutilizable, pero el enganche se hizo en el
-  ejecutable de escritorio, que es lo que opera hoy. Añadirlo a
-  `apps/estacionamiento/web/` es una vista más.
-* **El QR no se imprime en papel térmico.** Se muestra en pantalla para que el
-  cliente lo escanee. `qr.svg_qr` existe para un comprobante imprimible
-  cuando haga falta.
-* **No hay notificaciones.** El cliente consulta cuando quiere; el servicio no
-  envía nada.
+| «Boleto no disponible» | El folio no existe, o está liquidado y ya pasó su vigencia. |
+| El QR apunta a una dirección vieja | `IRCARS_URL_BOLETOS` quedó con el dominio anterior. Los QR ya emitidos siguen funcionando si `IRCARS_DOMINIO_CANONICO` está puesto. |
+| 429 al refrescar | Se alcanzó el límite por IP. Es el comportamiento esperado ante un refresco en bucle. |

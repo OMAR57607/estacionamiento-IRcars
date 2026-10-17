@@ -1,21 +1,19 @@
 """
-Controladores del servicio de boletos.
+Controlador del boleto que abre el cliente.
 
-Son dos superficies con públicos opuestos y, por tanto, con reglas opuestas:
+Una sola superficie y una sola regla: `/t/<uuid>/` se lee desde el teléfono,
+sin autenticación de ninguna clase, y es de **solo lectura, sin excepción**.
+No existe ninguna ruta pública que escriba, de modo que un fallo en esta
+página no puede alterar nada.
 
-* **Ingesta** (`/api/v1/boletos/`): la escribe la caja, autenticada con un
-  token compartido. Es la única ruta de escritura de todo el servicio.
-* **Consulta** (`/t/<uuid>/`): la lee el cliente desde su teléfono, sin
-  autenticación de ninguna clase. Es de solo lectura, sin excepción.
-
-Esa separación es la propiedad de seguridad central del servicio: **no existe
-ninguna ruta pública que escriba**. Aunque la vista de consulta tuviera un
-fallo, no hay nada que pueda alterar desde ella.
+Hubo aquí una segunda superficie, la ingesta que escribía la caja local
+contra un token compartido. Se retiró con la arquitectura que la justificaba:
+hoy la caja vive en este mismo servicio y el boleto se construye leyendo el
+folio.
 """
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import timedelta
 
 from django.conf import settings
@@ -23,95 +21,15 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
-from rest_framework.views import APIView
 
 from apps.estacionamiento import marca
 from apps.estacionamiento.domain.exceptions import ErrorDominio
 from apps.estacionamiento.domain.tarifas import cotizar, minutos_transcurridos
 
 from .limites import limitar_por_ip
-from .models import BoletoPublicado
-from .presentacion import BoletoVista, desde_folio, desde_publicado
-from .serializers import BoletoIngestaSerializer
+from .presentacion import BoletoVista, desde_folio
 
 logger = logging.getLogger(__name__)
-
-
-# ------------------------------------------------------------------- Ingesta
-
-
-class IngestaBoletosView(APIView):
-    """
-    Recibe la instantánea pública de un folio enviada por la caja.
-
-    Autenticación por token compartido y no por usuario: quien llama es una
-    máquina, no una persona, y no tiene sentido crear un usuario con sesión
-    para una caseta. El token se compara con `secrets.compare_digest`, que
-    tarda lo mismo con un token correcto que con uno casi correcto; una
-    comparación con `==` revelaría, por el tiempo de respuesta, cuántos
-    caracteres iniciales acertó quien lo intenta.
-
-    La operación es **idempotente**: recibir dos veces la misma carga deja el
-    mismo resultado. Esa garantía es la que permite al publicador reintentar
-    sin llevar registro de lo entregado.
-    """
-
-    authentication_classes: list = []
-    permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "ingesta_boletos"
-
-    def post(self, request):
-        esperado = str(getattr(settings, "IRCARS_TOKEN_PUBLICACION", ""))
-        if not esperado:
-            # Sin token configurado la ruta no se abre «por omisión»: se cierra.
-            # Un despliegue a medio configurar que aceptara cualquier carga
-            # permitiría a cualquiera publicar boletos falsos.
-            logger.error(
-                "Ingesta de boletos invocada sin IRCARS_TOKEN_PUBLICACION configurado."
-            )
-            return Response(
-                {"detalle": "El servicio de boletos no está configurado."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        if not self._token_valido(request, esperado):
-            # Mensaje escueto a propósito: no se informa si el token era
-            # inválido, estaba ausente o tenía mal formato.
-            return Response(
-                {"detalle": "Credenciales inválidas."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        serializador = BoletoIngestaSerializer(data=request.data)
-        serializador.is_valid(raise_exception=True)
-        datos = dict(serializador.validated_data)
-        uuid_folio = datos.pop("uuid_folio")
-
-        _, creado = BoletoPublicado.objects.update_or_create(
-            uuid_folio=uuid_folio, defaults=datos
-        )
-        logger.info(
-            "Boleto %s | folio=%s", "creado" if creado else "actualizado", uuid_folio
-        )
-        return Response(
-            {"estado": "recibido", "creado": creado},
-            status=status.HTTP_201_CREATED if creado else status.HTTP_200_OK,
-        )
-
-    @staticmethod
-    def _token_valido(request, esperado: str) -> bool:
-        cabecera = request.META.get("HTTP_AUTHORIZATION", "")
-        prefijo = "Bearer "
-        if not cabecera.startswith(prefijo):
-            return False
-        recibido = cabecera[len(prefijo) :].strip()
-        return secrets.compare_digest(recibido, esperado)
-
 
 # ------------------------------------------------------- Consulta del cliente
 
@@ -228,21 +146,11 @@ def _calcular_presentacion(boleto: BoletoVista, ahora) -> dict:
 
 def _resolver(uuid_folio) -> BoletoVista | None:
     """
-    Localiza el boleto en el origen que tenga este despliegue.
+    Busca el folio y lo traduce a la vista del cliente.
 
-    Se consulta primero el folio local y después la copia publicada, sin
-    ninguna variable de configuración que lo decida. El motivo es que una
-    bandera obligaría a acertar al desplegar, y equivocarse produciría un
-    «boleto no disponible» con todo correctamente guardado —el peor fallo de
-    diagnosticar—. Así, cada despliegue responde desde lo que realmente tiene:
-
-    * Aplicación web completa: la caja vive aquí, hay folios, y el boleto se
-      construye del folio enmascarando al presentar.
-    * Servicio de solo lectura: no hay folios, y responde la copia publicada,
-      que llegó ya enmascarada desde la caja.
-
-    Las dos ramas no pueden coexistir para un mismo identificador: un servicio
-    que tiene el folio es la caja y no se publica boletos a sí mismo.
+    El enmascarado de la placa ocurre al presentar, dentro de `desde_folio`:
+    la base guarda la placa completa porque la caja la necesita, y lo que
+    nunca sale de aquí es la placa entera.
     """
     from apps.estacionamiento.models import Folio
 
@@ -251,11 +159,7 @@ def _resolver(uuid_folio) -> BoletoVista | None:
         .filter(uuid=uuid_folio)
         .first()
     )
-    if folio is not None:
-        return desde_folio(folio)
-
-    publicado = BoletoPublicado.objects.filter(uuid_folio=uuid_folio).first()
-    return None if publicado is None else desde_publicado(publicado)
+    return None if folio is None else desde_folio(folio)
 
 
 # 60 consultas por minuto y por IP. Holgado para que un cliente refresque su

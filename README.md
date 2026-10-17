@@ -3,34 +3,23 @@
 Sistema de control de estacionamiento con cobro por hora y **fracción
 proporcional**, control de turnos y **corte de caja con cierre ciego**.
 
-## Modo de operación: ejecutable local
+## Modo de operación: en la nube
 
-La caja opera con el **ejecutable de escritorio** en el equipo de la caseta,
-con SQLite en ese mismo equipo. Para un estacionamiento de 13–15 autos al día
-—unas 30 operaciones diarias— es la arquitectura correcta, y no por falta de
-ambición técnica:
+La caja es una **aplicación web** que el operador abre desde el teléfono, la
+tableta o una computadora, con PostgreSQL gestionado detrás. Una sola
+instalación sirve a cualquier dispositivo y no hay nada que instalar ni
+actualizar en la caseta.
 
-- **Sigue cobrando sin internet.** Si se cae la red, la caseta no se detiene.
-  Ninguna arquitectura en la nube ofrece eso.
-- **Sin exposición.** No hay puertos abiertos ni servicios accesibles desde
-  fuera.
-- **Sin costo mensual** ni dependencia de un proveedor.
-- **Un solo punto de falla** en lugar de dos.
+Hubo antes un ejecutable de escritorio con SQLite en el equipo de la caseta,
+y durante un tiempo convivieron: la caja local publicaba hacia un servicio de
+boletos en la nube. Esa arquitectura se retiró por completo cuando la
+operación pasó entera a la web. Queda en el historial de git, no en el árbol
+de trabajo, porque dos motores de cobro —aunque compartan el núcleo— son dos
+sitios donde corregir el mismo error.
 
-A ese volumen, SQLite acumula unos 5,500 folios al año: una fracción mínima de
-su capacidad. La complejidad de un motor cliente-servidor —agrupadores de
-conexiones, réplicas, respaldos gestionados— no aportaría nada aquí.
-
-### Las otras dos interfaces siguen disponibles
-
-El repositorio conserva una **interfaz web** y una **API REST** completas,
-sobre los mismos servicios y el mismo motor de cobro. No están desplegadas hoy,
-pero funcionan: si en el futuro operan varias casetas o quiere consultar la
-caja desde fuera, está hecho. Ver [DESPLIEGUE-RAILWAY.md](DESPLIEGUE-RAILWAY.md).
-
-Las tres interfaces comparten exactamente las mismas reglas: el motor de
-tarificación y los casos de uso se escriben una vez y las tres los heredan. Un
-cambio en el cobro o en el control de caja no se replica en tres lugares.
+**Lo que esto cuesta y hay que saberlo:** sin internet, la caseta no cobra.
+Es la contrapartida de operar en la nube y está anotada como el trabajo
+siguiente.
 
 ---
 
@@ -41,99 +30,19 @@ escanea con la cámara de su teléfono y consulta, desde donde quiera y con sus
 propios datos móviles, su hora de ingreso, el tiempo transcurrido, el precio
 exhibido y el importe acumulado al instante.
 
-La arquitectura es **híbrida y preserva la operación local**:
+El boleto se construye **leyendo el folio**, que es la fuente de verdad y vive
+en la misma base:
 
-- La caja sigue siendo la **fuente de verdad** y opera igual sin internet. El
-  folio se registra en la base local y la publicación se encola para enviarse
-  cuando haya red.
-- Un servicio en la nube recibe una **copia mínima** de cada folio —con la
-  placa ya enmascarada— y la sirve en una dirección pública de solo lectura.
-  Si ese servicio se borra por completo, no se pierde ningún dato contable.
-- La placa se publica **enmascarada** (`ABC••••`): es un dato personal y la
-  dirección del boleto es pública y reenviable. No viajan el operador, el
-  turno, el efectivo ni la placa completa.
+- La dirección es un UUID v4 no enumerable (`/t/<uuid>/`), de solo lectura y
+  sin sesión. No existe ninguna ruta pública que escriba.
+- La placa se muestra **enmascarada** (`ABC••••`): es un dato personal y la
+  dirección del boleto es pública y reenviable. Lo que la página recibe es un
+  objeto de presentación que no tiene siquiera dónde llevar la placa completa,
+  el operador, el turno ni el efectivo.
+- El importe sale del **mismo motor** que cobra la caja, de modo que la cifra
+  del teléfono no puede diferir de la de la caseta.
 
-Puesta en marcha, controles de seguridad y diagnóstico en
-[BOLETO-QR.md](BOLETO-QR.md).
-
----
-
-## Obtener el ejecutable de Windows
-
-PyInstaller no hace compilación cruzada, así que el `.exe` se compila en un
-runner de Windows mediante GitHub Actions. **No necesita instalar Python ni
-herramientas de compilación.**
-
-1. Entre a la pestaña **Actions** del repositorio.
-2. Abra la ejecución más reciente de *«Compilar ejecutable de Windows»*.
-3. Descargue el artefacto **`IRcars-Caja-windows`**.
-4. Descomprima y ejecute `IRcars-Caja.exe`.
-
-El flujo se dispara solo cuando cambia algo que afecta al ejecutable, y también
-puede lanzarse a mano desde esa misma pestaña.
-
-Antes de publicar el artefacto, el flujo **ejecuta el propio `.exe`** con
-`--verificar`: arranca Django dentro del binario, aplica las migraciones,
-resuelve la zona horaria y comprueba los motores de tarificación y de corte con
-importes conocidos. Si PyInstaller dejó algo fuera, la compilación falla ahí y
-no le entrega un ejecutable roto.
-
-### Primer uso
-
-En el primer arranque no existe ningún operador, así que la aplicación le guía
-para crear el usuario administrador inicial. Después:
-
-1. Pestaña **Tarifa** → registre el cuadro tarifario (sin tarifa vigente no se
-   puede cobrar).
-2. Pestaña **Turno y corte** → abra turno declarando el fondo inicial.
-3. Pestaña **Caja** → ya puede registrar entradas y cobrar salidas.
-
-Los datos viven en `%LOCALAPPDATA%\IRcars`, ruta que la propia aplicación
-muestra en su barra inferior —un clic la copia al portapapeles—.
-**Respaldar el sistema es copiar esa carpeta.**
-
-### La pantalla de caja
-
-El ciclo de un vehículo son cuatro gestos, y la pantalla está dispuesta para
-que ocurran sin buscar nada:
-
-1. **Entrada.** Se teclea la placa y se pulsa `Enter`. El acuse confirma la
-   hora —y el cajón, si hay inventario de cajones dado de alta—, y el cursor
-   vuelve al campo listo para el siguiente vehículo.
-2. **Cotización.** Placa en «Salida y cobro» y `Enter`. El importe aparece en
-   grande, con la permanencia y la tarifa aplicada debajo. **No cierra el
-   folio**: todavía puede corregirse.
-3. **Cobro.** Al teclear el pago recibido, **el cambio se calcula al
-   instante** —o avisa cuánto falta—, a tiempo de contar los billetes. Los
-   botones de billete y de importe exacto evitan teclear la cifra.
-4. **Cierre.** `F5` cobra, cierra el folio y libera el cajón.
-
-Dos ayudas para los casos incómodos:
-
-- **Quien perdió el boleto.** El tablero de vehículos dentro tiene buscador:
-  se teclean unos caracteres de la placa y, en cuanto queda una sola
-  coincidencia, `Enter` la cotiza —doble clic sobre cualquier fila hace lo
-  mismo—. La columna «Lleva acumulado» responde «¿cuánto llevo?» sin tener que
-  cotizar folio por folio.
-- **Si no hay turno abierto**, la cabecera lo advierte en rojo desde cualquier
-  pestaña y lleva a abrirlo de un clic. Es la única condición que impide
-  cobrar, y se ve antes de tener al cliente enfrente.
-
-La cabecera **nunca muestra importes del turno en curso**. Es el cierre ciego:
-si el total estuviera a la vista, el conteo físico se ajustaría a él.
-
-### Atajos de teclado
-
-Pensados para operar sin ratón con un cliente esperando. Están impresos de
-forma permanente en la barra inferior, que es como se aprenden:
-
-| Tecla | Acción |
-|---|---|
-| `F2` | Registrar entrada |
-| `F4` | Cotizar salida |
-| `F5` | Cobrar y cerrar folio |
-| `F9` | Actualizar el tablero |
-| `Enter` | Confirma el campo en que esté el cursor |
+Detalle de los controles en [BOLETO-QR.md](BOLETO-QR.md).
 
 ---
 
@@ -144,10 +53,9 @@ conoce Django, HTTP ni la base de datos, por lo que es verificable de forma
 aislada y reutilizable por cualquier interfaz futura.
 
 ```
-  web/views.py      Interfaz web de caja (plantillas Django)
-  views.py          API REST (DRF)                    ─┐
-  escritorio/       Aplicación de escritorio (Tkinter) ─┤ tres interfaces,
-  api_errors.py     Errores de dominio → HTTP          ─┘ cero reglas propias
+  web/views.py      Interfaz web de caja (plantillas Django) ─┐ dos interfaces,
+  views.py          API REST (DRF)                           ─┤ cero reglas
+  api_errors.py     Errores de dominio → HTTP                 ─┘ propias
         │
         ▼
   services.py       Casos de uso: entrada, cotización, cobro, cancelación
@@ -164,8 +72,7 @@ aislada y reutilizable por cualquier interfaz futura.
 
 | Capa | Archivos | Responsabilidad |
 |---|---|---|
-| Interfaz | `web/`, `views.py`, `serializers.py`, `escritorio/` | Deserializar, delegar, presentar |
-| └ Presentación | `escritorio/tema.py` | Color, tipografía y componentes de la app de escritorio |
+| Interfaz | `web/`, `views.py`, `serializers.py` | Deserializar, delegar, presentar |
 | Aplicación | `services.py`, `services_caja.py` | Orquestar casos de uso, transacciones, concurrencia |
 | Dominio | `domain/tarifas.py`, `domain/corte.py` | Calcular importes y diferencias. Sin framework, 100 % testeable |
 | Infraestructura | `models.py`, `migrations/` | Persistir y hacer cumplir la integridad |
@@ -352,10 +259,11 @@ estacionamientos en México (PROFECO y normatividad local):
   motor que usa la caja, de modo que no puede diferir del que se le cobre.
 
 En materia de datos personales (LFPDPPP), el boleto público aplica
-**minimización** —la placa se enmascara en el origen y la completa nunca viaja
-ni se almacena en la nube— y **temporalidad**: los boletos liquidados se
-depuran del servicio público a los siete días, mientras el historial contable
-permanece íntegro en la caja.
+**minimización** —la placa se enmascara al presentar y la completa nunca sale
+de la base— y **temporalidad**: el enlace de un boleto ya liquidado deja de
+responder pasadas las horas configuradas, de modo que una dirección que vive
+en historiales y mensajes reenviados no sigue exhibiendo datos, mientras el
+historial contable permanece íntegro.
 
 ---
 
@@ -416,12 +324,13 @@ los mismos servicios, sin duplicar reglas de negocio:
   texto plano y se guarda en archivo; falta enviarlo a la impresora sin pasar
   por el explorador, y emitir boleto de entrada y recibo de cobro con el
   desglose que el folio ya persiste.
-- **Respaldo y reportería central en la nube.** La publicación de boletos ya
-  estableció el camino —bandeja de salida transaccional, reintentos, operación
-  local como fuente de verdad—; falta extenderlo a los datos del corte, que
-  hoy no salen del equipo.
+- **Cobrar sin conexión.** Es el pendiente de fondo de operar en la nube. El
+  primer paso acordado es un archivo de vectores de prueba que fije la
+  equivalencia entre el motor de tarifas en Python y una réplica en
+  JavaScript: sin esa equivalencia demostrada, una caja que cobre en el
+  navegador cobraría distinto que el servidor.
 
 Ya no figuran aquí tres puntos que sí están construidos: el **corte de caja**
 por turno y operador —con cierre ciego, conciliación e historial—, el **panel
-de caja**, que es la propia aplicación de escritorio, y la **consulta del
-boleto por el cliente**, descrita arriba.
+de caja**, que es la propia aplicación web, y la **consulta del boleto por el
+cliente**, descrita arriba.
