@@ -1,11 +1,8 @@
-# Dependencias exclusivas de la COMPILACIÓN del ejecutable de escritorio.
-# Se mantienen aparte de requirements.txt para no instalar PyInstaller en el
-# servidor ni en el entorno de desarrollo: solo lo necesita el flujo que
-# produce el .exe.
-pyinstaller==6.11.1
+# Herramientas de preparación, no de ejecución.
+#
+# Se mantienen aparte de requirements.txt para no instalarlas en el servidor:
+# nada de lo que hay aquí se carga al atender una petición. Lo que producen se
+# versiona ya listo.
 
-# Preparación del icono y la marca a partir del logotipo original
-# (`scripts/generar_iconos.py`). Igual que PyInstaller, es una herramienta de
-# construcción: ni el servidor ni el ejecutable la necesitan en ejecución, y
-# los archivos que produce se versionan ya listos.
+# Icono y marca a partir del logotipo original (`scripts/generar_iconos.py`).
 pillow==12.3.0

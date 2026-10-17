@@ -19,7 +19,7 @@ whitenoise[brotli]==6.8.2       # Archivos estáticos sin servidor web adicional
 segno==1.6.6                    # Generador de códigos QR en Python puro. Se
                                 # prefiere a «qrcode» porque este último
                                 # depende de Pillow, que añadiría decenas de
-                                # megabytes al ejecutable de PyInstaller y una
+                                # megabytes al empaquetado y una
                                 # superficie de decodificación de imágenes que
                                 # esta aplicación no necesita. segno escribe
                                 # PNG y SVG por sí mismo.

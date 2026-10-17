@@ -1,49 +1,16 @@
 """
-Construcción de la instantánea pública de un folio.
+Qué tarifa exhibe el boleto de un folio.
 
-Este módulo define **el contrato de cable** entre la caja y el servicio de
-boletos: lo que sale de aquí es, carácter por carácter, lo que valida
-`serializers.BoletoIngestaSerializer` al otro extremo. Cualquier cambio obliga
-a tocar ambos, y por eso están descritos en el mismo lugar del repositorio.
-
-Una decisión que conviene no perder de vista: la dirección de la dependencia.
-`apps.boletos` conoce a `apps.estacionamiento`; **nunca al revés**. El núcleo
-del negocio —folios, tarifas, caja, corte— ignora por completo que exista una
-publicación en la nube, y debe seguir ignorándolo. Si mañana se retira el
-servicio de boletos, basta con desinstalar esta aplicación: no queda un solo
-`import` que corregir en el estacionamiento.
+El archivo se llamaba así porque construía la «instantánea» que la caja local
+enviaba a la nube. Esa publicación se retiró con la arquitectura que la
+justificaba; lo que queda es la regla que decide qué precio se muestra, y
+vive aparte porque tiene efecto económico: la usan la vista pública y la
+presentación del boleto, y si cada una la resolviera por su cuenta, el mismo
+boleto podría mostrar precios distintos según por dónde se consultara.
 """
 from __future__ import annotations
 
 from decimal import Decimal
-
-from .dominio import enmascarar_placa
-
-# Versión del contrato. Viaja en la carga para que el servicio pueda rechazar
-# con un mensaje claro a una caja demasiado antigua, en lugar de fallar con un
-# error de validación que no explica nada.
-# v2: añade `minutos_tolerancia`. Un servicio v1 rechaza una carga v2 en
-# lugar de aceptarla descartando la tolerancia en silencio, que habría
-# hecho que el cliente leyera en su teléfono un precio distinto al cobrado.
-VERSION_CONTRATO = 2
-
-
-def _texto(valor: Decimal | None) -> str | None:
-    """
-    Los importes viajan como cadena, no como número.
-
-    JSON no distingue entre entero y decimal, y su número es un flotante de
-    doble precisión. Serializar `Decimal("0.10")` como número lo convierte en
-    un valor que no es exactamente una décima, y el redondeo del importe
-    dejaría de ser reproducible entre los dos extremos. Como cadena, el
-    `Decimal` se reconstruye idéntico.
-    """
-    return None if valor is None else str(valor)
-
-
-def _marca(momento) -> str | None:
-    """Fecha y hora en ISO-8601 con zona horaria explícita (siempre UTC)."""
-    return None if momento is None else momento.isoformat()
 
 
 def parametros_exhibidos(folio):

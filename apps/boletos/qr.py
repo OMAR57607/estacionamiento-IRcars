@@ -3,7 +3,7 @@ Generación del código QR que enlaza al boleto del cliente.
 
 Se eligió **segno** y no `qrcode`, que es la opción más difundida, por una
 razón de empaquetado: `qrcode` depende de Pillow para producir imágenes, y
-Pillow añade decenas de megabytes al ejecutable de PyInstaller además de una
+Pillow añadiría decenas de megabytes a la imagen del servidor además de una
 superficie de decodificación de imágenes que esta aplicación no necesita.
 `segno` es Python puro, escribe PNG y SVG por sí mismo y pesa unos cientos de
 kilobytes.

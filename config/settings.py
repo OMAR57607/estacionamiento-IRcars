@@ -242,31 +242,19 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "user": "600/min",
         "anon": "60/min",
-        # Ingesta de boletos: la emite una caseta, no una persona. 120 por
-        # minuto es holgado para el volumen real —unas 30 operaciones al
-        # día— y acota el daño si un cliente mal configurado entra en un
-        # ciclo de reintentos.
-        "ingesta_boletos": "120/min",
     },
 }
 
-# --- Servicio de boletos (consulta del cliente por QR) ----------------------
+# --- Boleto del cliente (consulta por QR) -----------------------------------
 #
-# Arquitectura: la caja local sigue siendo la fuente de verdad. Este servicio
-# recibe una copia mínima de cada folio y la sirve en una dirección pública
-# que el cliente abre con la cámara de su teléfono. Si se borra por completo,
-# no se pierde ningún dato contable.
+# El boleto se construye leyendo el folio, que es la fuente de verdad y vive
+# en esta misma base. La página es pública y de solo lectura: lo único que
+# sale de aquí es una placa enmascarada y el precio exhibido al ingresar.
 
 # Nombre que se muestra en el boleto del cliente.
 IRCARS_NOMBRE_COMERCIAL = env("IRCARS_NOMBRE_COMERCIAL", default="Estacionamiento")
 
-# Token compartido que autentica a la caja contra la ingesta. Sin valor, la
-# ruta de escritura responde 503 en lugar de aceptar cargas sin credencial.
-#   python -c "import secrets; print(secrets.token_urlsafe(48))"
-IRCARS_TOKEN_PUBLICACION = env("IRCARS_TOKEN_PUBLICACION", default="")
-
-# Origen público del servicio. Es lo que se codifica en el QR, de modo que el
-# enlace impreso y el destino de la publicación no puedan divergir.
+# Origen público del servicio: lo que se codifica en el QR del boleto.
 IRCARS_URL_BOLETOS = env("IRCARS_URL_BOLETOS", default="")
 if not IRCARS_URL_BOLETOS and _dominio_publico:
     IRCARS_URL_BOLETOS = f"https://{_dominio_publico}"
@@ -298,28 +286,11 @@ IRCARS_TRAS_CLOUDFLARE = env.bool("IRCARS_TRAS_CLOUDFLARE", default=False)
 # con el que se generaron. Vacío desactiva la redirección por completo.
 IRCARS_DOMINIO_CANONICO = env("IRCARS_DOMINIO_CANONICO", default="")
 
-# Reduce el despliegue a la consulta e ingesta de boletos: sin panel de
-# administración, sin interfaz de caja y sin API del estacionamiento. Es la
-# configuración recomendada en la nube, donde la operación vive en el
-# ejecutable local y exponer la caja no aportaría nada salvo superficie.
-IRCARS_SOLO_BOLETOS = env.bool("IRCARS_SOLO_BOLETOS", default=False)
-
 # Ruta del panel de administración de Django. Vacía —lo normal— significa que
 # el panel NO se monta en ninguna dirección. La aplicación no lo necesita para
 # operar, y `/admin/` es la ruta más sondeada de cualquier sitio Django.
 # Para habilitarlo puntualmente, use una cadena larga y aleatoria, sin barras.
 IRCARS_RUTA_ADMIN = env("IRCARS_RUTA_ADMIN", default="").strip("/")
-
-# Si esta instancia debe publicar los folios que registra. En el servicio de
-# la nube va en False —se publica a sí mismo no tiene sentido— y es el valor
-# por omisión. Se deja configurable porque la interfaz web de caja comparte
-# esta configuración: si algún día se desplegara como caja real, tendría que
-# poder publicar igual que el ejecutable local.
-IRCARS_PUBLICAR_BOLETOS = env.bool("IRCARS_PUBLICAR_BOLETOS", default=False)
-
-# Permite publicar contra un servicio sin cifrar. Solo para pruebas en la
-# máquina local: el token de publicación viaja en la petición.
-IRCARS_PERMITIR_HTTP_BOLETOS = env.bool("IRCARS_PERMITIR_HTTP_BOLETOS", default=False)
 
 # --- Observabilidad ---------------------------------------------------------
 # Los eventos de negocio (entrada, cobro, cierre) se registran con su folio

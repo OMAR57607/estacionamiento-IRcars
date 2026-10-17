@@ -11,7 +11,7 @@ Una tabla de ejemplos no bastó para detectarlo, porque obliga a deducir la
 regla a partir de ocho importes. Estas frases la dicen. Si lo que se lee no
 es lo que se quería cobrar, el error salta antes de guardar.
 
-Módulo sin Django a propósito: lo usan la caja web y la de escritorio, y una
+Módulo sin Django a propósito: la regla tiene efecto económico y una
 frase que describa mal el cobro es tan grave como un importe mal calculado,
 de modo que se prueba como lógica pura.
 """

@@ -285,10 +285,10 @@ def registrar_salida(
     no es opcional por comodidad —un ingreso que no cae en ningún turno queda
     fuera de todo corte—.
 
-    `exigir_turno` interrumpe el cobro cuando no hay turno abierto. La caja de
-    escritorio lo activa, porque ahí sí se maneja efectivo; la API lo deja
-    desactivado para permitir integraciones que no operan caja (pensiones,
-    cobro con terminal, conciliaciones automáticas).
+    `exigir_turno` interrumpe el cobro cuando no hay turno abierto. La caja
+    lo activa, porque ahí se maneja efectivo; la API lo deja desactivado para
+    permitir integraciones que no operan caja (pensiones, cobro con terminal,
+    conciliaciones automáticas).
     """
     momento = momento or timezone.now()
 

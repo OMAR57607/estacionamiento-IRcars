@@ -3,8 +3,8 @@ Formularios de la interfaz web de caja.
 
 Responsabilidad única: validar la forma de lo que se captura. Las reglas de
 negocio —si la placa ya está dentro, si el pago alcanza, si hay turno abierto—
-viven en los servicios y se aplican igual aquí que en la API o en el ejecutable
-de escritorio. Duplicarlas en el formulario garantizaría que algún día
+viven en los servicios y se aplican igual aquí que en la API. Duplicarlas en
+el formulario garantizaría que algún día
 divergieran.
 """
 from __future__ import annotations
@@ -225,8 +225,7 @@ class TarifaForm(forms.Form):
     """
     Cambio del precio.
 
-    Dos decisiones gobiernan este formulario, y son las mismas que gobiernan la
-    pantalla equivalente del ejecutable de escritorio:
+    Dos decisiones gobiernan este formulario:
 
     * **No existe formulario de edición a propósito.** Guardar crea un precio
       nuevo y desactiva el anterior, de modo que quede registro de qué precio
