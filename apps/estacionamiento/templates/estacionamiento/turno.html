@@ -10,14 +10,14 @@
   <div class="tarjeta">
     <h2>Turno {{ turno_actual.pk }} · abierto</h2>
     <p class="detalle-cobro">
-      Operador: <strong>{{ turno_actual.operador }}</strong><br>
-      Apertura: <strong>{{ turno_actual.abierto_en|date:"d/m/Y H:i" }}</strong><br>
-      Fondo inicial: <strong>{{ turno_actual.fondo_inicial|pesos }}</strong>
+      Lo abrió: <strong>{{ turno_actual.operador }}</strong><br>
+      Desde: <strong>{{ turno_actual.abierto_en|date:"d/m/Y H:i" }}</strong><br>
+      Cambio con que abrió: <strong>{{ turno_actual.fondo_inicial|pesos }}</strong>
     </p>
 
     <div class="indicadores" style="margin:.8rem 0">
       <div class="indicador">
-        <div class="rotulo">Folios cobrados</div>
+        <div class="rotulo">Boletos cobrados</div>
         <div class="valor">{{ avance.folios_cobrados }}</div>
       </div>
       <div class="indicador">
@@ -29,21 +29,58 @@
         <div class="valor">{{ avance.folios_abiertos_en_patio }}</div>
       </div>
     </div>
+
+    {% if esperado %}
+      {% comment %} Solo para el perfil administrativo. Al cajero se le sigue ocultando:
+         quien cuenta el efectivo no debe conocer la cifra a la que tiene que
+         llegar, o el conteo se ajusta a ella y un faltante nunca se registra.
+         Al dueño ocultársela no controla a nadie —puede verla en Reportes— y
+         le impide detectar un desvío mientras todavía hay tiempo. {% endcomment %}
+      <table>
+        <tbody>
+          <tr>
+            <th>Cobrado en este turno</th>
+            <td class="numero">{{ esperado.total_cobrado|pesos }}</td>
+          </tr>
+          <tr>
+            <th>Cambio con que abrió</th>
+            <td class="numero">{{ esperado.fondo_inicial|pesos }}</td>
+          </tr>
+          <tr style="font-weight:700">
+            <th>Debería haber en caja</th>
+            <td class="numero">{{ esperado.efectivo_esperado|pesos }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="ayuda">
+        Esta cifra solo la ve usted, por ser el perfil administrativo. Al
+        cajero no se le muestra: si conociera el total antes de contar, el
+        conteo se ajustaría a él y un faltante nunca quedaría registrado.
+      </p>
+    {% endif %}
   </div>
 
   <div class="tarjeta">
     <h2>Corte de caja</h2>
 
-    <div class="aviso info">
-      <strong>Cierre ciego.</strong>
-      Cuente el efectivo que hay en caja —incluyendo el fondo inicial— y
-      capture el total. El sistema le mostrará la diferencia <em>después</em> de
-      registrar su conteo.
-      <br><br>
-      Esta pantalla no muestra el total esperado a propósito: si lo conociera
-      antes de contar, el conteo se ajustaría a esa cifra y un faltante nunca
-      quedaría registrado.
-    </div>
+    {% comment %} El aviso ocupaba media pantalla del teléfono por delante del único
+       campo que hay que llenar. La instrucción cabe en un renglón; el porqué
+       queda plegado, para quien lo pregunte. {% endcomment %}
+    <p class="ayuda" style="margin-top:0">
+      Cuente todo el efectivo de la caja y capture el total. La diferencia
+      aparece <em>después</em> de registrar su conteo.
+    </p>
+    {% if not esperado %}
+      <details class="detalle-plegado">
+        <summary>¿Por qué no se muestra cuánto debería haber?</summary>
+        <p class="ayuda">
+          Porque si conociera esa cifra antes de contar, el conteo se
+          ajustaría a ella y un faltante nunca quedaría registrado. Es lo
+          que protege al cajero tanto como al dueño: un conteo independiente
+          es la única prueba de que la caja cuadró.
+        </p>
+      </details>
+    {% endif %}
 
     <form method="post">
       {% csrf_token %}
@@ -63,6 +100,30 @@
       El corte es definitivo y quedará registrado a su nombre. Los vehículos
       que sigan dentro se cobrarán en el turno siguiente.
     </p>
+
+    <details class="detalle-plegado">
+      <summary>¿Cómo funciona el turno?</summary>
+      <ol class="ayuda">
+        <li>
+          <strong>Al empezar la jornada</strong> abre el turno y declara el
+          cambio con que arranca la caja. Sin ese dato, cualquier diferencia
+          al final sería ininterpretable.
+        </li>
+        <li>
+          <strong>Durante el turno</strong> cobra salidas con normalidad. Cada
+          cobro queda atado a este turno.
+        </li>
+        <li>
+          <strong>Al entregar</strong> cuenta el efectivo, lo captura y cierra.
+          El sistema compara con lo que debería haber y registra la diferencia.
+        </li>
+        <li>
+          <strong>Los coches que sigan dentro</strong> no estorban: se quedan
+          en el patio y se cobran en el turno siguiente, con el precio que se
+          les exhibió al entrar.
+        </li>
+      </ol>
+    </details>
   </div>
 
 {% else %}
@@ -70,8 +131,9 @@
   <div class="tarjeta" style="max-width:520px">
     <h2>Abrir turno de caja</h2>
     <p class="ayuda" style="margin-bottom:.8rem">
-      Declare el efectivo con el que inicia la caja (el cambio). Sin ese dato
-      el corte no tiene línea base y cualquier diferencia sería ininterpretable.
+      Cuente el cambio con el que arranca la caja y captúrelo. Sin ese dato,
+      al cerrar no hay contra qué comparar y cualquier diferencia sería
+      ininterpretable.
     </p>
     <form method="post">
       {% csrf_token %}
@@ -96,9 +158,9 @@
           <tr>
             <th>Cierre</th>
             <th>Operador</th>
-            <th class="numero">Fondo</th>
+            <th class="numero">Cambio</th>
             <th class="numero">Cobrado</th>
-            <th class="numero">Esperado</th>
+            <th class="numero">Debería haber</th>
             <th class="numero">Contado</th>
             <th class="numero">Diferencia</th>
             <th></th>

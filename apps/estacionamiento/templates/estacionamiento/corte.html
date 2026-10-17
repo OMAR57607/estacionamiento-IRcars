@@ -26,19 +26,19 @@
 
   <table>
     <tbody>
-      <tr><th>Operador</th><td>{{ turno_corte.operador }}</td></tr>
+      <tr><th>Lo cerró</th><td>{{ turno_corte.operador }}</td></tr>
       <tr><th>Apertura</th><td>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Cierre</th><td>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Fondo inicial</th><td class="numero">{{ resumen.fondo_inicial|pesos }}</td></tr>
+      <tr><th>Cambio con que abrió</th><td class="numero">{{ resumen.fondo_inicial|pesos }}</td></tr>
       <tr><th>Cobrado en el turno</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
-      <tr><th>Efectivo esperado</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
-      <tr><th>Efectivo contado</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
+      <tr><th>Debería haber en caja</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
+      <tr><th>Contado al cerrar</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
       <tr style="font-weight:700">
         <th>DIFERENCIA</th>
         <td class="numero">{{ resumen.diferencia|pesos_con_signo }}</td>
       </tr>
-      <tr><th>Folios cobrados</th><td class="numero">{{ resumen.folios_cobrados }}</td></tr>
-      <tr><th>Folios en cortesía</th><td class="numero">{{ resumen.folios_cortesia }}</td></tr>
+      <tr><th>Boletos cobrados</th><td class="numero">{{ resumen.folios_cobrados }}</td></tr>
+      <tr><th>Boletos sin costo (cortesía)</th><td class="numero">{{ resumen.folios_cortesia }}</td></tr>
     </tbody>
   </table>
 
@@ -65,7 +65,7 @@
 
 {% if folios %}
 <div class="tarjeta">
-  <h2>Folios cobrados en el turno ({{ folios|length }})</h2>
+  <h2>Boletos cobrados en el turno ({{ folios|length }})</h2>
   <div class="tabla-envoltura">
     <table>
       <thead>

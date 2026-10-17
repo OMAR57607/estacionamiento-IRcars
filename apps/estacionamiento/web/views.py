@@ -460,6 +460,13 @@ def turno(request):
     if turno_actual is not None:
         contexto["avance"] = services_caja.resumen_operativo(turno_actual)
         contexto["form_cerrar"] = CerrarTurnoForm()
+        # El esperado antes de contar solo lo ve el perfil administrativo. El
+        # cierre sigue siendo ciego para el cajero, que es donde el control
+        # tiene sentido: quien cuenta no debe conocer la cifra a la que debe
+        # llegar. Al dueño ocultársela no controla a nadie —puede consultarla
+        # en Reportes— y le impide detectar un desvío mientras aún hay tiempo.
+        if contexto["es_administrativo"]:
+            contexto["esperado"] = services_caja.calcular_resumen(turno_actual)
     else:
         contexto["form_abrir"] = AbrirTurnoForm()
 
