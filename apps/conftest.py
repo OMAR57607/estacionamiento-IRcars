@@ -47,3 +47,24 @@ def estaticos_sin_manifiesto(settings):
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def sin_redireccion_a_https(settings):
+    """
+    Desactiva `SECURE_SSL_REDIRECT` durante las pruebas.
+
+    En producción está activo —con `DEBUG=False`— y es lo correcto: una caja
+    publicada en internet no debe atender nada por HTTP. Pero el cliente de
+    pruebas habla HTTP salvo que se le pida `secure=True`, de modo que con la
+    redirección encendida medio centenar de pruebas recibía un 301 en lugar
+    de la página, y la suite solo pasaba con `DEBUG=True`.
+
+    Esa dependencia oculta es justo lo que no debe tener un conjunto de
+    pruebas: el resultado cambiaba según una variable de entorno ajena a lo
+    que se examina, y quien lo descubría era quien montaba la integración
+    continua. Fijándola aquí, la suite da el mismo resultado con cualquier
+    valor de `DEBUG`, y las pruebas que sí examinan la superficie expuesta
+    piden `secure=True` explícitamente, como hace la mayoría.
+    """
+    settings.SECURE_SSL_REDIRECT = False
