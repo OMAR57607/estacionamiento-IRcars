@@ -1,0 +1,71 @@
+# Pruebas en cada propuesta de cambio.
+#
+# El repositorio se quedó sin ningún flujo al retirar la compilación del
+# ejecutable de Windows, de modo que lo único que impedía fusionar algo roto
+# era que alguien se acordara de correr las pruebas. Esto lo vuelve
+# automático: una propuesta que rompa el cobro, el corte o el boleto se ve en
+# rojo antes de llegar a `main`.
+
+name: Pruebas
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Una propuesta que recibe varios empujones seguidos no necesita verificar las
+# versiones intermedias: la última es la que se va a fusionar.
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: Suite completa
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Clave de usar y tirar, visible a propósito: este proceso no toca
+      # ningún dato real y una clave secreta aquí no protegería nada.
+      DJANGO_SECRET_KEY: clave-de-integracion-continua-sin-valor-alguno
+      # Con los ajustes de producción, que es lo que hay que verificar:
+      # cookies seguras, sin páginas de error detalladas. La redirección a
+      # HTTPS la desactiva el propio conjunto de pruebas, que por eso da el
+      # mismo resultado con cualquier valor de esta variable.
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: testserver,localhost
+      # SQLite: la suite no depende del motor salvo donde lo dice, y levantar
+      # PostgreSQL costaría un minuto por ejecución sin cambiar un resultado.
+      DATABASE_URL: sqlite:///pruebas-ci.sqlite3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # La misma versión con que corre el servicio.
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Migraciones al día
+        # Un modelo cambiado sin su migración despliega bien y falla al
+        # primer uso, con la tabla real sin la columna nueva. Esto lo corta
+        # antes de fusionar.
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Revisión del proyecto
+        run: python manage.py check
+
+      - name: Pruebas
+        run: pytest
