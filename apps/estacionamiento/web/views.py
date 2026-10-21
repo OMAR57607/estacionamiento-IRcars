@@ -72,8 +72,15 @@ def _contexto_base(request) -> dict:
     la sesión: si se cerró desde otra pestaña o dispositivo, un dato en caché
     permitiría cobrar contra un turno ya cortado.
     """
+    turno_actual = services.obtener_turno_abierto(request.user)
     return {
-        "turno_actual": services.obtener_turno_abierto(request.user),
+        "turno_actual": turno_actual,
+        # Cuánto lleva abierto. La caja avisaba solo cuando NO había turno
+        # —lo que estorba— y callaba el turno de catorce horas, que es lo que
+        # arruina el corte sin que nadie lo note.
+        "estado_turno": (
+            services_caja.estado_del_turno(turno_actual) if turno_actual else None
+        ),
         "es_administrativo": _es_administrativo(request.user),
     }
 
@@ -347,6 +354,22 @@ def _procesar_cotizacion(request, contexto):
 
 
 def _procesar_cobro(request):
+    turno = services.obtener_turno_abierto(request.user)
+    if turno is not None and services_caja.exige_cierre_antes_de_cobrar(turno):
+        # Se frena el cobro, no la entrada: un vehículo en la rampa no puede
+        # esperar a que alguien cuadre la caja, pero un cobro que cae en el
+        # turno de ayer mezcla el efectivo de dos días y deja la diferencia
+        # del corte sin lectura posible.
+        messages.error(
+            request,
+            f"El turno {turno.pk} sigue abierto desde el "
+            f"{timezone.localtime(turno.abierto_en):%d/%m a las %H:%M}. "
+            "Ciérrelo antes de cobrar: si no, el efectivo de dos días se "
+            "mezcla en un mismo corte. Las entradas puede seguir "
+            "registrándolas.",
+        )
+        return redirect("web:turno")
+
     form = CobroForm(request.POST)
     if not form.is_valid():
         messages.error(request, "El pago capturado no es una cantidad válida.")
