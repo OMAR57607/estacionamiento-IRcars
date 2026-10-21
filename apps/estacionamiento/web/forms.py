@@ -45,7 +45,11 @@ class EntradaForm(forms.Form):
         choices=TipoCajon.choices,
         initial=TipoCajon.AUTOMOVIL,
         required=False,
-        label="Tipo",
+        label="Tipo de vehículo",
+        help_text=(
+            "Decide el precio: la motocicleta tiene su propia tarifa. "
+            "«Accesible» es un cajón reservado y cobra como automóvil."
+        ),
         widget=forms.Select(attrs={"class": "campo"}),
     )
 

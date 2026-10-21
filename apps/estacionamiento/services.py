@@ -34,7 +34,16 @@ from .domain.exceptions import (
     VehiculoYaDentro,
 )
 from .domain.tarifas import Cotizacion, cotizar, minutos_transcurridos
-from .models import Cajon, EstadoFolio, EstadoTurno, Folio, Tarifa, TipoCajon, Turno
+from .models import (
+    Cajon,
+    EstadoFolio,
+    EstadoTurno,
+    Folio,
+    Tarifa,
+    TipoCajon,
+    TipoVehiculo,
+    Turno,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,23 +68,34 @@ def normalizar_placa(placa: str) -> str:
     return normalizada
 
 
-def obtener_tarifa_vigente(momento: datetime | None = None) -> Tarifa:
+def obtener_tarifa_vigente(
+    momento: datetime | None = None,
+    tipo_vehiculo: str = TipoVehiculo.AUTOMOVIL,
+) -> Tarifa:
     """
-    Recupera la tarifa activa cuya vigencia ya inició, la más reciente.
+    Recupera la tarifa activa del tipo pedido, la más reciente ya vigente.
 
     Si no existe ninguna, se interrumpe la operación: cobrar sin tarifa
     exhibida y registrada no es admisible ni contable ni normativamente.
+
+    No hay respaldo al precio de automóvil cuando falta el de motocicleta, y
+    es deliberado. Cobrar una moto a precio de auto sin avisar es peor que
+    detener esa entrada: el operador no tendría forma de notarlo y el cliente
+    pagaría de más amparado en un precio que nunca se le exhibió.
     """
     momento = momento or timezone.now()
     tarifa = (
-        Tarifa.objects.filter(activa=True, vigente_desde__lte=momento)
+        Tarifa.objects.filter(
+            activa=True, vigente_desde__lte=momento, tipo_vehiculo=tipo_vehiculo
+        )
         .order_by("-vigente_desde")
         .first()
     )
     if tarifa is None:
+        etiqueta = TipoVehiculo(tipo_vehiculo).label.lower()
         raise ErrorConfiguracion(
-            "No hay una tarifa vigente configurada. Registre el cuadro "
-            "tarifario antes de operar."
+            f"No hay un precio vigente para {etiqueta}. Regístrelo en la "
+            "pantalla de Precio antes de operar."
         )
     return tarifa
 
@@ -159,7 +179,11 @@ def registrar_entrada(
             "salida o verifique si se trata de una placa duplicada."
         )
 
-    tarifa = obtener_tarifa_vigente(momento)
+    # El precio lo decide el vehículo, no el cajón: un auto en un cajón
+    # accesible paga tarifa de auto.
+    tarifa = obtener_tarifa_vigente(
+        momento, tipo_vehiculo=TipoVehiculo.desde_cajon(tipo_cajon)
+    )
 
     cajon = _asignar_cajon(tipo_cajon)
 

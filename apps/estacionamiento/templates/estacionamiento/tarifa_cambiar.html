@@ -30,6 +30,7 @@
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="accion" value="desbloquear">
+      <input type="hidden" name="tipo" value="{{ tipo }}">
       <label for="{{ form_clave.clave.id_for_label }}">{{ form_clave.clave.label }}</label>
       {{ form_clave.clave }}
       <button type="submit" class="boton" style="margin-top:1rem">Desbloquear</button>
@@ -41,7 +42,10 @@
   <div class="rejilla-doble">
 
     <div class="tarjeta">
-      <h2>{% if vigente %}Cambiar el precio{% else %}Configurar el precio{% endif %}</h2>
+      <h2>
+        {% if vigente %}Cambiar el precio{% else %}Configurar el precio{% endif %}
+        de {{ tipo_etiqueta|lower }}
+      </h2>
       <p class="ayuda" style="margin-top:0">
         {% if vigente %}
           Los campos traen el precio que está en uso. Lo que no toque, no cambia.
@@ -54,6 +58,11 @@
       <form method="post">
         {% csrf_token %}
         <input type="hidden" name="accion" value="guardar">
+        {% comment %} El tipo viaja con el envío además de en la dirección: un formulario
+           que lo perdiera aplicaría el precio al vehículo equivocado, y eso
+           no lo delataría ningún error, solo un cobro raro días después.
+           {% endcomment %}
+        <input type="hidden" name="tipo" value="{{ tipo }}">
         {% for campo in form %}
           <div style="margin-bottom:.8rem">
             <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
@@ -73,7 +82,7 @@
     </div>
 
     <div class="tarjeta">
-      <h2>Precio que está en uso</h2>
+      <h2>Precio de {{ tipo_etiqueta|lower }} en uso</h2>
       {% if vigente %}
         <p class="importe-destacado">{{ vigente.cuota_hora|pesos }}</p>
         <p class="detalle-cobro" style="margin-top:-.4rem">

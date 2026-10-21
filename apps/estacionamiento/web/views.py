@@ -34,7 +34,7 @@ from django.views.decorators.http import require_http_methods, require_safe
 from .. import marca, reglas, services, services_caja, services_mantenimiento
 from ..domain.exceptions import ErrorDominio
 from ..domain.tarifas import ParametrosTarifa, cotizar
-from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, Turno
+from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, TipoVehiculo, Turno
 from .forms import (
     AbrirTurnoForm,
     ClaveOperadorForm,
@@ -1010,15 +1010,29 @@ def _cambiar_estado_operador(request, objetivo):
     return redirect("web:operador", pk=objetivo.pk)
 
 
-def _tarifa_vigente_o_nada() -> Tarifa | None:
+def _tipo_pedido(request) -> str:
     """
-    El precio vigente, o `None` si la caseta todavía no tiene ninguno.
+    Qué precio se está consultando o cambiando.
+
+    Llega por la dirección (`?tipo=MOTO`) y se valida contra las opciones
+    reales: un valor inventado seleccionaría un precio inexistente y la
+    pantalla ofrecería crear uno para un tipo de vehículo que no existe.
+    """
+    pedido = request.GET.get("tipo") or request.POST.get("tipo") or ""
+    return pedido if pedido in TipoVehiculo.values else TipoVehiculo.AUTOMOVIL
+
+
+def _tarifa_vigente_o_nada(
+    tipo_vehiculo: str = TipoVehiculo.AUTOMOVIL,
+) -> Tarifa | None:
+    """
+    El precio vigente de ese tipo, o `None` si todavía no tiene ninguno.
 
     La ausencia de precio no es un error que deba interrumpir esta pantalla:
     es precisamente el estado que hay que mostrar y resolver aquí.
     """
     try:
-        return services.obtener_tarifa_vigente()
+        return services.obtener_tarifa_vigente(tipo_vehiculo=tipo_vehiculo)
     except ErrorDominio:
         return None
 
@@ -1112,18 +1126,32 @@ def tarifa(request):
     aquí no hay ningún campo que se pueda teclear por descuido: el cambio vive
     en `tarifa_cambiar`, detrás de la contraseña.
     """
-    vigente = _tarifa_vigente_o_nada()
-
     contexto = _contexto_base(request)
     contexto["seccion"] = "tarifa"
-    contexto["vigente"] = vigente
-    parametros = _parametros_de(vigente) if vigente else None
-    contexto["ejemplos"] = _ejemplos(parametros)
-    # La regla dicha en palabras. La tabla de ejemplos obliga a deducirla a
-    # partir de ocho importes, y así se coló en producción un precio con
-    # «bloques de 15 minutos» donde iba «15 minutos de tolerancia»: ninguna
-    # de las dos capturas es inválida, solo cobran cosas distintas.
-    contexto["reglas"] = reglas.en_palabras(parametros) if parametros else []
+
+    # Un cuadro por tipo de vehículo, los dos a la vista. Esconder uno detrás
+    # de una pestaña invita a cambiar el precio del automóvil y olvidar el de
+    # la motocicleta, que es un desvío que nadie nota hasta que cobra mal.
+    precios = []
+    for tipo in TipoVehiculo:
+        vigente = _tarifa_vigente_o_nada(tipo)
+        parametros = _parametros_de(vigente) if vigente else None
+        precios.append(
+            {
+                "tipo": tipo.value,
+                "etiqueta": tipo.label,
+                "vigente": vigente,
+                "ejemplos": _ejemplos(parametros),
+                # La regla dicha en palabras. La tabla de ejemplos obliga a
+                # deducirla a partir de ocho importes, y así se coló en
+                # producción un precio con «bloques de 15 minutos» donde iba
+                # «15 minutos de tolerancia»: ninguna de las dos capturas es
+                # inválida, solo cobran cosas distintas.
+                "reglas": reglas.en_palabras(parametros) if parametros else [],
+            }
+        )
+
+    contexto["precios"] = precios
     contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
     return render(request, "estacionamiento/tarifa.html", contexto)
 
@@ -1153,11 +1181,17 @@ def tarifa_cambiar(request):
         )
         return redirect("web:tarifa")
 
-    vigente = _tarifa_vigente_o_nada()
+    tipo = _tipo_pedido(request)
+    vigente = _tarifa_vigente_o_nada(tipo)
 
     contexto = _contexto_base(request)
     contexto["seccion"] = "tarifa"
     contexto["vigente"] = vigente
+    # El tipo viaja en el contexto y en el formulario: la pantalla dice en
+    # todo momento qué precio se está cambiando, y el envío no puede acabar
+    # aplicándose al otro por haber perdido la dirección.
+    contexto["tipo"] = tipo
+    contexto["tipo_etiqueta"] = TipoVehiculo(tipo).label
     parametros = _parametros_de(vigente) if vigente else None
     contexto["ejemplos"] = _ejemplos(parametros)
     # La regla dicha en palabras. La tabla de ejemplos obliga a deducirla a
@@ -1204,15 +1238,16 @@ def tarifa_cambiar(request):
             except ErrorDominio as exc:
                 messages.error(request, str(exc))
             else:
-                nueva = _poner_precio_en_vigencia(parametros)
+                nueva = _poner_precio_en_vigencia(parametros, tipo_vehiculo=tipo)
                 # El desbloqueo no sobrevive al cambio: el precio vuelve a
                 # quedar bloqueado, como dice la pantalla.
                 _olvidar_autorizacion(request)
                 messages.success(
                     request,
-                    f"El precio quedó en ${nueva.cuota_hora:,.2f} por hora y ya "
-                    "está en vigencia. El anterior se conserva en el histórico: "
-                    "los folios ya cobrados mantienen el precio con que se "
+                    f"El precio de {nueva.get_tipo_vehiculo_display().lower()} "
+                    f"quedó en ${nueva.cuota_hora:,.2f} por hora y ya está en "
+                    "vigencia. El anterior se conserva en el histórico: los "
+                    "folios ya cobrados mantienen el precio con que se "
                     "calcularon.",
                 )
                 return redirect("web:tarifa")
@@ -1225,17 +1260,29 @@ def tarifa_cambiar(request):
     return render(request, "estacionamiento/tarifa_cambiar.html", contexto)
 
 
-def _poner_precio_en_vigencia(parametros: ParametrosTarifa) -> Tarifa:
+def _poner_precio_en_vigencia(
+    parametros: ParametrosTarifa,
+    tipo_vehiculo: str = TipoVehiculo.AUTOMOVIL,
+) -> Tarifa:
     """
-    Crea el precio nuevo y desactiva el anterior. Nunca edita en sitio.
+    Crea el precio nuevo y desactiva el anterior **del mismo tipo**.
+
+    El filtro por tipo no es un detalle: sin él, cambiar el precio del
+    automóvil desactivaría el de la motocicleta y la siguiente moto no podría
+    entrar. La base lo impediría a medias —solo garantiza que no haya dos
+    activos del mismo tipo—, así que la regla tiene que estar aquí.
 
     El nombre lleva marca de tiempo porque el modelo lo exige único y ya no se
     pide al usuario, que no tiene por qué bautizar un precio.
     """
     ahora = timezone.now()
-    Tarifa.objects.filter(activa=True).update(activa=False)
+    etiqueta = TipoVehiculo(tipo_vehiculo).label
+    Tarifa.objects.filter(activa=True, tipo_vehiculo=tipo_vehiculo).update(
+        activa=False
+    )
     return Tarifa.objects.create(
-        nombre=f"Precio {ahora:%Y-%m-%d %H:%M:%S}",
+        tipo_vehiculo=tipo_vehiculo,
+        nombre=f"{etiqueta} {ahora:%Y-%m-%d %H:%M:%S}",
         cuota_hora=parametros.cuota_hora,
         minutos_cortesia=parametros.minutos_cortesia,
         fraccion_minutos=parametros.fraccion_minutos,

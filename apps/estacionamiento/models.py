@@ -39,6 +39,33 @@ class TipoCajon(models.TextChoices):
     ACCESIBLE = "ACCESIBLE", "Accesible (personas con discapacidad)"
 
 
+class TipoVehiculo(models.TextChoices):
+    """
+    Lo que determina **qué precio se cobra**.
+
+    Se declara aparte de `TipoCajon` aunque los valores se parezcan, porque
+    responden a preguntas distintas: el tipo de cajón dice dónde cabe el
+    vehículo —y por eso incluye «accesible», que es un espacio reservado, no
+    una clase de vehículo— y el tipo de vehículo dice cuánto paga. Un auto
+    estacionado en un cajón accesible paga tarifa de auto.
+
+    Mezclarlos obligaría a decidir qué cobra un «cajón accesible», que es una
+    pregunta sin respuesta.
+    """
+
+    AUTOMOVIL = "AUTO", "Automóvil"
+    MOTOCICLETA = "MOTO", "Motocicleta"
+
+    @classmethod
+    def desde_cajon(cls, tipo_cajon: str) -> str:
+        """Qué precio corresponde a quien pide un cajón de este tipo."""
+        return (
+            cls.MOTOCICLETA
+            if tipo_cajon == TipoCajon.MOTOCICLETA
+            else cls.AUTOMOVIL
+        )
+
+
 class EstadoFolio(models.TextChoices):
     ABIERTO = "ABIERTO", "Abierto"
     CERRADO = "CERRADO", "Cerrado y liquidado"
@@ -159,6 +186,13 @@ class Tarifa(models.Model):
     """
 
     nombre = models.CharField("nombre", max_length=100, unique=True)
+    tipo_vehiculo = models.CharField(
+        "tipo de vehículo",
+        max_length=10,
+        choices=TipoVehiculo.choices,
+        default=TipoVehiculo.AUTOMOVIL,
+        help_text="Qué vehículos pagan este precio.",
+    )
     cuota_hora = models.DecimalField(
         "cuota por hora",
         max_digits=10,
@@ -213,9 +247,19 @@ class Tarifa(models.Model):
         verbose_name = "tarifa"
         verbose_name_plural = "tarifas"
         ordering = ["-vigente_desde"]
+        constraints = [
+            # Dos precios activos para el mismo tipo de vehículo dejarían el
+            # cobro a merced del orden de una consulta. La restricción lo hace
+            # imposible en la base, no solo en el código que la escribe.
+            models.UniqueConstraint(
+                fields=["tipo_vehiculo"],
+                condition=models.Q(activa=True),
+                name="uq_tarifa_activa_por_tipo",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.nombre} (${self.cuota_hora}/h)"
+        return f"{self.nombre} · {self.get_tipo_vehiculo_display()} (${self.cuota_hora}/h)"
 
     def a_parametros(self) -> ParametrosTarifa:
         """

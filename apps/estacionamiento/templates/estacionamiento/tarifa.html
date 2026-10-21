@@ -14,37 +14,43 @@
 
 {% block contenido %}
 
+{% comment %} Un cuadro por tipo de vehículo, los dos a la vista. Esconder uno
+   detrás de una pestaña invita a cambiar el precio del automóvil y olvidar el
+   de la motocicleta: un desvío que nadie nota hasta que se cobra mal.
+   {% endcomment %}
+{% for precio in precios %}
 <div class="rejilla-doble">
 
   <div class="tarjeta">
-    {% if vigente %}
+    <h2>{{ precio.etiqueta }}</h2>
+    {% if precio.vigente %}
       <p style="margin:0"><span class="etiqueta cuadra">Precio bloqueado</span></p>
-      <p class="importe-destacado">{{ vigente.cuota_hora|pesos }}</p>
+      <p class="importe-destacado">{{ precio.vigente.cuota_hora|pesos }}</p>
       <p class="detalle-cobro" style="margin-top:-.4rem">
         por hora<br>
-        <span class="ayuda">En uso desde el {{ vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
+        <span class="ayuda">En uso desde el {{ precio.vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
       </p>
 
       <table>
         <tbody>
-          <tr><th>Minutos gratis al entrar</th><td class="numero">{{ vigente.minutos_cortesia }} min</td></tr>
-          <tr><th>Se cobra en bloques de</th><td class="numero">{{ vigente.fraccion_minutos }} min</td></tr>
+          <tr><th>Minutos gratis al entrar</th><td class="numero">{{ precio.vigente.minutos_cortesia }} min</td></tr>
+          <tr><th>Redondeo del tiempo cobrado</th><td class="numero">{{ precio.vigente.fraccion_minutos }} min</td></tr>
           <tr>
             <th>Tolerancia por hora</th>
             <td class="numero">
-              {% if vigente.minutos_tolerancia %}{{ vigente.minutos_tolerancia }} min{% else %}sin tolerancia{% endif %}
+              {% if precio.vigente.minutos_tolerancia %}{{ precio.vigente.minutos_tolerancia }} min{% else %}sin tolerancia{% endif %}
             </td>
           </tr>
-          <tr><th>Cobro mínimo</th><td class="numero">{{ vigente.cobro_minimo|pesos }}</td></tr>
+          <tr><th>Cobro mínimo</th><td class="numero">{{ precio.vigente.cobro_minimo|pesos }}</td></tr>
           <tr>
             <th>Máximo por día</th>
-            <td class="numero">{% if vigente.tope_diario %}{{ vigente.tope_diario|pesos }}{% else %}sin máximo{% endif %}</td>
+            <td class="numero">{% if precio.vigente.tope_diario %}{{ precio.vigente.tope_diario|pesos }}{% else %}sin máximo{% endif %}</td>
           </tr>
         </tbody>
       </table>
 
       {% if es_administrativo %}
-        <a href="{% url 'web:tarifa_cambiar' %}" class="boton secundario" style="margin-top:1rem">Cambiar precio…</a>
+        <a href="{% url 'web:tarifa_cambiar' %}?tipo={{ precio.tipo }}" class="boton secundario" style="margin-top:1rem">Cambiar precio de {{ precio.etiqueta|lower }}…</a>
         <p class="ayuda">
           Para cambiarlo hay que confirmar su contraseña. El cambio queda
           registrado a su nombre.
@@ -56,15 +62,15 @@
         </p>
       {% endif %}
     {% else %}
-      <p style="margin:0"><span class="etiqueta faltante">Falta configurar el precio</span></p>
+      <p style="margin:0"><span class="etiqueta faltante">Falta configurar este precio</span></p>
       <p class="importe-destacado" style="color:var(--tinta-suave)">—</p>
       <p class="detalle-cobro" style="margin-top:-.4rem">sin precio configurado</p>
       <div class="aviso error">
-        No se pueden registrar entradas ni cobrar salidas hasta configurar el
-        precio. Es lo primero que hay que hacer.
+        No se puede registrar la entrada de un vehículo de este tipo hasta
+        configurar su precio.
       </div>
       {% if es_administrativo %}
-        <a href="{% url 'web:tarifa_cambiar' %}" class="boton">Configurar el precio</a>
+        <a href="{% url 'web:tarifa_cambiar' %}?tipo={{ precio.tipo }}" class="boton">Configurar el precio de {{ precio.etiqueta|lower }}</a>
       {% else %}
         <p class="ayuda">
           Lo configura el personal administrativo. Avise para poder operar.
@@ -74,25 +80,24 @@
   </div>
 
   <div class="tarjeta">
-    <h2>Así se cobra</h2>
-    {% if reglas %}
+    <h2>Así se cobra · {{ precio.etiqueta|lower }}</h2>
+    {% if precio.reglas %}
       {% comment %} La regla en palabras, antes de la tabla. Deducirla a partir de ocho
          importes es justo lo que no funcionó: un precio con «bloques de 15
          minutos» y otro con «15 de tolerancia» producen tablas parecidas, y
          ninguno de los dos es inválido. Leído en una frase, el desvío salta.
          {% endcomment %}
       <ul class="reglas">
-        {% for regla in reglas %}<li>{{ regla }}</li>{% endfor %}
+        {% for regla in precio.reglas %}<li>{{ regla }}</li>{% endfor %}
       </ul>
     {% endif %}
-    {% if ejemplos %}
+    {% if precio.ejemplos %}
       <p class="ayuda" style="margin-top:0">
-        Lo que pagaría un vehículo según el tiempo que se quede, con el precio
-        vigente.
+        Lo que pagaría según el tiempo que se quede, con el precio vigente.
       </p>
       <table>
         <tbody>
-        {% for ejemplo in ejemplos %}
+        {% for ejemplo in precio.ejemplos %}
           <tr>
             <th style="text-transform:none;font-size:.92rem">{{ ejemplo.etiqueta }}</th>
             <td class="numero">
@@ -108,6 +113,7 @@
   </div>
 
 </div>
+{% endfor %}
 
 <div class="tarjeta">
   <h2>Cambios de precio</h2>
@@ -122,6 +128,7 @@
       <thead>
         <tr>
           <th>Desde</th>
+          <th>Vehículo</th>
           <th class="numero">Por hora</th>
           <th class="numero">Min. gratis</th>
           <th class="numero">Bloque</th>
@@ -135,6 +142,7 @@
       {% for t in tarifas %}
         <tr>
           <td>{{ t.vigente_desde|date:"d/m/Y H:i" }}</td>
+          <td>{{ t.get_tipo_vehiculo_display }}</td>
           <td class="numero">{{ t.cuota_hora|pesos }}</td>
           <td class="numero">{{ t.minutos_cortesia }} min</td>
           <td class="numero">{{ t.fraccion_minutos }} min</td>
@@ -144,7 +152,7 @@
           <td>{% if t.activa %}<span class="etiqueta cuadra">Sí</span>{% else %}—{% endif %}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="8" class="vacio">Todavía no hay ningún precio registrado.</td></tr>
+        <tr><td colspan="9" class="vacio">Todavía no hay ningún precio registrado.</td></tr>
       {% endfor %}
       </tbody>
     </table>

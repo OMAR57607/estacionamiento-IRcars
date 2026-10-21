@@ -28,7 +28,7 @@ que abrió → captúrelo → *Cerrar turno y generar corte*.
 
 | | Qué hace | Dónde |
 |---|---|---|
-| **Entra** | Teclea la placa y `Enter`. Se muestra el código QR: pídale al cliente que lo escanee, o compártalo por WhatsApp. | Caja → *Registrar entrada* |
+| **Entra** | Teclea la placa, **elige el tipo de vehículo** y `Enter`. Se muestra el código QR: pídale al cliente que lo escanee, o compártalo por WhatsApp. | Caja → *Registrar entrada* |
 | **Pregunta cuánto lleva** | El cliente lo ve solo en su teléfono, con el QR que ya tiene. | — |
 | **Sale** | Teclea la placa en *Salida y cobro* y `Enter`. Aparece el importe. **Todavía no cobró nada.** | Caja → *Cotizar* |
 | **Paga** | Capture el pago recibido: **el cambio se calcula solo**. Confirme. | Caja → *Cobrar* |
@@ -38,6 +38,12 @@ teclear tres o cuatro caracteres basta.
 
 **Si se equivocó al capturar la placa:** cancele el folio con el motivo escrito.
 No se borra: queda registrado quién lo canceló y por qué.
+
+---
+
+> **El tipo de vehículo decide el precio.** La motocicleta tiene su propia
+> tarifa, más barata. Elegirlo mal cobra de más o de menos, y se corrige
+> cancelando el folio con el motivo escrito y registrando la entrada de nuevo.
 
 ---
 

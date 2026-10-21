@@ -79,8 +79,12 @@
       <input type="hidden" name="accion" value="entrada">
       <label for="{{ form_entrada.placa.id_for_label }}">Placa</label>
       {{ form_entrada.placa }}
-      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" style="margin-top:.7rem">Tipo</label>
+      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" style="margin-top:.7rem">Tipo de vehículo</label>
       {{ form_entrada.tipo_cajon }}
+      {% comment %} Esta elección decide el precio desde que la motocicleta tiene tarifa
+         propia. Antes solo escogía cajón y pasarla por alto no costaba nada;
+         ahora, equivocarla cobra de más o de menos. {% endcomment %}
+      <p class="ayuda">{{ form_entrada.tipo_cajon.help_text }}</p>
       <button type="submit" class="boton">Registrar entrada</button>
     </form>
   </div>
