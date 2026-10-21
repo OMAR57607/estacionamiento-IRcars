@@ -12,6 +12,26 @@
     quedaría fuera de todo corte.
     <a href="{% url 'web:turno' %}">Abrir turno</a>
   </div>
+{% elif estado_turno.es_largo %}
+  {% comment %} El aviso va aquí y no en la pestaña Turno: el operador vive en esta
+     pantalla y a la otra entra justamente cuando ya se acordó. Hasta ahora
+     la caja solo avisaba de lo que impide trabajar —no hay turno— y callaba
+     lo que estropea el corte en silencio. {% endcomment %}
+  <div class="aviso {% if estado_turno.de_otro_dia %}error{% else %}warning{% endif %}">
+    {% if estado_turno.de_otro_dia %}
+      <strong>El turno {{ turno_actual.pk }} sigue abierto desde el
+      {{ estado_turno.abierto_en|date:"d/m" }} a las
+      {{ estado_turno.abierto_en|date:"H:i" }}.</strong>
+      Ciérrelo antes de cobrar: el efectivo de dos días en un mismo corte deja
+      la diferencia sin lectura posible. Las entradas puede seguir
+      registrándolas.
+    {% else %}
+      <strong>Lleva {{ estado_turno.horas_enteras }} h
+      {{ estado_turno.minutos_restantes }} min con el turno abierto.</strong>
+      Si ya terminó su jornada, haga el corte: cuente el efectivo y ciérrelo.
+    {% endif %}
+    <a href="{% url 'web:turno' %}">Ir al corte</a>
+  </div>
 {% endif %}
 
 {# ------------------------------------------------- Cotización en curso #}

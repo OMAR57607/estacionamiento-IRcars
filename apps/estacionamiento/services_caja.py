@@ -262,3 +262,64 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
             estado=EstadoTurno.CERRADO, cerrado_en__gte=desde, cerrado_en__lte=hasta
         ).count(),
     }
+
+
+# --- Vigilancia del turno abierto -------------------------------------------
+#
+# El sistema avisaba en rojo cuando **no** había turno abierto —porque eso
+# impide cobrar— y callaba cuando había uno abierto desde hacía catorce horas.
+# Avisaba de lo que estorba y no de lo que hace daño en silencio: un turno que
+# cruza la noche mezcla el efectivo de dos días y la diferencia del corte deja
+# de ser interpretable, que es la única herramienta de control sobre la caja.
+
+# A partir de cuántas horas un turno abierto deja de ser normal. Una jornada
+# larga de caseta cabe de sobra; doce horas significan casi siempre que nadie
+# cerró.
+HORAS_TURNO_LARGO = 12
+
+
+def estado_del_turno(turno: Turno, ahora: datetime | None = None) -> dict:
+    """
+    Cuánto lleva abierto un turno y si ya debería haberse cerrado.
+
+    Devuelve un diccionario y no un booleano porque la pantalla necesita las
+    dos cosas: decidir si avisa y decir cuánto lleva. El cálculo vive aquí, y
+    no en la plantilla, porque de él depende que se pueda cobrar o no.
+
+    `de_otro_dia` se mide sobre la fecha **local**, no sobre horas
+    transcurridas: un turno abierto a las 23:50 y revisado a las 00:10 lleva
+    veinte minutos, pero ya pertenece a otra jornada de caja y su corte
+    mezclaría el efectivo de dos días.
+    """
+    ahora = ahora or timezone.now()
+    transcurrido = ahora - turno.abierto_en
+    horas = transcurrido.total_seconds() / 3600
+
+    abierto_local = timezone.localtime(turno.abierto_en).date()
+    hoy_local = timezone.localtime(ahora).date()
+    de_otro_dia = abierto_local < hoy_local
+
+    return {
+        "horas": horas,
+        "horas_enteras": int(horas),
+        "minutos_restantes": int((horas - int(horas)) * 60),
+        "de_otro_dia": de_otro_dia,
+        "es_largo": horas >= HORAS_TURNO_LARGO or de_otro_dia,
+        "abierto_en": turno.abierto_en,
+    }
+
+
+def exige_cierre_antes_de_cobrar(turno: Turno, ahora: datetime | None = None) -> bool:
+    """
+    Si este turno debe cerrarse antes de aceptar un cobro más.
+
+    Solo cuando viene de otra jornada. Un turno largo del mismo día se avisa,
+    pero no se frena: el operador puede llevar doce horas legítimas de caseta
+    y un vehículo en la rampa no espera a que alguien cuadre la caja.
+
+    No vive dentro de `registrar_salida` a propósito. Ahí afectaría también a
+    la API, que existe para integraciones que no operan caja —pensiones, cobro
+    con terminal, conciliaciones— y donde este freno no significa nada. El
+    problema que resuelve es de la caja, y en la caja se aplica.
+    """
+    return estado_del_turno(turno, ahora)["de_otro_dia"]
