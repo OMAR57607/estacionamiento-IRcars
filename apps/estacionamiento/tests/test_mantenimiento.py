@@ -98,7 +98,10 @@ class TestPurga:
             nombre="Viejo", cuota_hora=Decimal("20.00"), activa=False
         )
         services_mantenimiento.purgar_movimientos(operador=operador, respaldar=False)
-        assert Tarifa.objects.count() == 2
+
+        # El vigente de automóvil, el viejo que acaba de crearse y el de
+        # motocicleta que siembra su migración: ninguno se toca sin pedirlo.
+        assert Tarifa.objects.count() == 3
 
     def test_puede_limpiar_el_historico_sin_tocar_el_vigente(
         self, con_movimientos, operador, tarifa
@@ -113,7 +116,14 @@ class TestPurga:
             operador=operador, incluir_historico_precios=True, respaldar=False
         )
         assert resultado["precios_borrados"] == 2
-        assert list(Tarifa.objects.values_list("pk", flat=True)) == [tarifa.pk]
+        # Sobreviven los dos precios vigentes: el de automóvil de la prueba y
+        # el de motocicleta que siembra su migración. Lo que se fue son los
+        # dos del histórico.
+        assert set(Tarifa.objects.filter(activa=True).values_list("pk", flat=True)) == {
+            tarifa.pk,
+            Tarifa.objects.get(tipo_vehiculo="MOTO", activa=True).pk,
+        }
+        assert not Tarifa.objects.filter(activa=False).exists()
         # Y la caseta sigue pudiendo operar.
         assert services.obtener_tarifa_vigente().pk == tarifa.pk
 

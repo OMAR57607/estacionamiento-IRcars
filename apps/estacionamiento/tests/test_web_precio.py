@@ -24,7 +24,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.estacionamiento.models import Tarifa
+from apps.estacionamiento.models import Tarifa, TipoVehiculo
 
 pytestmark = pytest.mark.django_db
 
@@ -64,6 +64,17 @@ def administrativo():
     )
 
 
+def _precios_de_auto():
+    """
+    Los precios de automóvil, que es de lo que habla esta suite.
+
+    El cuadro tarifario tiene una fila por tipo de vehículo y la base de
+    pruebas trae el precio de motocicleta que siembra su migración, así que
+    contar en global mezclaría dos cosas distintas.
+    """
+    return Tarifa.objects.filter(tipo_vehiculo=TipoVehiculo.AUTOMOVIL)
+
+
 def _desbloquear(client, clave=CLAVE):
     return client.post(
         reverse("web:tarifa_cambiar"), {"accion": "desbloquear", "clave": clave}
@@ -101,7 +112,12 @@ class TestConsulta:
         client.force_login(cajero)
         respuesta = client.get(reverse("web:tarifa"))
 
-        ejemplos = {fila["etiqueta"]: fila for fila in respuesta.context["ejemplos"]}
+        auto = next(
+            p
+            for p in respuesta.context["precios"]
+            if p["tipo"] == TipoVehiculo.AUTOMOVIL
+        )
+        ejemplos = {fila["etiqueta"]: fila for fila in auto["ejemplos"]}
         # 20 minutos de cortesía: a los 15 todavía no se cobra.
         assert ejemplos["15 minutos"]["es_cortesia"]
         # Una hora: 4 bloques de 15 min a 42.00/h → 42.00, por encima del
@@ -150,7 +166,7 @@ class TestSoloAdministrativo:
         )
 
         assert respuesta.status_code == 302
-        assert Tarifa.objects.count() == 1
+        assert _precios_de_auto().count() == 1
         vigente.refresh_from_db()
         assert vigente.cuota_hora == Decimal("42.00")
 
@@ -213,7 +229,7 @@ class TestDesbloqueo:
 
         assert respuesta.status_code == 200
         assert "form_clave" in respuesta.context
-        assert Tarifa.objects.count() == 1
+        assert _precios_de_auto().count() == 1
 
     def test_el_desbloqueo_no_sobrevive_al_cambio(
         self, client, administrativo, vigente
@@ -296,7 +312,7 @@ class TestToleranciaPorHora:
         )
 
         assert respuesta.status_code == 302
-        assert Tarifa.objects.get(activa=True).minutos_tolerancia == 15
+        assert _precios_de_auto().get(activa=True).minutos_tolerancia == 15
 
     def test_los_ejemplos_muestran_el_salto_de_precio(
         self, client, administrativo, vigente
@@ -308,7 +324,7 @@ class TestToleranciaPorHora:
         cifras con tolerancia y sin ella, y quien fija el precio no vería la
         consecuencia de lo que acaba de teclear.
         """
-        Tarifa.objects.all().update(
+        _precios_de_auto().update(
             cuota_hora=Decimal("30.00"),
             minutos_cortesia=0,
             fraccion_minutos=1,
@@ -347,7 +363,7 @@ class TestToleranciaPorHora:
         )
 
         assert respuesta.status_code == 200
-        assert Tarifa.objects.count() == 1
+        assert _precios_de_auto().count() == 1
 
 
 class TestReglaEnPalabras:
@@ -360,7 +376,7 @@ class TestReglaEnPalabras:
     """
 
     def test_la_pantalla_declara_la_tolerancia_vigente(self, client, cajero, vigente):
-        Tarifa.objects.all().update(
+        _precios_de_auto().update(
             cuota_hora=Decimal("15.00"),
             minutos_cortesia=0,
             fraccion_minutos=1,
@@ -376,7 +392,7 @@ class TestReglaEnPalabras:
         assert "la hora completa" in contenido
 
     def test_la_pantalla_avisa_cuando_no_hay_tolerancia(self, client, cajero, vigente):
-        Tarifa.objects.all().update(
+        _precios_de_auto().update(
             cuota_hora=Decimal("15.00"),
             minutos_cortesia=0,
             fraccion_minutos=15,
@@ -435,7 +451,7 @@ class TestValoresIniciales:
         assert respuesta.status_code == 302
         assert respuesta["Location"] == reverse("web:tarifa")
 
-        nueva = Tarifa.objects.get(activa=True)
+        nueva = _precios_de_auto().get(activa=True)
         assert nueva.cuota_hora == Decimal("48.00")
         assert nueva.minutos_cortesia == 20
         assert nueva.fraccion_minutos == 15
@@ -457,7 +473,7 @@ class TestValoresIniciales:
         vigente.refresh_from_db()
         assert not vigente.activa
         assert vigente.cuota_hora == Decimal("42.00")
-        assert Tarifa.objects.count() == 2
+        assert _precios_de_auto().count() == 2
 
     def test_el_nombre_se_genera_con_marca_de_tiempo(
         self, client, administrativo, vigente
@@ -469,8 +485,11 @@ class TestValoresIniciales:
         envio["cuota_hora"] = "48.00"
         client.post(reverse("web:tarifa_cambiar"), envio)
 
-        nueva = Tarifa.objects.get(activa=True)
-        assert nueva.nombre.startswith("Precio ")
+        nueva = _precios_de_auto().get(activa=True)
+        assert nueva.nombre.startswith("Automóvil "), (
+            "El nombre lleva el tipo por delante: con dos precios creados en "
+            "el mismo segundo, es lo que los distingue"
+        )
         # El modelo lo exige único: dos cambios no pueden chocar de nombre.
         assert nueva.nombre != vigente.nombre
 
@@ -493,7 +512,7 @@ class TestValoresIniciales:
         )
 
         assert respuesta.status_code == 200
-        assert Tarifa.objects.count() == 1
+        assert _precios_de_auto().count() == 1
         # El desbloqueo sigue en pie: el intento falló, no hay por qué volver a
         # teclear la contraseña para corregir un dígito.
         assert "form" in respuesta.context
