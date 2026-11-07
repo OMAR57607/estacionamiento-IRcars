@@ -13,8 +13,9 @@ Dos reglas con efectos distintos, y la diferencia importa:
 * **Turno de otra jornada**: se frena el cobro. Un cobro que cae en el turno
   de ayer mezcla el efectivo de dos días y deja la diferencia sin lectura.
 """
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+from unittest import mock
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -27,6 +28,41 @@ from apps.estacionamiento.models import Cajon, EstadoFolio, Folio, Tarifa, TipoC
 pytestmark = pytest.mark.django_db
 
 CLAVE = "clave-de-prueba-1234"
+
+# Hora local a la que se sitúa todo este módulo. Las 23:00 es la única franja
+# en la que caben a la vez las dos situaciones que aquí se distinguen: un
+# turno largo *del mismo día* —trece horas atrás siguen siendo hoy— y uno de
+# la jornada anterior.
+HORA_DEL_RELOJ = time(23, 0)
+
+
+@pytest.fixture(autouse=True)
+def reloj_fijo():
+    """
+    Sitúa todas las pruebas de este módulo a una hora concreta del día.
+
+    Sin esto, el módulo entero depende de a qué hora se ejecute la suite, y lo
+    hace en silencio. «Abrir un turno hace trece horas» solo cae en el mismo
+    día si son más de las 13:00; antes de esa hora el turno pertenece a la
+    jornada anterior y la aplicación —correctamente— deja de avisar de «turno
+    largo» para avisar de «turno de otra jornada», y frena el cobro.
+
+    El resultado era una suite que pasaba por la tarde y fallaba de
+    madrugada, con dos pruebas señalando un fallo que no existía. Un conjunto
+    de pruebas cuyo veredicto depende del reloj no sirve para decidir si algo
+    se puede desplegar, que es justo para lo que está.
+
+    Se congela `timezone.now`, que es de donde toman la hora tanto el
+    servicio como la vista. La prueba del cruce de medianoche no depende de
+    esta congelación: pasa su propio instante a `estado_del_turno`, porque lo
+    que examina es precisamente el cambio de fecha.
+    """
+    zona = timezone.get_current_timezone()
+    momento = timezone.make_aware(
+        datetime.combine(timezone.localtime().date(), HORA_DEL_RELOJ), zona
+    )
+    with mock.patch.object(timezone, "now", return_value=momento):
+        yield momento
 
 
 @pytest.fixture
@@ -94,6 +130,8 @@ class TestEstadoDelTurno:
 
 class TestAvisoEnLaCaja:
     def test_la_caja_avisa_del_turno_largo(self, client, operador):
+        # Trece horas atrás y el mismo día local: el aviso que corresponde es
+        # el de turno largo, no el de otra jornada. Lo sostiene `reloj_fijo`.
         _abrir_turno_hace(operador, hours=13)
         client.force_login(operador)
 
