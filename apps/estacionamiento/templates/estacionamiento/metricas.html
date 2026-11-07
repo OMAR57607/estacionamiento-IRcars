@@ -1,0 +1,325 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Métricas de operación{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta no-imprimir">
+  <h2>Periodo</h2>
+  <form method="get">
+    <div class="rejilla-doble">
+      <div>
+        <label for="{{ form.desde.id_for_label }}">Desde</label>
+        {{ form.desde }}
+      </div>
+      <div>
+        <label for="{{ form.hasta.id_for_label }}">Hasta</label>
+        {{ form.hasta }}
+      </div>
+    </div>
+    <div class="rejilla-doble" style="margin-top:.8rem">
+      <div>
+        <label for="{{ form.minimo_visitas.id_for_label }}">{{ form.minimo_visitas.label }}</label>
+        {{ form.minimo_visitas }}
+        <p class="ayuda">{{ form.minimo_visitas.help_text }}</p>
+      </div>
+      <div>
+        <label for="{{ form.top_clientes.id_for_label }}">{{ form.top_clientes.label }}</label>
+        {{ form.top_clientes }}
+      </div>
+    </div>
+    {% if form.errors %}
+      <div class="aviso error" style="margin-top:.8rem">
+        {% for errores in form.errors.values %}{% for e in errores %}{{ e }}{% endfor %}{% endfor %}
+      </div>
+    {% endif %}
+    <div class="acciones-fila">
+      <button type="submit" class="boton">Calcular métricas</button>
+      {% if metricas %}
+        {% comment %} El PDF sale del mismo cálculo que esta pantalla, con los mismos
+           parámetros en la dirección: lo que se manda es exactamente lo que se
+           acaba de revisar. {% endcomment %}
+        <a class="boton secundario angosto" href="{% url 'web:metricas_pdf' %}?{{ parametros }}">
+          Descargar PDF para mandar
+        </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if metricas %}
+
+{# ------------------------------------------------------------- Totales #}
+<div class="indicadores" style="margin-bottom:1rem">
+  <div class="indicador">
+    <div class="rotulo">Total cobrado</div>
+    <div class="valor">{{ resumen.total_cobrado|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Boletos cobrados</div>
+    <div class="valor">{{ resumen.folios_cobrados }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Importe promedio</div>
+    <div class="valor">{{ resumen.importe_promedio|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Placas atendidas</div>
+    <div class="valor">{{ metricas.clientes.placas_atendidas }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Clientes frecuentes</div>
+    <div class="valor">{{ metricas.clientes.placas_frecuentes }}</div>
+  </div>
+  <div class="indicador{% if metricas.caja.faltantes %} alerta{% endif %}">
+    <div class="rotulo">Diferencia de caja</div>
+    <div class="valor">{{ metricas.caja.diferencia|pesos_con_signo }}</div>
+  </div>
+</div>
+
+{# ----------------------------------------------------------- Horas pico #}
+<div class="tarjeta">
+  <h2>Horas pico</h2>
+
+  {% with pico=metricas.horas.pico_entradas cobros=metricas.horas.pico_cobros %}
+    {% if pico.hora is None %}
+      <p class="vacio">No se registraron entradas en el periodo.</p>
+    {% else %}
+      <p>
+        La hora de mayor afluencia es la de las <strong>{{ pico.etiqueta }}</strong>,
+        con {{ pico.conteo }} entradas: el {{ pico.porcentaje }} % de todas las del periodo.
+        {% if pico.hay_empate %}
+          Mismo volumen en:
+          {% for h in pico.empates %}{{ h|stringformat:"02d" }}:00 h{% if not forloop.last %}, {% endif %}{% endfor %}.
+        {% endif %}
+        {% if cobros.hora is not None and cobros.hora != pico.hora %}
+          El cobro se concentra más tarde, a las <strong>{{ cobros.etiqueta }}</strong>.
+        {% endif %}
+      </p>
+    {% endif %}
+  {% endwith %}
+
+  {{ dibujos.entradas_por_hora }}
+  <p class="ayuda">
+    Entradas por hora del día, acumuladas en todo el periodo. La barra destacada
+    marca el máximo. Se cuenta la entrada y no el cobro porque es la entrada la
+    que exige presencia en la caseta.
+  </p>
+</div>
+
+<div class="tarjeta">
+  <h2>Ingreso por hora de cobro</h2>
+  {{ dibujos.ingreso_por_hora }}
+  <p class="ayuda">
+    Recaudación por hora. Está desplazada respecto a las entradas tanto como dura
+    la estancia media, de modo que no sirve para decidir horarios de personal.
+  </p>
+</div>
+
+<div class="tarjeta">
+  <h2>Comportamiento por día de la semana</h2>
+  {{ dibujos.semana }}
+  <p class="ayuda">
+    Entradas por día de la semana. Un día en cero dentro de un periodo corto solo
+    indica que el rango no lo cubre.
+  </p>
+</div>
+
+<div class="tarjeta">
+  <h2>Ingreso día por día</h2>
+  {{ dibujos.serie_diaria }}
+  <p class="ayuda">
+    Cobrado por día. Es donde se ven el fin de semana flojo, el puente y el día que
+    no se abrió, que un total del periodo esconde.
+  </p>
+</div>
+
+{# ------------------------------------------------------- Clientes frecuentes #}
+<div class="tarjeta">
+  <h2>Clientes frecuentes</h2>
+  <p>
+    Placas con {{ metricas.clientes.minimo_visitas }} visitas o más dentro del
+    periodo. Son <strong>{{ metricas.clientes.placas_frecuentes }}</strong> de
+    {{ metricas.clientes.placas_atendidas }} placas atendidas y aportan
+    <strong>{{ metricas.clientes.gasto_frecuentes|pesos }}</strong>, el
+    {{ metricas.clientes.parte_del_ingreso }} % del ingreso.
+  </p>
+
+  {% if metricas.clientes.filas %}
+    {{ dibujos.clientes }}
+    <div class="tabla-envoltura" style="margin-top:1rem">
+      <table>
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th class="numero">Visitas</th>
+            <th class="numero">Gasto</th>
+            <th class="numero">Ticket</th>
+            <th class="numero">Estancia</th>
+            <th class="numero">% ingreso</th>
+            <th>Última visita</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for c in metricas.clientes.filas %}
+          <tr>
+            <td class="placa">{{ c.placa }}</td>
+            <td class="numero">{{ c.visitas }}</td>
+            <td class="numero">{{ c.gasto|pesos }}</td>
+            <td class="numero">{{ c.ticket|pesos }}</td>
+            <td class="numero">{{ c.minutos_promedio|floatformat:0|duracion }}</td>
+            <td class="numero">{{ c.parte_del_ingreso }} %</td>
+            <td>{{ c.ultima|date:"d/m/Y H:i" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if metricas.clientes.truncado %}
+      <p class="ayuda">
+        Se listan los {{ metricas.clientes.top }} de mayor frecuencia, de
+        {{ metricas.clientes.placas_frecuentes }} en total.
+      </p>
+    {% endif %}
+    <p class="ayuda">
+      La placa identifica al vehículo, no a la persona: un cambio de placa
+      interrumpe la serie de ese cliente.
+    </p>
+  {% else %}
+    <p class="vacio">Ninguna placa repitió visita en el periodo.</p>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------- Composición #}
+<div class="tarjeta">
+  <h2>Composición de la operación</h2>
+  {{ dibujos.boletos }}
+
+  {% if metricas.composicion.por_tipo %}
+    <div class="tabla-envoltura" style="margin-top:1rem">
+      <table>
+        <thead>
+          <tr><th>Tipo de vehículo</th><th class="numero">Boletos</th>
+              <th class="numero">Ingreso</th><th class="numero">% del ingreso</th></tr>
+        </thead>
+        <tbody>
+        {% for t in metricas.composicion.por_tipo %}
+          <tr>
+            <td>{{ t.etiqueta }}</td>
+            <td class="numero">{{ t.folios }}</td>
+            <td class="numero">{{ t.ingreso|pesos }}</td>
+            <td class="numero">{{ t.porcentaje }} %</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if metricas.composicion.por_operador %}
+    <div class="tabla-envoltura" style="margin-top:1rem">
+      <table>
+        <thead>
+          <tr><th>Cobró</th><th class="numero">Boletos</th>
+              <th class="numero">Ingreso</th><th class="numero">Cortesías</th></tr>
+        </thead>
+        <tbody>
+        {% for o in metricas.composicion.por_operador %}
+          <tr>
+            <td>{{ o.operador }}</td>
+            <td class="numero">{{ o.folios }}</td>
+            <td class="numero">{{ o.ingreso|pesos }}</td>
+            <td class="numero">{{ o.cortesias }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<div class="tarjeta">
+  <h2>Cuánto tiempo se queda la gente</h2>
+  {{ dibujos.permanencia }}
+  <p class="ayuda">
+    Si la mayoría de las estancias no llega a la hora, el ingreso depende de la
+    rotación y no del precio por hora.
+  </p>
+</div>
+
+{# ------------------------------------------------------- Control de caja #}
+<div class="tarjeta">
+  <h2>Control de caja del periodo</h2>
+
+  <div class="indicadores" style="margin-bottom:1rem">
+    <div class="indicador">
+      <div class="rotulo">Turnos cortados</div>
+      <div class="valor">{{ metricas.caja.turnos }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Efectivo esperado</div>
+      <div class="valor">{{ metricas.caja.esperado|pesos }}</div>
+    </div>
+    <div class="indicador{% if metricas.caja.faltantes %} alerta{% endif %}">
+      <div class="rotulo">Cortes con faltante</div>
+      <div class="valor">{{ metricas.caja.faltantes }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Cortes corregidos</div>
+      <div class="valor">{{ metricas.caja.ajustados }}</div>
+    </div>
+  </div>
+
+  {% if metricas.caja.ajustados %}
+    <div class="aviso info">
+      <strong>{{ metricas.caja.ajustados }} corte(s) corregidos</strong> después de
+      su cierre. La diferencia declarada al cerrar sumaba
+      {{ metricas.caja.diferencia_original|pesos_con_signo }} y las correcciones
+      movieron {{ metricas.caja.ajustado_neto|pesos_con_signo }}, dejándola en
+      {{ metricas.caja.diferencia|pesos_con_signo }}.
+    </div>
+  {% endif %}
+
+  {% if metricas.caja.detalle %}
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Turno</th><th>Operador</th><th>Cerrado</th>
+            <th class="numero">Cobrado</th><th class="numero">Esperado</th>
+            <th class="numero">Difer. cierre</th><th class="numero">Difer. vigente</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for t in metricas.caja.detalle %}
+          <tr>
+            <td><a href="{% url 'web:corte' turno_id=t.pk %}">{{ t.pk }}</a></td>
+            <td>{{ t.operador }}</td>
+            <td>{{ t.cerrado_en|date:"d/m/Y H:i" }}</td>
+            <td class="numero">{{ t.total_cobrado|pesos }}</td>
+            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
+            <td class="numero">{{ t.diferencia|pesos_con_signo }}</td>
+            <td class="numero">
+              {{ t.diferencia_vigente|pesos_con_signo }}{% if t.tiene_ajuste %} *{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="ayuda">
+      «Difer. cierre» es lo que el operador declaró al cortar y no se modifica
+      nunca. «Difer. vigente» incluye las correcciones posteriores; el asterisco
+      marca los cortes corregidos.
+    </p>
+  {% endif %}
+</div>
+
+{% endif %}
+
+<p class="ayuda no-imprimir" style="margin-top:1.5rem">
+  <a href="{% url 'web:reportes' %}">Ver el listado de boletos del periodo</a>
+</p>
+
+{% endblock %}

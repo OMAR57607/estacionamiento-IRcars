@@ -24,6 +24,45 @@ segno==1.6.6                    # Generador de códigos QR en Python puro. Se
                                 # esta aplicación no necesita. segno escribe
                                 # PNG y SVG por sí mismo.
 
+# --- Reporte de operación en PDF ---------------------------------------------
+reportlab==4.2.5                # Genera el PDF de métricas y dibuja sus
+                                # gráficos de forma vectorial, sin convertirlos
+                                # a imagen: el archivo pesa una fracción, se
+                                # amplía sin pixelarse y los rótulos siguen
+                                # siendo texto buscable.
+                                #
+                                # Se descartaron las alternativas por el mismo
+                                # criterio que llevó a elegir «segno» sobre
+                                # «qrcode». WeasyPrint exige Cairo y Pango, que
+                                # son paquetes del sistema y obligarían a tocar
+                                # el Dockerfile. «Imprimir a PDF» desde el
+                                # navegador no sirve: produce un archivo
+                                # distinto en cada equipo y no se puede generar
+                                # desde un proceso programado, y el reporte
+                                # existe precisamente para mandarse.
+                                #
+                                # Arrastra Pillow, que aquí no se usa pero es
+                                # dependencia declarada de reportlab 4.x y no
+                                # puede evitarse. Era el precio de la opción
+                                # más ligera disponible.
+pillow==12.3.0                  # Dependencia de reportlab, fijada aquí a
+                                # propósito aunque nada la importe.
+                                #
+                                # reportlab solo pide «pillow>=9.0.0», de modo
+                                # que sin esta línea cada despliegue instala la
+                                # versión más nueva que exista ese día: el
+                                # mismo commit produce entornos distintos y una
+                                # publicación de terceros puede romper
+                                # producción sin que nadie haya tocado el
+                                # código. Es lo único que quedaba sin fijar.
+                                #
+                                # Es además la misma versión que
+                                # requirements-build.txt, donde Pillow ya
+                                # figuraba para generar los iconos. Dos
+                                # versiones de la misma librería en un mismo
+                                # repositorio son dos verdades, y acaban
+                                # divergiendo.
+
 # --- Calidad y pruebas -------------------------------------------------------
 pytest==8.3.4
 pytest-django==4.9.0

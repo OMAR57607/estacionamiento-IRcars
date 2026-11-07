@@ -18,7 +18,9 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from ..domain.corte import MINIMO_JUSTIFICACION, justificacion_suficiente
 from ..models import TipoCajon
+from ..services_metricas import MINIMO_VISITAS, TOP_CLIENTES
 
 
 class EntradaForm(forms.Form):
@@ -193,7 +195,7 @@ class RangoFechasForm(forms.Form):
         return datos
 
     @staticmethod
-    def valores_por_omision() -> dict[str, date]:
+    def valores_por_omision() -> dict:
         from django.utils import timezone
 
         hoy = timezone.localtime().date()
@@ -492,3 +494,132 @@ class ClaveOperadorForm(_ClaveMixin, forms.Form):
         label="Repita la contraseña",
         widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "new-password"}),
     )
+
+
+class AjusteCorteForm(forms.Form):
+    """
+    Corrección de un corte ya cerrado.
+
+    Pide la cifra **real** y no el monto del ajuste. Capturar «+140» obliga a
+    quien corrige a hacer la resta mentalmente y a acertar con el signo, y un
+    signo invertido convierte un faltante de $140 en uno de $280 sin que nada
+    lo delate. Pidiendo el efectivo que había en caja, la aritmética la hace el
+    sistema y el error deja de ser posible.
+
+    El motivo se elige de una lista y la justificación se escribe. Las dos
+    cosas, no una: la lista permite contar cuántas veces se repite el mismo
+    problema —que es lo que revela un fallo de procedimiento— y el texto
+    explica el caso concreto, que es lo que hace falta al auditarlo meses
+    después.
+    """
+
+    efectivo_real = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        label="Efectivo que realmente había en caja",
+        help_text=(
+            "Inclúyalo todo, también el cambio con que se abrió. Es la misma "
+            "cifra que se pidió al cerrar, ahora bien contada."
+        ),
+        widget=forms.NumberInput(
+            attrs={
+                "step": "0.01",
+                "autofocus": True,
+                "class": "campo campo-grande",
+                "inputmode": "decimal",
+            }
+        ),
+    )
+    motivo = forms.ChoiceField(
+        label="Motivo",
+        widget=forms.Select(attrs={"class": "campo"}),
+    )
+    justificacion = forms.CharField(
+        label="Qué pasó",
+        help_text=(
+            "Con detalle suficiente para que se entienda dentro de seis meses "
+            "sin preguntarle a nadie."
+        ),
+        widget=forms.Textarea(
+            attrs={
+                "class": "campo",
+                "rows": 3,
+                "placeholder": (
+                    "Se localizó un cobro de $140 que no se registró; el "
+                    "efectivo sí estaba en la caja."
+                ),
+            }
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Las opciones se leen del modelo en tiempo de instancia y no se
+        # copian aquí: una lista duplicada acabaría ofreciendo un motivo que
+        # el servicio rechaza, y el operador vería un error sin explicación.
+        from ..models import MotivoAjuste
+
+        self.fields["motivo"].choices = MotivoAjuste.choices
+
+    def clean_justificacion(self) -> str:
+        texto = self.cleaned_data["justificacion"].strip()
+        # La regla vive en el dominio y se aplica igual venga de donde venga.
+        # Aquí se repite la comprobación solo para que el error salga junto al
+        # campo en lugar de como un aviso suelto arriba de la pantalla.
+        if not justificacion_suficiente(texto):
+            raise forms.ValidationError(
+                f"Explique qué pasó, con al menos {MINIMO_JUSTIFICACION} "
+                "caracteres. Una palabra no permite auditar la corrección."
+            )
+        return texto
+
+
+class MetricasForm(RangoFechasForm):
+    """
+    Periodo del reporte, más los parámetros de «cliente frecuente».
+
+    Hereda el rango y sus validaciones en lugar de copiarlas: la comprobación
+    de fechas invertidas debe comportarse igual en las dos pantallas.
+
+    Los dos parámetros son visibles y editables a propósito. Qué cuenta como
+    cliente frecuente depende de la longitud del periodo —dos visitas en un
+    día es un dato notable y en un año es ruido— y dejarlo fijo en el código
+    obligaría a interpretar la lista de memoria en cada reporte.
+    """
+
+    minimo_visitas = forms.IntegerField(
+        min_value=2,
+        max_value=100,
+        required=False,
+        # Con el campo en blanco, el operador no sabe con qué umbral se
+        # calculó la lista que está mirando y tiene que deducirlo. El valor
+        # por omisión se muestra escrito.
+        initial=MINIMO_VISITAS,
+        label="Visitas mínimas para considerar frecuente a un cliente",
+        help_text="Desde 2. Con una sola visita no hay nada que distinguir.",
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
+    )
+    top_clientes = forms.IntegerField(
+        min_value=1,
+        max_value=100,
+        required=False,
+        initial=TOP_CLIENTES,
+        label="Cuántos clientes listar",
+        widget=forms.NumberInput(attrs={"class": "campo", "inputmode": "numeric"}),
+    )
+
+    @staticmethod
+    def valores_por_omision() -> dict:
+        """El periodo de hoy, con los parámetros de frecuencia por omisión."""
+        return {
+            **RangoFechasForm.valores_por_omision(),
+            "minimo_visitas": MINIMO_VISITAS,
+            "top_clientes": TOP_CLIENTES,
+        }
+
+    def clean_minimo_visitas(self) -> int:
+        return self.cleaned_data.get("minimo_visitas") or MINIMO_VISITAS
+
+    def clean_top_clientes(self) -> int:
+        return self.cleaned_data.get("top_clientes") or TOP_CLIENTES

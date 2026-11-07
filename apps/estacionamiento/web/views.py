@@ -31,19 +31,30 @@ from django.utils import timezone
 from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods, require_safe
 
-from .. import marca, reglas, services, services_caja, services_mantenimiento
+from .. import (
+    graficos,
+    marca,
+    reglas,
+    reportes_pdf,
+    services,
+    services_caja,
+    services_mantenimiento,
+    services_metricas,
+)
 from ..domain.exceptions import ErrorDominio
 from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, TipoVehiculo, Turno
 from .forms import (
     AbrirTurnoForm,
-    ClaveOperadorForm,
+    AjusteCorteForm,
     BuscarPlacaForm,
     CancelarFolioForm,
     CerrarTurnoForm,
+    ClaveOperadorForm,
     CobroForm,
     ConfirmarClaveForm,
     EntradaForm,
+    MetricasForm,
     OperadorEditarForm,
     OperadorNuevoForm,
     RangoFechasForm,
@@ -529,11 +540,119 @@ def corte(request, turno_id: int):
 
     contexto["turno_corte"] = turno_consultado
     contexto["resumen"] = services_caja.calcular_resumen(turno_consultado)
+    # El veredicto se calcula aparte del resumen porque el resumen es la
+    # fotografía del cierre —inmutable— y el veredicto es lo que hay que leer
+    # hoy, ya con las correcciones aplicadas. La pantalla muestra las dos
+    # cosas: lo que se declaró y lo que resultó ser cierto.
+    contexto["veredicto"] = services_caja.veredicto_del_corte(turno_consultado)
+    contexto["ajustes"] = services_caja.ajustes_del_turno(turno_consultado)
+    contexto["puede_ajustar"] = (
+        contexto["es_administrativo"]
+        and turno_consultado.estado == EstadoTurno.CERRADO
+    )
     contexto["folios"] = (
         Folio.objects.filter(turno=turno_consultado, estado=EstadoFolio.CERRADO)
         .order_by("salida_en")[:MAXIMO_FILAS]
     )
     return render(request, "estacionamiento/corte.html", contexto)
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def ajustar_corte(request, turno_id: int):
+    """
+    Corrige el efectivo declarado de un corte ya cerrado.
+
+    Restringida al perfil administrativo y en su propia dirección. Quien
+    cerró mal no se corrige a sí mismo: el control de caja descansa en que la
+    diferencia la constata alguien distinto de quien contó, y una pantalla que
+    permitiera al cajero reescribir su propio faltante lo desarmaría por
+    completo.
+
+    Pide la contraseña del propio administrador antes de aplicar, igual que el
+    cambio de precio y el borrado de movimientos. No es ceremonia: convierte
+    un clic de más en una decisión y deja la corrección atribuida a quien se
+    autenticó, que es justo lo que un ajuste de caja necesita.
+
+    La pantalla **sí** muestra el efectivo esperado antes de capturar, al
+    contrario que el cierre. Aquí no hay nada que cegar: el conteo ciego ya
+    ocurrió y su resultado está grabado. Ocultar el esperado ahora solo
+    obligaría a adivinar la cifra con la que se quiere cuadrar.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "turno"
+
+    turno_objetivo = (
+        Turno.objects.select_related("operador").filter(pk=turno_id).first()
+    )
+    if turno_objetivo is None:
+        messages.error(request, f"No existe el turno {turno_id}.")
+        return redirect("web:turno")
+    if turno_objetivo.estado != EstadoTurno.CERRADO:
+        messages.error(
+            request,
+            f"El turno {turno_objetivo.pk} sigue abierto: no hay corte que "
+            "corregir. Ciérrelo con la cifra correcta.",
+        )
+        return redirect("web:turno")
+
+    contexto["turno_corte"] = turno_objetivo
+    contexto["veredicto"] = services_caja.veredicto_del_corte(turno_objetivo)
+    contexto["ajustes"] = services_caja.ajustes_del_turno(turno_objetivo)
+    contexto["form_clave"] = ConfirmarClaveForm()
+    contexto["form"] = AjusteCorteForm(
+        # El esperado viene precargado: «cuadrar el corte» es la corrección
+        # más frecuente y teclear a mano una cifra que el sistema ya conoce
+        # solo añade ocasiones de equivocarse. Sigue siendo editable, porque
+        # el efectivo real puede no coincidir con el esperado.
+        initial={"efectivo_real": turno_objetivo.efectivo_esperado}
+    )
+
+    if request.method == "POST":
+        form = AjusteCorteForm(request.POST)
+        form_clave = ConfirmarClaveForm(request.POST)
+        contexto["form"] = form
+        contexto["form_clave"] = form_clave
+
+        if not form.is_valid():
+            messages.error(request, "Revise los datos de la corrección.")
+            return render(request, "estacionamiento/ajuste.html", contexto)
+
+        if not form_clave.is_valid() or not authenticate(
+            username=request.user.get_username(),
+            password=form_clave.cleaned_data["clave"],
+        ):
+            messages.error(request, "Contraseña incorrecta. No se ajustó nada.")
+            return render(request, "estacionamiento/ajuste.html", contexto)
+
+        try:
+            _, _, resultado = services_caja.ajustar_corte(
+                turno_id=turno_objetivo.pk,
+                efectivo_corregido=form.cleaned_data["efectivo_real"],
+                motivo=form.cleaned_data["motivo"],
+                justificacion=form.cleaned_data["justificacion"],
+                autorizo=request.user,
+            )
+        except ErrorDominio as exc:
+            messages.error(request, str(exc))
+            return render(request, "estacionamiento/ajuste.html", contexto)
+
+        if resultado.cuadra:
+            aviso = (
+                f"Corte {turno_objetivo.pk} corregido: la caja queda cuadrada. "
+                f"El ajuste de {resultado.monto:+,.2f} quedó registrado a su nombre."
+            )
+        else:
+            aviso = (
+                f"Corte {turno_objetivo.pk} corregido en {resultado.monto:+,.2f}. "
+                f"La diferencia pasa de {resultado.diferencia_anterior:+,.2f} a "
+                f"{resultado.diferencia_nueva:+,.2f}."
+            )
+        messages.success(request, aviso)
+        return redirect("web:corte", turno_id=turno_objetivo.pk)
+
+    return render(request, "estacionamiento/ajuste.html", contexto)
 
 
 # ------------------------------------------------------------------ Reportes
@@ -573,6 +692,196 @@ def reportes(request):
     contexto["total_folios"] = folios.count()
     contexto["truncado"] = contexto["total_folios"] > MAXIMO_FILAS
     return render(request, "estacionamiento/reportes.html", contexto)
+
+
+def _metricas_solicitadas(request) -> tuple[MetricasForm, dict | None, dict | None]:
+    """
+    Resuelve el periodo y calcula las métricas una sola vez.
+
+    Lo comparten la pantalla y el PDF. Es lo que garantiza que el documento
+    que se manda por correo y la pantalla donde se revisó antes de mandarlo
+    digan exactamente lo mismo: si cada vista armara su consulta, bastaría un
+    filtro distinto para que el dueño mandara cifras que no vio.
+    """
+    # Los valores por omisión se mezclan con lo que venga en la dirección, en
+    # lugar de dejarlos en `initial`. Un formulario ligado ignora `initial` y
+    # dibuja lo que recibió: con «desde» y «hasta» en la URL, los dos campos
+    # de frecuencia salían en blanco y el operador no podía saber con qué
+    # umbral se calculó la lista que estaba mirando.
+    enviados = {clave: valor for clave, valor in request.GET.items() if valor != ""}
+    form = MetricasForm({**MetricasForm.valores_por_omision(), **enviados})
+    if not form.is_valid():
+        return form, None, None
+
+    desde, hasta = _rango_local(form.cleaned_data["desde"], form.cleaned_data["hasta"])
+    metricas = services_metricas.metricas_por_rango(
+        desde,
+        hasta,
+        top_clientes=form.cleaned_data["top_clientes"],
+        minimo_visitas=form.cleaned_data["minimo_visitas"],
+    )
+    return form, metricas, services_caja.reporte_por_rango(desde, hasta)
+
+
+def _dibujos(metricas: dict) -> dict:
+    """
+    Convierte las métricas en los SVG de la pantalla.
+
+    Se dibuja en el servidor y no en el navegador: la hoja de estilos de esta
+    aplicación ya se niega a depender de recursos remotos —en una caseta sin
+    conexión la pantalla debe verse igual— y una librería de gráficas por CDN
+    rompería esa regla. Además evita mandar al navegador las cifras de caja
+    en un bloque de datos aparte del que ya se muestra.
+    """
+    horas = metricas["horas"]
+    clientes = metricas["clientes"]
+
+    return {
+        "entradas_por_hora": graficos.barras_verticales(
+            [
+                {
+                    "etiqueta": f"{h:02d}",
+                    "valor": conteo,
+                    "titulo": f"{h:02d}:00 h · {conteo} entradas",
+                }
+                for h, conteo in enumerate(horas["entradas"])
+            ],
+            formato=lambda v: f"{int(v):,}",
+        ),
+        "ingreso_por_hora": graficos.barras_verticales(
+            [
+                {
+                    "etiqueta": f"{h:02d}",
+                    "valor": monto,
+                    "titulo": f"{h:02d}:00 h · ${monto:,.2f} cobrados",
+                }
+                for h, monto in enumerate(horas["ingresos"])
+            ],
+            alto=150,
+            formato=lambda v: f"${int(v):,}",
+        ),
+        "semana": graficos.barras_verticales(
+            [
+                {
+                    "etiqueta": dia["dia"][:3],
+                    "valor": dia["entradas"],
+                    "titulo": f"{dia['dia']} · {dia['entradas']} entradas · "
+                    f"${dia['ingreso']:,.2f}",
+                }
+                for dia in metricas["semana"]
+            ],
+            alto=150,
+            formato=lambda v: f"{int(v):,}",
+            etiquetar_todas=True,
+        ),
+        "serie_diaria": graficos.barras_verticales(
+            [
+                {
+                    "etiqueta": f"{fila['dia']:%d/%m}",
+                    "valor": fila["ingreso"],
+                    "titulo": f"{fila['dia']:%d/%m/%Y} · ${fila['ingreso']:,.2f} "
+                    f"en {fila['folios']} boletos",
+                }
+                for fila in metricas["serie_diaria"]
+            ],
+            alto=190,
+            formato=lambda v: f"${int(v):,}",
+        ),
+        "boletos": graficos.barra_segmentada(metricas["composicion"]["boletos"]),
+        "clientes": graficos.barras_horizontales(
+            [
+                {
+                    "etiqueta": fila["placa"],
+                    "valor": fila["visitas"],
+                    "titulo": f"{fila['placa']} · {fila['visitas']} visitas · "
+                    f"${fila['gasto']:,.2f}",
+                }
+                for fila in clientes["filas"][:12]
+            ],
+            formato=lambda v: f"{int(v)} visitas",
+        ),
+        "permanencia": graficos.barras_verticales(
+            [
+                {
+                    "etiqueta": tramo["etiqueta"].replace(" min", "'").replace("Hasta ", "≤"),
+                    "valor": tramo["conteo"],
+                    "titulo": f"{tramo['etiqueta']} · {tramo['conteo']} estancias "
+                    f"({tramo['porcentaje']} %)",
+                }
+                for tramo in metricas["composicion"]["permanencia"]
+            ],
+            alto=150,
+            formato=lambda v: f"{int(v):,}",
+            etiquetar_todas=True,
+        ),
+    }
+
+
+@login_required
+@solo_administrativo
+@require_safe
+def metricas(request):
+    """
+    Métricas de operación: horas pico, clientes frecuentes y composición.
+
+    Pantalla aparte del reporte de folios. Responden a preguntas distintas
+    —aquélla «qué pasó con este boleto», ésta «cómo se comporta el negocio»—
+    y sus consultas pesan distinto: quien solo quiere el listado del día no
+    tiene por qué esperar a los agregados del mes.
+
+    Existe además del PDF, y no solo él, porque el dueño revisa antes de
+    mandar. Las dos salidas se calculan con la misma llamada, de modo que no
+    pueden discrepar.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "metricas"
+
+    form, datos, resumen = _metricas_solicitadas(request)
+    contexto["form"] = form
+    if datos is None:
+        return render(request, "estacionamiento/metricas.html", contexto)
+
+    contexto["metricas"] = datos
+    contexto["resumen"] = resumen
+    contexto["dibujos"] = _dibujos(datos)
+    contexto["parametros"] = urlencode(
+        {
+            "desde": form.cleaned_data["desde"].isoformat(),
+            "hasta": form.cleaned_data["hasta"].isoformat(),
+            "minimo_visitas": form.cleaned_data["minimo_visitas"],
+            "top_clientes": form.cleaned_data["top_clientes"],
+        }
+    )
+    return render(request, "estacionamiento/metricas.html", contexto)
+
+
+@login_required
+@solo_administrativo
+@require_safe
+def metricas_pdf(request):
+    """
+    El mismo reporte, como archivo PDF descargable.
+
+    `attachment` y no `inline`: el documento existe para mandarse. Abrirlo en
+    una pestaña obliga a descargarlo después desde el visor del navegador, un
+    paso que en un teléfono no siempre está donde se espera.
+    """
+    form, datos, resumen = _metricas_solicitadas(request)
+    if datos is None:
+        messages.error(request, "Revise el periodo solicitado.")
+        return redirect("web:metricas")
+
+    pdf = reportes_pdf.construir_reporte(
+        datos, resumen=resumen, solicitado_por=request.user.get_username()
+    )
+    respuesta = HttpResponse(pdf, content_type="application/pdf")
+    respuesta["Content-Disposition"] = (
+        f'attachment; filename="{reportes_pdf.nombre_de_archivo(datos)}"'
+    )
+    # Sin almacenamiento intermedio: el reporte contiene cifras de caja y no
+    # debe quedar en la caché de un proxy ni del propio navegador.
+    respuesta["Cache-Control"] = "no-store, private"
+    return respuesta
 
 
 @login_required

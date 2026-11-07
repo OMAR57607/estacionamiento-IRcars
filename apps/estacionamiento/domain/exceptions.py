@@ -63,3 +63,15 @@ class TurnoConFoliosAbiertos(ErrorDominio):
     Es una advertencia de control: esos vehículos siguen dentro y su cobro
     caería en el turno siguiente, distorsionando ambos cortes.
     """
+
+
+class AjusteNoAplicable(ErrorDominio):
+    """
+    Se intenta ajustar un corte que no admite corrección.
+
+    Cubre tres casos distintos con una misma consecuencia: el turno todavía
+    está abierto —no hay corte que corregir, basta con cerrarlo bien—, el
+    ajuste no cambia ninguna cifra —no es una corrección, es ruido en la
+    bitácora— o la justificación no explica nada. Un ajuste de caja sin
+    motivo escrito es indistinguible de un faltante encubierto.
+    """

@@ -6,17 +6,28 @@
 {% block contenido %}
 
 {% comment %} El veredicto encabeza la pantalla: es lo que debe verse primero, sin
-   depender del color para comunicarlo. {% endcomment %}
-{% if resumen.cuadra %}
-  <div class="aviso success"><strong>La caja cuadra exactamente.</strong></div>
-{% elif resumen.hay_faltante %}
+   depender del color para comunicarlo.
+
+   Se lee de `veredicto` y no de `resumen`. El resumen es la fotografía del
+   cierre y no cambia nunca; el veredicto es lo que hay que leer hoy, ya con
+   las correcciones aplicadas. Si un corte se cerró con un faltante que
+   resultó ser un error de conteo, esta franja debe decir que la caja cuadra
+   —y más abajo, que eso se consiguió con un ajuste documentado—. {% endcomment %}
+{% if veredicto.cuadra %}
+  <div class="aviso success">
+    <strong>La caja cuadra exactamente.</strong>
+    {% if veredicto.ajustado %}
+      Se llegó a esta cifra con una corrección posterior al cierre, detallada abajo.
+    {% endif %}
+  </div>
+{% elif veredicto.hay_faltante %}
   <div class="aviso error">
-    <strong>FALTANTE de {{ resumen.diferencia|pesos_absoluto }}.</strong>
+    <strong>FALTANTE de {{ veredicto.diferencia|pesos_absoluto }}.</strong>
     Recuente antes de entregar el turno y documente la diferencia.
   </div>
 {% else %}
   <div class="aviso warning">
-    <strong>SOBRANTE de {{ resumen.diferencia|pesos_absoluto }}.</strong>
+    <strong>SOBRANTE de {{ veredicto.diferencia|pesos_absoluto }}.</strong>
     Verifique si se omitió registrar algún cobro.
   </div>
 {% endif %}
@@ -33,10 +44,30 @@
       <tr><th>Cobrado en el turno</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
       <tr><th>Debería haber en caja</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
       <tr><th>Contado al cerrar</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
-      <tr style="font-weight:700">
-        <th>DIFERENCIA</th>
-        <td class="numero">{{ resumen.diferencia|pesos_con_signo }}</td>
-      </tr>
+
+      {% if veredicto.ajustado %}
+        {% comment %} Las dos cifras conviven a propósito. Mostrar solo la corregida
+           convertiría el ajuste en un borrado, y un faltante que puede
+           desaparecer sin dejar rastro no disuade a nadie de provocarlo. {% endcomment %}
+        <tr>
+          <th>Diferencia declarada al cerrar</th>
+          <td class="numero">{{ turno_corte.diferencia|pesos_con_signo }}</td>
+        </tr>
+        <tr>
+          <th>Efectivo real, tras la corrección</th>
+          <td class="numero">{{ turno_corte.efectivo_ajustado|pesos }}</td>
+        </tr>
+        <tr style="font-weight:700">
+          <th>DIFERENCIA VIGENTE</th>
+          <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
+        </tr>
+      {% else %}
+        <tr style="font-weight:700">
+          <th>DIFERENCIA</th>
+          <td class="numero">{{ resumen.diferencia|pesos_con_signo }}</td>
+        </tr>
+      {% endif %}
+
       <tr><th>Boletos cobrados</th><td class="numero">{{ resumen.folios_cobrados }}</td></tr>
       <tr><th>Boletos sin costo (cortesía)</th><td class="numero">{{ resumen.folios_cortesia }}</td></tr>
     </tbody>
@@ -58,10 +89,63 @@
     </div>
   </div>
 
-  <button type="button" class="boton secundario no-imprimir" onclick="window.print()">
-    Imprimir comprobante
-  </button>
+  <div class="acciones-fila no-imprimir" style="margin-top:1rem">
+    <button type="button" class="boton secundario angosto" onclick="window.print()">
+      Imprimir comprobante
+    </button>
+    {% if puede_ajustar %}
+      {% comment %} Solo el perfil administrativo, y solo sobre un turno ya cerrado.
+         Quien cerró mal no se corrige a sí mismo: el control de caja descansa
+         en que la diferencia la constate alguien distinto de quien contó.
+
+         La etiqueta cambia según lo que haya que hacer. «Cuadrar el corte»
+         sobre un corte que ya cuadra no significa nada: ahí lo que se ofrece
+         es corregir una cifra, no llevarla a cero. {% endcomment %}
+      <a class="boton secundario angosto" href="{% url 'web:ajustar_corte' turno_id=turno_corte.pk %}">
+        {% if veredicto.cuadra %}Corregir el corte…{% else %}Cuadrar el corte…{% endif %}
+      </a>
+    {% endif %}
+  </div>
 </div>
+
+{% if ajustes %}
+{% comment %} La bitácora se imprime junto con el comprobante, no se oculta tras un
+   desplegable: un corte corregido que se entrega en papel debe llevar encima
+   quién lo corrigió y por qué. {% endcomment %}
+<div class="tarjeta">
+  <h2>Correcciones aplicadas a este corte</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr>
+          <th>Cuándo</th>
+          <th>Autorizó</th>
+          <th>Motivo</th>
+          <th class="numero">Ajuste</th>
+          <th class="numero">Diferencia</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for a in ajustes %}
+        <tr>
+          <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
+          <td>{{ a.autorizo }}</td>
+          <td>
+            {{ a.get_motivo_display }}
+            <br><span class="ayuda">{{ a.justificacion }}</span>
+          </td>
+          <td class="numero">{{ a.monto|pesos_con_signo }}</td>
+          <td class="numero">
+            {{ a.diferencia_anterior|pesos_con_signo }} →
+            <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% if folios %}
 <div class="tarjeta">

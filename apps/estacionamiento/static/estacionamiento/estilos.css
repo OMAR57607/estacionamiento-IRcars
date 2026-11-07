@@ -55,6 +55,33 @@
   --sombra-elevada: 0 4px 16px rgba(16, 32, 48, 0.12);
 
   --alto-barra-inferior: 56px;
+
+  /* --- Gráficas del reporte -------------------------------------------
+     Van aparte de los tokens de interfaz porque responden a otra regla: el
+     color de una gráfica debe distinguirse también para quien no percibe
+     algún matiz, y eso se verifica con números, no a ojo. Esta paleta pasó
+     las comprobaciones de banda de luminosidad, piso de croma, separación
+     bajo protanopia y tritanopia, y contraste contra la superficie.
+
+     `--viz-serie` y `--viz-destacada` son dos pasos del mismo azul, no dos
+     colores: así la jerarquía de la barra máxima sobrevive a una impresión
+     en blanco y negro, donde dos matices se vuelven el mismo tono.
+     `--viz-destacada` es además el azul de la marca.
+
+     El mismo juego de colores lo lleva el PDF, escrito en `graficos.py`. */
+  --viz-serie: #2a78d6;
+  --viz-destacada: #1b4f91;
+  --viz-segunda: #eb6834;
+  --viz-tinta: #0b0b0b;
+  --viz-tinta-suave: #52514e;
+  --viz-apagado: #898781;
+  --viz-cuadricula: #e1e0d9;
+  --viz-eje: #c3c2b7;
+  --viz-rampa-0: #86b6ef;
+  --viz-rampa-1: #5598e7;
+  --viz-rampa-2: #2a78d6;
+  --viz-rampa-3: #1b4f91;
+  --viz-rampa-4: #0d366b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -84,6 +111,30 @@
 
     --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sombra-elevada: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+    /* Pasos elegidos para la superficie oscura (#182636) y verificados
+       contra ella, no el claro aclarado a ojo.
+
+       La jerarquía se invierte: aquí la barra destacada es la **más clara**,
+       porque es la que resalta sobre fondo oscuro. Sin esta inversión, el
+       máximo quedaba más oscuro que el resto y desaparecía.
+
+       Los rótulos de los ejes son el caso que motivó todo esto: con los
+       colores del tema claro quedaban en gris oscuro sobre fondo oscuro, y
+       la gráfica se veía pero no se podía leer. */
+    --viz-serie: #2a78d6;
+    --viz-destacada: #6da7ec;
+    --viz-segunda: #d95926;
+    --viz-tinta: #e8eef4;
+    --viz-tinta-suave: #9aacbd;
+    --viz-apagado: #8699ad;
+    --viz-cuadricula: #2b3d52;
+    --viz-eje: #3d5571;
+    --viz-rampa-0: #0d366b;
+    --viz-rampa-1: #1b4f91;
+    --viz-rampa-2: #2a78d6;
+    --viz-rampa-3: #5598e7;
+    --viz-rampa-4: #86b6ef;
   }
 }
 
@@ -370,6 +421,26 @@ select.campo { appearance: none; background-image: none; }
 
 .acciones-fila { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .acciones-fila .boton { margin: 0; }
+
+/* ----------------------------------------------------------------- Gráficas */
+
+/* Mismo recurso que `.tabla-envoltura`, y por el mismo motivo: en un teléfono
+   no cabe todo y es preferible desplazar de lado a encoger hasta lo ilegible.
+   El SVG lleva su propio `min-width`; aquí solo se le da por dónde moverse. */
+.grafico-envoltura {
+  overflow-x: auto;
+  /* Desplazamiento suave en iOS sin arrastrar la página entera. */
+  -webkit-overflow-scrolling: touch;
+  margin: 0 0 0.2rem;
+}
+
+/* Al imprimir no hay a dónde desplazarse: la gráfica se ajusta al papel
+   aunque sus rótulos queden más pequeños. Un gráfico cortado por el borde de
+   la hoja es peor que uno con el texto algo justo. */
+@media print {
+  .grafico-envoltura { overflow: visible; }
+  .grafico-envoltura svg { min-width: 0 !important; }
+}
 
 /* ------------------------------------------------------------------ Avisos */
 

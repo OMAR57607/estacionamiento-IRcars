@@ -28,6 +28,15 @@
 </div>
 
 {% if datos %}
+{% comment %} Esta pantalla responde «qué pasó con cada boleto». La de métricas
+   responde «cómo se comporta el negocio» y es la que produce el PDF que se
+   manda. Van por separado porque sus consultas pesan muy distinto: quien
+   solo quiere el listado del día no debe esperar a los agregados del mes. {% endcomment %}
+<div class="aviso info no-imprimir">
+  ¿Busca horas pico, clientes frecuentes y gráficos para mandar?
+  <a href="{% url 'web:metricas' %}?desde={{ form.desde.value|date:'Y-m-d' }}&amp;hasta={{ form.hasta.value|date:'Y-m-d' }}">Ver las métricas de este periodo…</a>
+</div>
+
 <div class="indicadores" style="margin-bottom:1rem">
   <div class="indicador">
     <div class="rotulo">Total cobrado</div>

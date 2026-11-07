@@ -46,6 +46,10 @@
     <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
     {% if es_administrativo %}
       <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
+      {% comment %} Entrada propia y no un enlace dentro de Reportes: es la pantalla que
+         el dueño abre para decidir —horarios, personal, quién vuelve— y
+         esconderla dentro del listado de boletos la deja sin usar. {% endcomment %}
+      <a href="{% url 'web:metricas' %}" {% if seccion == 'metricas' %}class="activo"{% endif %}>Métricas</a>
       <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>Operadores</a>
     {% endif %}
     {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el

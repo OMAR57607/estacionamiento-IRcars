@@ -149,6 +149,40 @@ class Turno(models.Model):
     )
     observaciones = models.TextField("observaciones", blank=True)
 
+    # --- Corrección del corte (ver AjusteCorte) ----------------------------
+    #
+    # El corte cerrado es inmutable y los campos de arriba no se reescriben
+    # nunca. Cuando la cifra declarada estaba mal —el caso que motivó esto:
+    # un turno cerrado con $140 menos de los que había en caja—, la
+    # corrección se registra como asiento aparte y su efecto acumulado se
+    # refleja aquí.
+    #
+    # Son redundantes respecto a la bitácora de ajustes, igual que los
+    # campos del corte son redundantes respecto a los folios, y por el mismo
+    # motivo: el reporte de un mes consulta miles de turnos y recorrer sus
+    # ajustes uno a uno para saber cuánto falta en caja convertiría una
+    # consulta agregada en un recorrido en memoria. `NULL` significa «nunca
+    # se ajustó», que no es lo mismo que «se ajustó a cero».
+    efectivo_ajustado = models.DecimalField(
+        "efectivo corregido",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Efectivo real tras la corrección administrativa. Vacío si el "
+            "corte nunca se ajustó."
+        ),
+    )
+    diferencia_ajustada = models.DecimalField(
+        "diferencia corregida",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Diferencia resultante del último ajuste aplicado.",
+    )
+
     class Meta:
         verbose_name = "turno"
         verbose_name_plural = "turnos"
@@ -174,6 +208,36 @@ class Turno(models.Model):
 
     def __str__(self) -> str:
         return f"Turno {self.pk} · {self.operador} · {self.abierto_en:%Y-%m-%d %H:%M}"
+
+    # Las tres propiedades siguientes existen para que ninguna pantalla,
+    # reporte ni PDF tenga que recordar la regla «si hay ajuste usa el
+    # ajustado». Escrita una vez, un olvido deja de poder mostrar la cifra
+    # equivocada en un documento que alguien firma.
+
+    @property
+    def tiene_ajuste(self) -> bool:
+        """Si el corte fue corregido después de cerrarse."""
+        return self.efectivo_ajustado is not None
+
+    @property
+    def efectivo_vigente(self) -> Decimal | None:
+        """Efectivo que el corte da por bueno hoy."""
+        if self.efectivo_ajustado is not None:
+            return self.efectivo_ajustado
+        return self.efectivo_declarado
+
+    @property
+    def diferencia_vigente(self) -> Decimal | None:
+        """
+        Diferencia que el corte da por buena hoy.
+
+        Es la cifra que debe leerse para saber si la caja cuadra. La original
+        sigue disponible en `diferencia` y el comprobante muestra las dos:
+        una sin la otra cuenta media historia.
+        """
+        if self.efectivo_ajustado is not None:
+            return self.diferencia_ajustada
+        return self.diferencia
 
 
 class Tarifa(models.Model):
@@ -455,3 +519,129 @@ class Folio(models.Model):
         # evita duplicados del tipo "abc123" / "ABC 123".
         self.placa = self.placa.strip().upper().replace(" ", "")
         super().save(*args, **kwargs)
+
+
+class MotivoAjuste(models.TextChoices):
+    """
+    Por qué se corrige un corte ya firmado.
+
+    La lista es cerrada a propósito. Un campo de texto libre produce bitácoras
+    en las que cada ajuste se explica con otras palabras y no hay forma de
+    contar cuántas veces pasó lo mismo —que es justo lo que delata un problema
+    recurrente—. La justificación escrita sigue siendo obligatoria y va además
+    del motivo, no en su lugar.
+    """
+
+    RECUENTO = "RECUENTO", "Error de conteo: se recontó el efectivo"
+    LOCALIZADO = "LOCALIZADO", "Efectivo localizado después del cierre"
+    NO_REGISTRADO = "NO_REGISTRADO", "Cobro no registrado en el sistema"
+    CAPTURA = "CAPTURA", "Error al teclear el efectivo declarado"
+    RETIRO = "RETIRO", "Retiro de efectivo no descontado"
+    OTRO = "OTRO", "Otro (se detalla en la justificación)"
+
+
+class AjusteCorte(models.Model):
+    """
+    Asiento de corrección sobre un corte ya cerrado.
+
+    Responde a una necesidad real de operación: un turno se cerró declarando
+    $140 menos de los que había en caja, y el sistema no ofrecía forma de
+    corregirlo. Las dos salidas que quedaban eran malas. Dejar el faltante
+    falso envenena el histórico —si la diferencia de un corte puede ser un
+    error de dedo, deja de significar nada y el control de caja entero se
+    vuelve decorativo—. Editar la base a mano corrige la cifra y borra al
+    responsable.
+
+    **El corte original no se reescribe.** `Turno` conserva intactos el
+    efectivo que el operador declaró y la diferencia que resultó. Este
+    registro guarda aparte la cifra corregida, quién la autorizó, cuándo y
+    por qué. El comprobante muestra las dos, y es esa coexistencia la que
+    hace al ajuste un acto auditable en lugar de un borrado: un faltante que
+    puede desaparecer sin rastro no disuade a nadie de provocarlo.
+
+    Varios ajustes sobre un mismo turno son válidos y se acumulan. Cada uno
+    registra de qué cifra partió, de modo que la cadena completa se reconstruye
+    sin ambigüedad aunque alguien corrija dos veces.
+    """
+
+    turno = models.ForeignKey(
+        Turno,
+        on_delete=models.PROTECT,
+        related_name="ajustes",
+        verbose_name="turno corregido",
+    )
+
+    # --- Cifras del asiento -------------------------------------------------
+    efectivo_esperado = models.DecimalField(
+        "efectivo esperado",
+        max_digits=12,
+        decimal_places=2,
+        help_text=(
+            "Copia de lo que el sistema esperaba. Redundante a propósito: el "
+            "asiento debe explicar su propio monto sin depender del turno."
+        ),
+    )
+    efectivo_anterior = models.DecimalField(
+        "efectivo declarado antes del ajuste", max_digits=12, decimal_places=2
+    )
+    efectivo_nuevo = models.DecimalField(
+        "efectivo real", max_digits=12, decimal_places=2
+    )
+    monto = models.DecimalField(
+        "monto del ajuste",
+        max_digits=12,
+        decimal_places=2,
+        help_text="Positivo = apareció efectivo; negativo = había menos.",
+    )
+    diferencia_anterior = models.DecimalField(
+        "diferencia antes del ajuste", max_digits=12, decimal_places=2
+    )
+    diferencia_nueva = models.DecimalField(
+        "diferencia después del ajuste", max_digits=12, decimal_places=2
+    )
+
+    # --- Responsabilidad ----------------------------------------------------
+    motivo = models.CharField(
+        "motivo", max_length=20, choices=MotivoAjuste.choices
+    )
+    justificacion = models.TextField(
+        "justificación",
+        help_text=(
+            "Qué pasó, con detalle suficiente para que se entienda meses "
+            "después sin preguntar a nadie."
+        ),
+    )
+    autorizo = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ajustes_autorizados",
+        verbose_name="autorizó",
+        help_text="Perfil administrativo que respondió por la corrección.",
+    )
+    creado_en = models.DateTimeField("registrado en", default=timezone.now)
+
+    class Meta:
+        verbose_name = "ajuste de corte"
+        verbose_name_plural = "ajustes de corte"
+        ordering = ["-creado_en"]
+        constraints = [
+            # Un ajuste de cero no corrige nada y solo ensucia la bitácora.
+            # Se impide en la base y no solo en el servicio: la restricción
+            # sobrevive a cualquier vía de entrada futura.
+            models.CheckConstraint(
+                condition=~models.Q(monto=Decimal("0.00")),
+                name="ck_ajuste_monto_no_cero",
+            ),
+            # Un ajuste sin justificación escrita es indistinguible de un
+            # faltante encubierto.
+            models.CheckConstraint(
+                condition=~models.Q(justificacion=""),
+                name="ck_ajuste_justificado",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["turno", "creado_en"], name="idx_ajuste_turno_fecha"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Ajuste de {self.monto:+.2f} al turno {self.turno_id}"
