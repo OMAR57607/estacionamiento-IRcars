@@ -46,6 +46,83 @@ Detalle de los controles en [BOLETO-QR.md](BOLETO-QR.md).
 
 ---
 
+## Corte de caja: corrección de un cierre equivocado
+
+Un turno se cerró declarando $140 menos de los que había en caja. El corte
+cerrado es inmutable por diseño —`calcular_resumen` devuelve su fotografía y no
+un recálculo—, de modo que no había forma de enmendarlo. Las dos salidas que
+quedaban eran malas: dejar el faltante falso envenena el histórico, porque si
+la diferencia de un corte puede ser un error de dedo deja de significar algo y
+el control de caja entero se vuelve decorativo; y editar la base a mano corrige
+la cifra y borra al responsable.
+
+La corrección se modela como **asiento de ajuste**, no como reescritura. Es el
+criterio que la contabilidad aplica a un asiento equivocado —no se borra, se
+contra-asienta— y por el mismo motivo.
+
+- **El cierre no se toca.** `Turno.efectivo_declarado` y `Turno.diferencia`
+  conservan para siempre lo que el operador firmó.
+- **La corrección vive aparte**, en `AjusteCorte`: de qué cifra se partió, a
+  cuál se llegó, el motivo —lista cerrada, para poder contar cuántas veces se
+  repite el mismo problema—, la justificación escrita y quién la autorizó.
+  Dos restricciones de base la sostienen: un ajuste no puede valer cero ni
+  quedarse sin justificación.
+- **El comprobante muestra las dos cifras.** Esa coexistencia es lo que hace
+  del ajuste un acto auditable en lugar de un borrado: un faltante que puede
+  desaparecer sin rastro no disuade a nadie de provocarlo.
+- **Quien cerró mal no se corrige a sí mismo.** La pantalla está restringida al
+  perfil administrativo y exige confirmar la contraseña, igual que el cambio de
+  precio. El cierre ciego descansa en que la diferencia la constate alguien
+  distinto de quien contó.
+- **Varias correcciones se acumulan.** La segunda parte de la cifra vigente, no
+  de la original, para que no se pisen.
+
+Cada ajuste se registra en la bitácora en nivel `WARNING`, incluso cuando deja
+la caja cuadrada: un patrón de correcciones que siempre cuadran es exactamente
+lo que se vería si alguien usara esta función para tapar faltantes.
+
+---
+
+## Métricas de operación y reporte en PDF
+
+Pantalla propia (`/reportes/metricas/`), restringida al perfil administrativo, y
+el mismo contenido como archivo descargable (`/reportes/metricas/pdf/`).
+
+| Métrica | Qué decide | Cómo se cuenta |
+|---|---|---|
+| **Horas pico** | A qué hora hace falta alguien en la caseta | Entradas por hora del día, en zona local, acumuladas en el periodo. Los empates se informan: dos horas iguales son dos turnos a cubrir |
+| **Ingreso por hora de cobro** | Nada de personal — va aparte por eso | Recaudación por hora de salida. Desplazada respecto a las entradas tanto como dura la estancia media |
+| **Clientes frecuentes** | A quién conviene ofrecer una pensión | Placas con N visitas o más dentro del periodo, con visitas, gasto, ticket, estancia media y parte del ingreso. El umbral y el tamaño de la lista son parámetros de la pantalla |
+| **Día de la semana / día a día** | Horarios y previsión | Entradas e ingreso agregados en la base |
+| **Composición** | Si el ingreso depende del precio o de la rotación | Cobros frente a cortesías, tipo de vehículo, operador y distribución de permanencia |
+| **Control de caja** | Si hay fuga de efectivo | Diferencia **vigente** del periodo —ya con las correcciones— junto a la declarada al cerrar |
+
+El límite que conviene no olvidar al leer el reporte: la placa identifica al
+vehículo, no a la persona, y un cambio de placa interrumpe la serie de ese
+cliente. Para lo que sirve —saber a quién retener— es suficiente.
+
+**Por qué un PDF generado en el servidor.** El documento se manda. «Imprimir a
+PDF» desde el navegador produce un archivo distinto en cada equipo y no se puede
+generar desde un proceso programado. Los gráficos se dibujan vectoriales, no
+como imagen: un reporte de treinta días pesa unos 22 KB, se amplía sin pixelarse
+y sus rótulos siguen siendo texto.
+
+**Por qué las gráficas se dibujan en el servidor.** Misma regla que ya cumple la
+hoja de estilos —ni fuentes ni CSS remotos—: si se cae la conexión a un CDN, la
+pantalla debe verse igual. Además evita mandar al navegador las cifras de caja
+en un bloque de datos aparte del que ya se muestra.
+
+**Color.** Una sola serie por gráfica y un solo matiz; la longitud de la barra
+lleva el dato y el color no transporta información, de modo que el reporte sigue
+siendo exacto impreso en blanco y negro. El máximo se marca con un segundo paso
+del mismo azul —no con otro color— por el mismo motivo. La paleta está
+verificada por banda de luminosidad, piso de croma, separación bajo protanopia y
+tritanopia, y contraste contra la superficie, en los temas claro y oscuro. No
+hay gráficas de pastel: dos longitudes sobre una recta se comparan mejor que dos
+ángulos.
+
+---
+
 ## Arquitectura
 
 Las dependencias apuntan siempre hacia el dominio. El núcleo de negocio no
@@ -53,18 +130,22 @@ conoce Django, HTTP ni la base de datos, por lo que es verificable de forma
 aislada y reutilizable por cualquier interfaz futura.
 
 ```
-  web/views.py      Interfaz web de caja (plantillas Django) ─┐ dos interfaces,
-  views.py          API REST (DRF)                           ─┤ cero reglas
-  api_errors.py     Errores de dominio → HTTP                 ─┘ propias
+  web/views.py        Interfaz web de caja (plantillas Django) ─┐ dos interfaces,
+  views.py            API REST (DRF)                           ─┤ cero reglas
+  api_errors.py       Errores de dominio → HTTP                 ─┘ propias
+  graficos.py         Gráficas en SVG, dibujadas en el servidor ─┐ dos salidas,
+  reportes_pdf.py     El mismo reporte, en PDF (ReportLab)      ─┘ un cálculo
         │
         ▼
-  services.py       Casos de uso: entrada, cotización, cobro, cancelación
-  services_caja.py  Casos de uso: apertura de turno, cierre ciego, corte
+  services.py           Casos de uso: entrada, cotización, cobro, cancelación
+  services_caja.py      Casos de uso: turno, cierre ciego, corte y su corrección
+  services_metricas.py  Consultas agregadas del periodo
         │
         ▼
-  domain/tarifas.py Motor de tarificación   ─┐ lógica pura, sin Django,
-  domain/corte.py   Motor de corte de caja  ─┤ sin ORM, sin reloj propio
-  domain/exceptions.py                       ─┘
+  domain/tarifas.py  Motor de tarificación    ─┐ lógica pura, sin Django,
+  domain/corte.py    Corte de caja y su ajuste ─┤ sin ORM, sin reloj propio
+  domain/metricas.py Hora pico, tramos, escalas ┤
+  domain/exceptions.py                          ─┘
         │
         ▼
   models.py         Persistencia e integridad (PostgreSQL / SQLite)
@@ -72,10 +153,15 @@ aislada y reutilizable por cualquier interfaz futura.
 
 | Capa | Archivos | Responsabilidad |
 |---|---|---|
-| Interfaz | `web/`, `views.py`, `serializers.py` | Deserializar, delegar, presentar |
-| Aplicación | `services.py`, `services_caja.py` | Orquestar casos de uso, transacciones, concurrencia |
-| Dominio | `domain/tarifas.py`, `domain/corte.py` | Calcular importes y diferencias. Sin framework, 100 % testeable |
+| Interfaz | `web/`, `views.py`, `serializers.py`, `graficos.py`, `reportes_pdf.py` | Deserializar, delegar, presentar |
+| Aplicación | `services.py`, `services_caja.py`, `services_metricas.py` | Orquestar casos de uso, transacciones, concurrencia |
+| Dominio | `domain/tarifas.py`, `domain/corte.py`, `domain/metricas.py` | Calcular importes, diferencias y conclusiones. Sin framework, 100 % testeable |
 | Infraestructura | `models.py`, `migrations/` | Persistir y hacer cumplir la integridad |
+
+La pantalla de métricas y el PDF salen de una sola llamada a
+`metricas_por_rango`. Es deliberado: el dueño revisa en pantalla y manda el
+archivo, y dos documentos que discrepan en una cifra obligan a averiguar cuál
+de los dos miente.
 
 ---
 
@@ -123,6 +209,10 @@ python manage.py runserver
 
 | Recurso | URL |
 |---|---|
+| Caja (la pantalla de uso diario) | http://localhost:8000/ |
+| Turno y corte | http://localhost:8000/turno/ |
+| Métricas de operación | http://localhost:8000/reportes/metricas/ |
+| Reporte de operación en PDF | http://localhost:8000/reportes/metricas/pdf/ |
 | API (interfaz navegable de DRF) | http://localhost:8000/api/v1/ |
 | Panel de administración | http://localhost:8000/admin/ |
 | Sonda de proceso (*liveness*) | http://localhost:8000/healthz |
@@ -133,12 +223,14 @@ python manage.py runserver
 ## Pruebas
 
 ```bash
-pytest                                              # suite completa
-pytest apps/estacionamiento/tests/test_tarifas.py   # solo el motor de cobro
-pytest apps/estacionamiento/tests/test_corte.py     # solo el corte de caja
+pytest                                                    # suite completa
+pytest apps/estacionamiento/tests/test_tarifas.py         # solo el motor de cobro
+pytest apps/estacionamiento/tests/test_corte.py           # solo el corte de caja
+pytest apps/estacionamiento/tests/test_ajuste_corte.py    # solo la corrección del corte
+pytest apps/estacionamiento/tests/test_metricas.py        # solo las métricas
 ```
 
-La suite cubre **91 casos**, verificados contra **PostgreSQL 16 y SQLite**:
+La suite cubre **456 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 
 - **Motor de tarifas**: fronteras de cortesía, proporcionalidad, cobro mínimo,
   tope por día natural, precisión monetaria, validación de parámetros.
@@ -148,6 +240,18 @@ La suite cubre **91 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 - **Casos de uso**: asignación de cajón, unicidad de folios y turnos, auditoría
   de la tarifa aplicada, validación del pago, adscripción del cobro al turno,
   inmutabilidad del corte cerrado.
+- **Corrección del corte**: que la cifra declarada al cerrar sobreviva al
+  ajuste, que el cajero no pueda corregir su propia caja, que dos correcciones
+  se acumulen en lugar de pisarse, y que la base rechace un ajuste de cero o
+  sin justificación aunque el servicio lo olvide.
+- **Métricas**: que la hora se cuente en zona local —sin eso, una entrada de
+  las 20:00 aparecería a las 02:00 y el pico señalaría una hora con la caseta
+  cerrada—, que los empates de hora pico no se oculten, que los totales de
+  clientes frecuentes no salgan en cero, y que el orden del ranking sea estable
+  entre dos ejecuciones del mismo reporte.
+- **Reporte en PDF**: que el archivo sea un PDF válido, que se descargue en
+  lugar de abrirse, que no quede en ninguna caché, y que un periodo sin
+  movimientos produzca documento en lugar de fallar.
 - **Contrato de la API**: códigos de estado, permisos, autenticación.
 
 Los motores de tarificación y de corte **no requieren base de datos**: son
@@ -288,6 +392,15 @@ no expone `update` ni `destroy`, y el panel de administración los muestra en
 solo lectura. Las correcciones se realizan por cancelación con motivo
 documentado, operador identificado y registro en el log.
 
+**Un corte firmado tampoco se reescribe: se contra-asienta.** La misma regla
+aplicada al control de caja. Cuando un turno se cierra con una cifra
+equivocada, la corrección se guarda como asiento aparte —con motivo,
+justificación escrita y autor— y el comprobante pasa a mostrar las dos cifras.
+Permitir editar el declarado habría sido más simple y habría desarmado el
+control: una diferencia que puede borrarse sin dejar rastro no disuade a nadie
+de provocarla. La contrapartida —dos cifras en el comprobante en lugar de una—
+es el precio de que la primera siga significando algo.
+
 **Mínimo privilegio.** El cuadro tarifario solo es modificable por personal
 administrativo: el precio no se toca desde una caja. El contenedor no corre
 como `root`.
@@ -330,7 +443,9 @@ los mismos servicios, sin duplicar reglas de negocio:
   JavaScript: sin esa equivalencia demostrada, una caja que cobre en el
   navegador cobraría distinto que el servidor.
 
-Ya no figuran aquí tres puntos que sí están construidos: el **corte de caja**
-por turno y operador —con cierre ciego, conciliación e historial—, el **panel
-de caja**, que es la propia aplicación web, y la **consulta del boleto por el
-cliente**, descrita arriba.
+Ya no figuran aquí los puntos que sí están construidos: el **corte de caja**
+por turno y operador —con cierre ciego, conciliación, historial y corrección
+auditable de un cierre equivocado—, el **panel de caja**, que es la propia
+aplicación web, la **consulta del boleto por el cliente** y el **reporte de
+operación** con horas pico, clientes frecuentes y salida en PDF, los tres
+descritos arriba.

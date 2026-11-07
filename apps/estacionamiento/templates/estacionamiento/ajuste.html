@@ -1,0 +1,120 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Corregir el corte del turno {{ turno_corte.pk }}{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta">
+  <h2>Corregir el corte del turno {{ turno_corte.pk }}</h2>
+
+  <p class="ayuda">
+    {% comment %} La fecha y la hora van en dos filtros y no en uno con el texto
+       dentro: en el formato de `date`, las letras «a», «l» y «s» de «a las»
+       son códigos —a. m./p. m., día de la semana y segundos— y producían
+       «06/11/2026 p.m. Viernesp.m.00 22:00». {% endcomment %}
+    El corte que firmó <strong>{{ turno_corte.operador }}</strong> el
+    {{ turno_corte.cerrado_en|date:"d/m/Y" }} a las
+    {{ turno_corte.cerrado_en|date:"H:i" }} <strong>no se reescribe</strong>:
+    la cifra que declaró queda registrada tal como la entregó. Lo que se
+    guarda aquí es una corrección aparte, con su motivo y su firma, y el
+    comprobante pasa a mostrar las dos.
+  </p>
+
+  <table>
+    <tbody>
+      <tr><th>Cobrado en el turno</th><td class="numero">{{ turno_corte.total_cobrado|pesos }}</td></tr>
+      <tr><th>Cambio con que abrió</th><td class="numero">{{ turno_corte.fondo_inicial|pesos }}</td></tr>
+      <tr style="font-weight:700">
+        <th>Debería haber en caja</th>
+        <td class="numero">{{ turno_corte.efectivo_esperado|pesos }}</td>
+      </tr>
+      <tr><th>Se declaró al cerrar</th><td class="numero">{{ turno_corte.efectivo_declarado|pesos }}</td></tr>
+      {% if veredicto.ajustado %}
+        <tr><th>Efectivo vigente tras correcciones previas</th>
+            <td class="numero">{{ veredicto.efectivo_vigente|pesos }}</td></tr>
+      {% endif %}
+      <tr style="font-weight:700">
+        <th>Diferencia actual</th>
+        <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="ayuda">
+    Aquí sí se muestra el efectivo esperado, al contrario que al cerrar. El
+    conteo a ciegas ya ocurrió y su resultado está grabado arriba; ocultar
+    ahora la cifra solo obligaría a adivinar con cuál se quiere cuadrar.
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <div class="tarjeta">
+    <h2>La corrección</h2>
+
+    <div>
+      <label for="{{ form.efectivo_real.id_for_label }}">{{ form.efectivo_real.label }}</label>
+      {{ form.efectivo_real }}
+      <p class="ayuda">{{ form.efectivo_real.help_text }}</p>
+      {% for e in form.efectivo_real.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div style="margin-top:1rem">
+      <label for="{{ form.motivo.id_for_label }}">{{ form.motivo.label }}</label>
+      {{ form.motivo }}
+      {% for e in form.motivo.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div style="margin-top:1rem">
+      <label for="{{ form.justificacion.id_for_label }}">{{ form.justificacion.label }}</label>
+      {{ form.justificacion }}
+      <p class="ayuda">{{ form.justificacion.help_text }}</p>
+      {% for e in form.justificacion.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Confirme su contraseña</h2>
+    <p class="ayuda">
+      La misma con la que entró. No es un trámite: deja la corrección
+      atribuida a usted y convierte un clic de más en una decisión. La
+      corrección se registra a nombre de <strong>{{ request.user }}</strong>.
+    </p>
+    <label for="{{ form_clave.clave.id_for_label }}">{{ form_clave.clave.label }}</label>
+    {{ form_clave.clave }}
+    {% for e in form_clave.clave.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+
+    <div class="acciones-fila" style="margin-top:1rem">
+      <button type="submit" class="boton">Aplicar la corrección</button>
+      {# Angosto a propósito: salir no debe pesar en la pantalla lo mismo que aplicar. #}
+      <a class="boton secundario angosto" href="{% url 'web:corte' turno_id=turno_corte.pk %}">Cancelar</a>
+    </div>
+  </div>
+</form>
+
+{% if ajustes %}
+<div class="tarjeta">
+  <h2>Correcciones previas</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr><th>Cuándo</th><th>Autorizó</th><th>Motivo</th><th class="numero">Ajuste</th></tr>
+      </thead>
+      <tbody>
+      {% for a in ajustes %}
+        <tr>
+          <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
+          <td>{{ a.autorizo }}</td>
+          <td>{{ a.get_motivo_display }}<br><span class="ayuda">{{ a.justificacion }}</span></td>
+          <td class="numero">{{ a.monto|pesos_con_signo }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

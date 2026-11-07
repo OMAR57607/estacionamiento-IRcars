@@ -17,7 +17,18 @@ urlpatterns = [
     path("manifiesto.json", views.manifiesto, name="manifiesto"),
     path("turno/", views.turno, name="turno"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
+    # Corrección de un corte ya cerrado. En su propia dirección y no como un
+    # formulario más del comprobante: llegar aquí es un acto deliberado del
+    # perfil administrativo, y la vista exige confirmar la contraseña antes
+    # de aplicar nada.
+    path("turno/<int:turno_id>/corte/ajustar/", views.ajustar_corte, name="ajustar_corte"),
     path("reportes/", views.reportes, name="reportes"),
+    # Métricas de operación: horas pico, clientes frecuentes y composición.
+    # Separadas del reporte de folios porque responden a otra pregunta y
+    # porque su consulta es más pesada: quien solo quiere el listado del día
+    # no debe pagar por los agregados del mes.
+    path("reportes/metricas/", views.metricas, name="metricas"),
+    path("reportes/metricas/pdf/", views.metricas_pdf, name="metricas_pdf"),
     # Puesta en marcha: borrar los movimientos de prueba. En su propia
     # dirección, lejos de lo que se pulsa a diario.
     path("mantenimiento/", views.mantenimiento, name="mantenimiento"),
