@@ -45,6 +45,23 @@ reportlab==4.2.5                # Genera el PDF de métricas y dibuja sus
                                 # dependencia declarada de reportlab 4.x y no
                                 # puede evitarse. Era el precio de la opción
                                 # más ligera disponible.
+pillow==12.3.0                  # Dependencia de reportlab, fijada aquí a
+                                # propósito aunque nada la importe.
+                                #
+                                # reportlab solo pide «pillow>=9.0.0», de modo
+                                # que sin esta línea cada despliegue instala la
+                                # versión más nueva que exista ese día: el
+                                # mismo commit produce entornos distintos y una
+                                # publicación de terceros puede romper
+                                # producción sin que nadie haya tocado el
+                                # código. Es lo único que quedaba sin fijar.
+                                #
+                                # Es además la misma versión que
+                                # requirements-build.txt, donde Pillow ya
+                                # figuraba para generar los iconos. Dos
+                                # versiones de la misma librería en un mismo
+                                # repositorio son dos verdades, y acaban
+                                # divergiendo.
 
 # --- Calidad y pruebas -------------------------------------------------------
 pytest==8.3.4
