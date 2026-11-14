@@ -3,7 +3,7 @@
 {% block titulo %}Cancelar folio{% endblock %}
 
 {% block contenido %}
-<div class="tarjeta" style="max-width:560px;margin:0 auto">
+<div class="tarjeta angosta centrada">
   <h2>Cancelar folio</h2>
 
   <div class="aviso warning">
@@ -28,7 +28,7 @@
     <button type="submit" class="boton peligro">Cancelar el folio</button>
   </form>
 
-  <p class="ayuda" style="margin-top:.8rem">
+  <p class="ayuda mt">
     <a href="{% url 'web:caja' %}">Volver a la caja sin cancelar</a>
   </p>
 </div>

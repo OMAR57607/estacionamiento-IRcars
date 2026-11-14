@@ -15,7 +15,7 @@
       Cambio con que abrió: <strong>{{ turno_actual.fondo_inicial|pesos }}</strong>
     </p>
 
-    <div class="indicadores" style="margin:.8rem 0">
+    <div class="indicadores my">
       <div class="indicador">
         <div class="rotulo">Boletos cobrados</div>
         <div class="valor">{{ avance.folios_cobrados }}</div>
@@ -46,7 +46,7 @@
             <th>Cambio con que abrió</th>
             <td class="numero">{{ esperado.fondo_inicial|pesos }}</td>
           </tr>
-          <tr style="font-weight:700">
+          <tr class="fila-total">
             <th>Debería haber en caja</th>
             <td class="numero">{{ esperado.efectivo_esperado|pesos }}</td>
           </tr>
@@ -66,7 +66,7 @@
     {% comment %} El aviso ocupaba media pantalla del teléfono por delante del único
        campo que hay que llenar. La instrucción cabe en un renglón; el porqué
        queda plegado, para quien lo pregunte. {% endcomment %}
-    <p class="ayuda" style="margin-top:0">
+    <p class="ayuda mt-0">
       Cuente todo el efectivo de la caja y capture el total. La diferencia
       aparece <em>después</em> de registrar su conteo.
     </p>
@@ -89,14 +89,14 @@
         {{ form_cerrar.efectivo_declarado.label }}
       </label>
       {{ form_cerrar.efectivo_declarado }}
-      <label for="{{ form_cerrar.observaciones.id_for_label }}" style="margin-top:.8rem">
+      <label for="{{ form_cerrar.observaciones.id_for_label }}" class="mt">
         {{ form_cerrar.observaciones.label }}
       </label>
       {{ form_cerrar.observaciones }}
       <button type="submit" class="boton">Cerrar turno y generar corte</button>
     </form>
 
-    <p class="ayuda" style="margin-top:.8rem">
+    <p class="ayuda mt">
       El corte es definitivo y quedará registrado a su nombre. Los vehículos
       que sigan dentro se cobrarán en el turno siguiente.
     </p>
@@ -128,9 +128,9 @@
 
 {% else %}
   {# ------------------------------------------------ Sin turno: apertura #}
-  <div class="tarjeta" style="max-width:520px">
+  <div class="tarjeta angosta">
     <h2>Abrir turno de caja</h2>
-    <p class="ayuda" style="margin-bottom:.8rem">
+    <p class="ayuda mb">
       Cuente el cambio con el que arranca la caja y captúrelo. Sin ese dato,
       al cerrar no hay contra qué comparar y cualquier diferencia sería
       ininterpretable.

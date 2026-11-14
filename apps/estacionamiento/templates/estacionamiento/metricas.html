@@ -18,7 +18,7 @@
         {{ form.hasta }}
       </div>
     </div>
-    <div class="rejilla-doble" style="margin-top:.8rem">
+    <div class="rejilla-doble mt">
       <div>
         <label for="{{ form.minimo_visitas.id_for_label }}">{{ form.minimo_visitas.label }}</label>
         {{ form.minimo_visitas }}
@@ -30,7 +30,7 @@
       </div>
     </div>
     {% if form.errors %}
-      <div class="aviso error" style="margin-top:.8rem">
+      <div class="aviso error mt">
         {% for errores in form.errors.values %}{% for e in errores %}{{ e }}{% endfor %}{% endfor %}
       </div>
     {% endif %}
@@ -51,7 +51,7 @@
 {% if metricas %}
 
 {# ------------------------------------------------------------- Totales #}
-<div class="indicadores" style="margin-bottom:1rem">
+<div class="indicadores mb">
   <div class="indicador">
     <div class="rotulo">Total cobrado</div>
     <div class="valor">{{ resumen.total_cobrado|pesos }}</div>
@@ -77,6 +77,38 @@
     <div class="valor">{{ metricas.caja.diferencia|pesos_con_signo }}</div>
   </div>
 </div>
+
+{# ------------------------------------------------------------ Pensiones #}
+{% comment %} Cuatro cifras, sin gráfica. Solo si hay pensiones: un periodo de antes
+   de que existieran no gana una sección vacía. {% endcomment %}
+{% if metricas.pensiones.activas or metricas.pensiones.pagos %}
+<div class="tarjeta">
+  <h2>Pensiones</h2>
+  <div class="indicadores">
+    <div class="indicador">
+      <div class="rotulo">Ingreso por pensiones</div>
+      <div class="valor">{{ metricas.pensiones.ingreso|pesos }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Días cobrados</div>
+      <div class="valor">{{ metricas.pensiones.dias }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Activas hoy</div>
+      <div class="valor">{{ metricas.pensiones.activas }}</div>
+    </div>
+    <div class="indicador{% if metricas.pensiones.vencidas %} alerta{% endif %}">
+      <div class="rotulo">Vencidas hoy</div>
+      <div class="valor">{{ metricas.pensiones.vencidas }}</div>
+    </div>
+  </div>
+  <p class="ayuda">
+    El ingreso va aparte del cobrado en boletos y se cuenta por fecha de pago.
+    Quien ya tiene pensión activa no aparece entre los clientes frecuentes:
+    esa lista sirve para decidir a quién ofrecerla.
+  </p>
+</div>
+{% endif %}
 
 {# ----------------------------------------------------------- Horas pico #}
 <div class="tarjeta">
@@ -148,7 +180,7 @@
 
   {% if metricas.clientes.filas %}
     {{ dibujos.clientes }}
-    <div class="tabla-envoltura" style="margin-top:1rem">
+    <div class="tabla-envoltura mt">
       <table>
         <thead>
           <tr>
@@ -197,7 +229,7 @@
   {{ dibujos.boletos }}
 
   {% if metricas.composicion.por_tipo %}
-    <div class="tabla-envoltura" style="margin-top:1rem">
+    <div class="tabla-envoltura mt">
       <table>
         <thead>
           <tr><th>Tipo de vehículo</th><th class="numero">Boletos</th>
@@ -218,7 +250,7 @@
   {% endif %}
 
   {% if metricas.composicion.por_operador %}
-    <div class="tabla-envoltura" style="margin-top:1rem">
+    <div class="tabla-envoltura mt">
       <table>
         <thead>
           <tr><th>Cobró</th><th class="numero">Boletos</th>
@@ -252,7 +284,7 @@
 <div class="tarjeta">
   <h2>Control de caja del periodo</h2>
 
-  <div class="indicadores" style="margin-bottom:1rem">
+  <div class="indicadores mb">
     <div class="indicador">
       <div class="rotulo">Turnos cortados</div>
       <div class="valor">{{ metricas.caja.turnos }}</div>
@@ -318,7 +350,7 @@
 
 {% endif %}
 
-<p class="ayuda no-imprimir" style="margin-top:1.5rem">
+<p class="ayuda no-imprimir mt">
   <a href="{% url 'web:reportes' %}">Ver el listado de boletos del periodo</a>
 </p>
 

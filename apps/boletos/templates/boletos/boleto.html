@@ -124,7 +124,13 @@
 
   {% if boleto.estado != 'CANCELADO' %}
   <section class="tarjeta importe">
-    {% if es_estimado %}
+    {% if boleto.es_pension and boleto.estado == 'ABIERTO' %}
+      <p class="rotulo">Vehículo en pensión</p>
+      <p class="pie">
+        Su estancia está cubierta por su pensión. Consulte su vigencia en la
+        caseta.
+      </p>
+    {% elif es_estimado %}
       <p class="rotulo">Importe estimado a este momento</p>
       <p class="cifra">{{ importe|pesos }}</p>
       <p class="pie">

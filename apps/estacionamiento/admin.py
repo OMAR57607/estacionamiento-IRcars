@@ -8,7 +8,7 @@ cancelación, que deja constancia del motivo y del operador.
 """
 from django.contrib import admin
 
-from .models import Cajon, Folio, Tarifa
+from .models import Cajon, Folio, PagoPension, Pension, PlanPension, Tarifa
 
 
 @admin.register(Tarifa)
@@ -58,3 +58,41 @@ class FolioAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class _SoloLectura(admin.ModelAdmin):
+    """
+    Pensiones, pagos y planes, en solo lectura.
+
+    Se operan desde la caja, donde cada cambio pasa por su caso de uso: alta,
+    cobro con turno, baja con motivo, precio con contraseña. Editarlos aquí
+    saltaría esos controles y dejaría `vigente_hasta` desalineado de los pagos.
+    """
+
+    def get_readonly_fields(self, request, obj=None):
+        return [campo.name for campo in self.model._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PlanPension)
+class PlanPensionAdmin(_SoloLectura):
+    list_display = ("nombre", "precio_diario", "activo", "vigente_desde")
+
+
+@admin.register(Pension)
+class PensionAdmin(_SoloLectura):
+    list_display = ("placa", "tipo_vehiculo", "estado", "vigente_hasta", "alta_en")
+    list_filter = ("estado", "tipo_vehiculo")
+    search_fields = ("placa",)
+
+
+@admin.register(PagoPension)
+class PagoPensionAdmin(_SoloLectura):
+    list_display = ("uuid", "pension", "dias", "monto", "estado", "turno", "creado_en")
+    list_filter = ("estado",)
+    search_fields = ("pension__placa", "uuid")

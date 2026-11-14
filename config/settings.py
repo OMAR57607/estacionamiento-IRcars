@@ -264,6 +264,22 @@ if not IRCARS_URL_BOLETOS and _dominio_publico:
 # exposición de una dirección que vive en historiales y mensajes reenviados.
 IRCARS_HORAS_VIGENCIA_BOLETO = env.int("IRCARS_HORAS_VIGENCIA_BOLETO", default=24)
 
+# --- Caja y pensiones --------------------------------------------------------
+
+# Billetes que la caja ofrece como atajo de pago. Solo se muestran los que
+# alcanzan para el importe cotizado.
+IRCARS_ATAJOS_DE_PAGO = [
+    int(b) for b in env.list("IRCARS_ATAJOS_DE_PAGO", default=["50", "100", "200", "500"])
+]
+
+# Horas finales de vigencia en que una pensión se marca «Por vencer», para que
+# el operador ofrezca renovar mientras el cliente está delante.
+IRCARS_PENSION_AVISO_HORAS = env.int("IRCARS_PENSION_AVISO_HORAS", default=2)
+
+# Aviso de privacidad que se enlaza al dar de alta una pensión, donde se piden
+# nombre y teléfono del cliente (LFPDPPP). Vacío: no se muestra el enlace.
+IRCARS_AVISO_PRIVACIDAD_URL = env("IRCARS_AVISO_PRIVACIDAD_URL", default="")
+
 # El servicio corre detrás del proxy de la plataforma, que termina el TLS. De
 # ello depende cómo se determina la IP del solicitante al aplicar límites de
 # tasa (ver `apps.boletos.limites.ip_cliente`). Póngase en False si el proceso

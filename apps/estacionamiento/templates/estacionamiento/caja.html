@@ -34,8 +34,71 @@
   </div>
 {% endif %}
 
+<div class="caja-rejilla">
+<div>
+
+{# ------------------------------------------------- Resultado del cobro #}
+{% if resultado %}
+  {% comment %} El cambio es la cifra que se dice en voz alta: ocupa la tarjeta, con
+     el mismo tamaño que tenía el importe al cotizar. «Siguiente vehículo»
+     recibe el foco para que el ciclo siga sin buscar dónde tocar.
+     {% endcomment %}
+  <div class="tarjeta resultado" role="status">
+    <h2>{% if resultado.es_pension %}Salida registrada{% else %}Cobrado{% endif %} · {{ resultado.placa }}</h2>
+    {% if resultado.es_pension %}
+      <p class="cifra">Sin cobro</p>
+      <p class="detalle-cobro">Estancia cubierta por su pensión.</p>
+    {% elif resultado.es_cortesia %}
+      <p class="cifra">Sin cobro</p>
+      <p class="detalle-cobro">Salida dentro del tiempo de cortesía.</p>
+    {% elif resultado.cambio and resultado.cambio != "0.00" %}
+      <p class="detalle-cobro">
+        Importe <strong>{{ resultado.importe|pesos }}</strong> ·
+        Recibido <strong>{{ resultado.pago_recibido|pesos }}</strong>
+      </p>
+      <p class="m-0"><strong>Cambio a entregar</strong></p>
+      <p class="cifra cambio">{{ resultado.cambio|pesos }}</p>
+    {% else %}
+      <p class="cifra">{{ resultado.importe|pesos }}</p>
+      <p class="detalle-cobro">Cobro exacto, sin cambio.</p>
+    {% endif %}
+    <a class="boton alto" href="{% url 'web:caja' %}" autofocus>Siguiente vehículo</a>
+  </div>
+{% endif %}
+
+{# -------------------------------------------- Salida de pensionado cubierta #}
+{% comment %} Sin cobro, sin turno y sin campo de pago: la estancia quedó dentro de
+   la vigencia. Si está por vencer, la misma tarjeta ofrece renovar mientras
+   el cliente está delante. {% endcomment %}
+{% if salida_pension and salida_pension.cubierta %}
+<div class="tarjeta de-pension">
+  <h2>Salida de {{ folio_cotizado.placa }} <span class="pildora {{ vigencia_pension.clase }}">{{ vigencia_pension.etiqueta }}</span></h2>
+  <p class="detalle-cobro">
+    {{ folio_cotizado.pension.nombre_cliente }}{% if folio_cotizado.pension.descripcion_vehiculo %} · {{ folio_cotizado.pension.descripcion_vehiculo }}{% endif %}<br>
+    Entrada: <strong>{{ folio_cotizado.entrada_en|date:"d/m H:i" }}</strong> ·
+    Permanencia: <strong>{{ salida_pension.minutos_totales|duracion }}</strong><br>
+    Cubierta hasta: <strong>{{ salida_pension.vigente_hasta|date:"d/m H:i" }}</strong>
+  </p>
+  <p class="cifra">Sin cobro</p>
+  <p class="detalle-cobro mt-neg">Estancia cubierta por pensión.</p>
+  {% if vigencia_pension.value == 'POR_VENCER' %}
+    <div class="aviso warning">
+      La pensión vence a las {{ salida_pension.vigente_hasta|date:"H:i" }}.
+      <a href="{% url 'web:pension_cobrar' folio_cotizado.pension_id %}">Cobrar días</a>
+    </div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="cobrar">
+    {{ form_cobro.folio }}
+    <button type="submit" class="boton alto">Registrar salida</button>
+  </form>
+  <a class="boton fantasma" href="{% url 'web:caja' %}">Volver</a>
+</div>
+{% endif %}
+
 {# ------------------------------------------------- Cotización en curso #}
-{% if cotizacion and folio_cotizado %}
+{% if cotizacion and folio_cotizado and not salida_pension.cubierta %}
 <div class="tarjeta destacada">
   <h2>Cobro de {{ folio_cotizado.placa }}</h2>
 
@@ -49,19 +112,45 @@
     {% if cotizacion.cobro_minimo_aplicado %}<br><em>Se aplicó el cobro mínimo.</em>{% endif %}
   </p>
 
-  <div class="importe-destacado">{{ cotizacion.importe|pesos }}</div>
+  {% if salida_pension %}
+    {% comment %} Pensionado que se pasó de su vigencia: se cobra solo el excedente,
+       por hora y sin cortesía. Renovar ahora lo cubriría, y es lo que el
+       dueño quiere que se ofrezca primero. {% endcomment %}
+    <div class="aviso warning">
+      <strong>Pensión vencida a las {{ salida_pension.vigente_hasta|date:"H:i" }}
+      del {{ salida_pension.vigente_hasta|date:"d/m" }}.</strong>
+      Se cobran {{ salida_pension.minutos_excedentes|duracion }} de excedente con
+      la tarifa por hora.
+      <a href="{% url 'web:pension_cobrar' folio_cotizado.pension_id %}">Renovar pensión</a>
+      lo cubre sin cobrar excedente.
+    </div>
+  {% endif %}
+
+  <div class="cifra">{{ cotizacion.importe|pesos }}</div>
 
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="accion" value="cobrar">
     {{ form_cobro.folio }}
+    {% if cotizacion.importe %}
+      {% comment %} Atajos de billete. Ocultos en el marcado y mostrados por caja.js:
+         sin JavaScript no harían nada y solo estorbarían. {% endcomment %}
+      <div class="atajos" data-atajos hidden aria-label="Atajos de pago">
+        <button type="button" data-monto="{{ cotizacion.importe }}">Exacto</button>
+        {% for billete in atajos %}
+          <button type="button" data-monto="{{ billete }}">${{ billete }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
     <label for="{{ form_cobro.pago_recibido.id_for_label }}">Pago recibido</label>
     {{ form_cobro.pago_recibido }}
+    <p class="estimado" id="cambio-estimado" aria-live="polite"></p>
     <p class="ayuda">{{ form_cobro.pago_recibido.help_text }}</p>
-    <button type="submit" class="boton">Cobrar y cerrar folio</button>
+    <button type="submit" class="boton alto">Cobrar y cerrar folio</button>
   </form>
+  <a class="boton fantasma" href="{% url 'web:caja' %}">Volver sin cobrar</a>
 
-  <p class="ayuda" style="margin-top:.8rem">
+  <p class="ayuda mt">
     <a href="{% url 'web:cancelar' folio_cotizado.uuid %}">
       Cancelar este folio por error de captura
     </a>
@@ -69,47 +158,75 @@
 </div>
 {% endif %}
 
-<div class="rejilla-doble">
-
-  {# ------------------------------------------------------------ Entrada #}
-  <div class="tarjeta">
-    <h2>Entrada de vehículo</h2>
-    <form method="post">
+{# ----------------------------------------------- Placa que no está dentro #}
+{% if placa_no_encontrada %}
+<div class="aviso warning" role="status">
+  <strong>{{ placa_no_encontrada }} no está dentro.</strong>
+  {% if sugerencias %}¿Es alguna de estas?{% else %}Verifique la captura.{% endif %}
+  <div class="fila-flex mt">
+    {% for s in sugerencias %}
+      <form method="post" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="cotizar">
+        <input type="hidden" name="placa" value="{{ s.placa }}">
+        <button type="submit" class="boton angosto">{{ s.placa }}</button>
+      </form>
+    {% endfor %}
+    <form method="post" class="m-0">
       {% csrf_token %}
       <input type="hidden" name="accion" value="entrada">
-      <label for="{{ form_entrada.placa.id_for_label }}">Placa</label>
-      {{ form_entrada.placa }}
-      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" style="margin-top:.7rem">Tipo de vehículo</label>
-      {{ form_entrada.tipo_cajon }}
-      {% comment %} Esta elección decide el precio desde que la motocicleta tiene tarifa
-         propia. Antes solo escogía cajón y pasarla por alto no costaba nada;
-         ahora, equivocarla cobra de más o de menos. {% endcomment %}
-      <p class="ayuda">{{ form_entrada.tipo_cajon.help_text }}</p>
-      <button type="submit" class="boton">Registrar entrada</button>
+      <input type="hidden" name="placa" value="{{ placa_no_encontrada }}">
+      <button type="submit" class="boton fantasma angosto">Registrar entrada de {{ placa_no_encontrada }}</button>
     </form>
   </div>
+</div>
+{% endif %}
 
-  {# -------------------------------------------------------------- Salida #}
-  <div class="tarjeta">
-    <h2>Salida y cobro</h2>
-    <form method="post">
-      {% csrf_token %}
-      <input type="hidden" name="accion" value="cotizar">
-      <label for="{{ form_buscar.placa.id_for_label }}">Placa</label>
-      {{ form_buscar.placa }}
-      <button type="submit" class="boton">Cotizar</button>
-    </form>
-    <p class="ayuda" style="margin-top:.7rem">
-      La cotización no cierra el folio: informe el monto, reciba el efectivo y
-      cobre después.
-    </p>
-  </div>
+{# ------------------------------------------------------------ Captura #}
+{% comment %} Una placa, un campo. Antes había dos —entrada y salida— y en el
+   teléfono quedaban apilados: el operador tecleaba en el equivocado y recibía
+   un error en lugar de la operación. Ahora el servidor decide según el estado
+   de esa placa. «Entrada» va primero porque `Enter` dispara el primer botón
+   del formulario, como antes. {% endcomment %}
+{% if not folio_cotizado %}
+<div class="tarjeta">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <label for="{{ form_captura.placa.id_for_label }}">Placa</label>
+    {{ form_captura.placa }}
+    {% for error in form_captura.placa.errors %}
+      <p class="error-campo" role="alert">{{ error }}</p>
+    {% endfor %}
+
+    {% comment %} Esta elección decide el precio desde que la motocicleta tiene tarifa
+       propia. Antes solo escogía cajón y pasarla por alto no costaba nada;
+       ahora, equivocarla cobra de más o de menos. {% endcomment %}
+    <fieldset class="segmentado mt">
+      <legend>Tipo de vehículo</legend>
+      {% for opcion in form_captura.tipo_cajon %}
+        {{ opcion.tag }}<label for="{{ opcion.id_for_label }}">{{ opcion.choice_label }}</label>
+      {% endfor %}
+    </fieldset>
+    <p class="ayuda">{{ form_captura.tipo_cajon.help_text }}</p>
+
+    <div class="acciones-dobles">
+      <button type="submit" name="accion" value="entrada" class="boton alto">Entrada</button>
+      <button type="submit" name="accion" value="cotizar" class="boton alto fantasma">Cobrar salida</button>
+    </div>
+  </form>
+  <p class="ayuda mt">
+    «Cobrar salida» solo informa el importe: el folio se cierra después de
+    recibir el efectivo.
+  </p>
+</div>
+{% endif %}
 
 </div>
+<div>
 
 {# --------------------------------------------------------- Ocupación #}
 {% if ocupacion.capacidad_total %}
-<div class="indicadores" style="margin-bottom:1rem">
+<div class="indicadores compactos">
   <div class="indicador">
     <div class="rotulo">Dentro</div>
     <div class="valor">{{ ocupacion.ocupados_total }}</div>
@@ -133,7 +250,13 @@
 
 {# ------------------------------------------------- Vehículos dentro #}
 <div class="tarjeta">
-  <h2>Vehículos dentro ({{ patio|length }})</h2>
+  <div class="filtro">
+    <h2 class="m-0">Vehículos dentro ({{ patio|length }})</h2>
+    {% comment %} El contador lo actualiza caja.js al teclear la placa arriba: «con
+       teclear tres o cuatro caracteres basta», como promete la hoja de
+       caseta. {% endcomment %}
+    <span class="contador" id="contador-patio" aria-live="polite"></span>
+  </div>
 
   {% if patio %}
     <div class="lista-encabezado" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
@@ -144,10 +267,21 @@
       <span></span>
     </div>
 
-    <ul class="lista" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
+    <ul class="lista" id="patio" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
     {% for fila in patio %}
-      <li class="lista-fila">
-        <span class="celda-principal">{{ fila.placa }}</span>
+      <li class="lista-fila" data-placa="{{ fila.placa }}">
+        <span class="celda-principal">
+          {{ fila.placa }}
+          {% if fila.es_pension %}
+            {% if fila.vigencia.value == 'VENCIDA' %}
+              <span class="pildora vencida">Pensión vencida</span>
+            {% elif fila.vigencia.value == 'POR_VENCER' %}
+              <span class="pildora por-vencer">Pensión por vencer</span>
+            {% else %}
+              <span class="pildora pension">Pensión</span>
+            {% endif %}
+          {% endif %}
+        </span>
 
         {% comment %} Los tres datos van agrupados. En pantalla ancha el grupo se
            disuelve con `display: contents` y cada dato ocupa su columna; al
@@ -163,23 +297,31 @@
         <span class="celda-acciones">
           {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero el
              POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
-          <form method="post" style="margin:0">
+          <form method="post" class="m-0">
             {% csrf_token %}
             <input type="hidden" name="accion" value="cotizar">
             <input type="hidden" name="placa" value="{{ fila.placa }}">
-            <button type="submit" class="boton angosto">Cobrar</button>
+            <button type="submit" class="boton angosto">{% if fila.es_pension %}Salida{% else %}Cobrar{% endif %}</button>
           </form>
           {% comment %} Reabrir el boleto: el caso frecuente es el cliente que perdió el
-             enlace o quiere que se lo reenvíen. {% endcomment %}
-          <a class="boton secundario angosto"
-             href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+             enlace o quiere que se lo reenvíen. El pensionado lleva en su
+             lugar el enlace a su pensión. {% endcomment %}
+          {% if fila.es_pension %}
+            <a class="boton secundario angosto" href="{% url 'web:pension' fila.pension_id %}">Pensión</a>
+          {% else %}
+            <a class="boton secundario angosto"
+               href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+          {% endif %}
         </span>
       </li>
     {% endfor %}
     </ul>
   {% else %}
-    <p class="vacio">No hay vehículos dentro en este momento.</p>
+    <p class="vacio">No hay vehículos dentro. Las entradas que registre aparecerán aquí.</p>
   {% endif %}
+</div>
+
+</div>
 </div>
 
 {% endblock %}

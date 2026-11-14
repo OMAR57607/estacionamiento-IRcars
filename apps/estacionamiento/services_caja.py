@@ -32,7 +32,16 @@ from .domain.exceptions import (
     TurnoYaAbierto,
     TurnoYaCerrado,
 )
-from .models import AjusteCorte, EstadoFolio, EstadoTurno, Folio, MotivoAjuste, Turno
+from .models import (
+    AjusteCorte,
+    EstadoFolio,
+    EstadoPagoPension,
+    EstadoTurno,
+    Folio,
+    MotivoAjuste,
+    PagoPension,
+    Turno,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +102,20 @@ def _importes_del_turno(turno: Turno) -> list[Decimal]:
     )
 
 
+def _importes_pension_del_turno(turno: Turno) -> list[Decimal]:
+    """
+    Montos de los pagos de pensión vigentes del turno.
+
+    Un pago cancelado no suma: se canceló mientras el turno seguía abierto,
+    que es la única ventana en que se permite, y su efectivo se devolvió.
+    """
+    return list(
+        PagoPension.objects.filter(turno=turno, estado=EstadoPagoPension.VIGENTE)
+        .order_by("creado_en")
+        .values_list("monto", flat=True)
+    )
+
+
 def resumen_operativo(turno: Turno) -> dict:
     """
     Avance del turno **sin revelar importes**.
@@ -105,7 +128,12 @@ def resumen_operativo(turno: Turno) -> dict:
     agregados = Folio.objects.filter(turno=turno).aggregate(
         cobrados=Count("id", filter=Q(estado=EstadoFolio.CERRADO)),
         cortesias=Count(
-            "id", filter=Q(estado=EstadoFolio.CERRADO, importe=Decimal("0.00"))
+            "id",
+            filter=Q(
+                estado=EstadoFolio.CERRADO,
+                importe=Decimal("0.00"),
+                pension__isnull=True,
+            ),
         ),
     )
     return {
@@ -115,6 +143,11 @@ def resumen_operativo(turno: Turno) -> dict:
         "estado": turno.estado,
         "folios_cobrados": agregados["cobrados"] or 0,
         "folios_cortesia": agregados["cortesias"] or 0,
+        # Cuántos pagos de pensión, nunca cuánto: revelar el importe anularía
+        # el cierre ciego igual que revelar el de los boletos.
+        "pagos_pension": PagoPension.objects.filter(
+            turno=turno, estado=EstadoPagoPension.VIGENTE
+        ).count(),
         "folios_abiertos_en_patio": Folio.objects.filter(
             estado=EstadoFolio.ABIERTO
         ).count(),
@@ -141,12 +174,15 @@ def calcular_resumen(turno: Turno, efectivo_declarado: Decimal | None = None) ->
             folios_cortesia=turno.folios_cortesia or 0,
             efectivo_declarado=turno.efectivo_declarado,
             diferencia=turno.diferencia,
+            total_pensiones=turno.total_pensiones or Decimal("0.00"),
+            pagos_pension=turno.pagos_pension or 0,
         )
 
     return calcular_corte(
         fondo_inicial=turno.fondo_inicial,
         importes_cobrados=_importes_del_turno(turno),
         efectivo_declarado=efectivo_declarado,
+        importes_pension=_importes_pension_del_turno(turno),
     )
 
 
@@ -202,6 +238,7 @@ def cerrar_turno(
         fondo_inicial=turno.fondo_inicial,
         importes_cobrados=_importes_del_turno(turno),
         efectivo_declarado=efectivo_declarado,
+        importes_pension=_importes_pension_del_turno(turno),
     )
 
     turno.estado = EstadoTurno.CERRADO
@@ -212,6 +249,8 @@ def cerrar_turno(
     turno.diferencia = resumen.diferencia
     turno.folios_cobrados = resumen.folios_cobrados
     turno.folios_cortesia = resumen.folios_cortesia
+    turno.total_pensiones = resumen.total_pensiones
+    turno.pagos_pension = resumen.pagos_pension
     turno.resumen = resumen.a_dict()
     if observaciones:
         turno.observaciones = f"{turno.observaciones}\n{observaciones}".strip()
@@ -427,9 +466,17 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         total=Sum("importe"),
         minutos=Sum("minutos"),
         folios=Count("id"),
-        cortesias=Count("id", filter=Q(importe=Decimal("0.00"))),
+        # Las salidas de pensionado cubiertas también valen $0 y no son
+        # cortesías: contarlas así ocultaría las cortesías reales.
+        cortesias=Count(
+            "id", filter=Q(importe=Decimal("0.00"), pension__isnull=True)
+        ),
+        pensionados=Count("id", filter=Q(pension__isnull=False)),
     )
     folios = agregados["folios"] or 0
+    pagos = PagoPension.objects.filter(
+        estado=EstadoPagoPension.VIGENTE, creado_en__gte=desde, creado_en__lte=hasta
+    ).aggregate(total=Sum("monto"), pagos=Count("id"), dias=Sum("dias"))
     total = agregados["total"] or Decimal("0.00")
     minutos = agregados["minutos"] or 0
 
@@ -446,6 +493,14 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         "turnos_cerrados": Turno.objects.filter(
             estado=EstadoTurno.CERRADO, cerrado_en__gte=desde, cerrado_en__lte=hasta
         ).count(),
+        # Pensiones del periodo: el ingreso va aparte del de boletos para que
+        # «total cobrado» siga significando lo mismo que en todos los reportes
+        # anteriores.
+        "salidas_pension": agregados["pensionados"] or 0,
+        "pensiones_cobradas": pagos["total"] or Decimal("0.00"),
+        "pagos_pension": pagos["pagos"] or 0,
+        "dias_pension": pagos["dias"] or 0,
+        "ingreso_total": total + (pagos["total"] or Decimal("0.00")),
     }
 
 

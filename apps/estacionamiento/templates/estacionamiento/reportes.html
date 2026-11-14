@@ -19,7 +19,7 @@
       </div>
     </div>
     {% if form.errors %}
-      <div class="aviso error" style="margin-top:.8rem">
+      <div class="aviso error mt">
         {% for errores in form.errors.values %}{% for e in errores %}{{ e }}{% endfor %}{% endfor %}
       </div>
     {% endif %}
@@ -37,7 +37,7 @@
   <a href="{% url 'web:metricas' %}?desde={{ form.desde.value|date:'Y-m-d' }}&amp;hasta={{ form.hasta.value|date:'Y-m-d' }}">Ver las métricas de este periodo…</a>
 </div>
 
-<div class="indicadores" style="margin-bottom:1rem">
+<div class="indicadores mb">
   <div class="indicador">
     <div class="rotulo">Total cobrado</div>
     <div class="valor">{{ datos.total_cobrado|pesos }}</div>
@@ -62,6 +62,23 @@
     <div class="rotulo">Turnos cortados</div>
     <div class="valor">{{ datos.turnos_cerrados }}</div>
   </div>
+  {% comment %} Las pensiones van aparte del total de boletos: así «Total cobrado»
+     sigue significando lo mismo que en los reportes anteriores. Solo
+     aparecen si hubo alguna en el periodo. {% endcomment %}
+  {% if datos.pagos_pension or datos.salidas_pension %}
+  <div class="indicador">
+    <div class="rotulo">Pensiones cobradas</div>
+    <div class="valor">{{ datos.pensiones_cobradas|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Días de pensión</div>
+    <div class="valor">{{ datos.dias_pension }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Ingreso total</div>
+    <div class="valor">{{ datos.ingreso_total|pesos }}</div>
+  </div>
+  {% endif %}
 </div>
 
 <div class="tarjeta">
@@ -75,7 +92,7 @@
   {% endif %}
 
   {% if folios %}
-    <p class="ayuda" style="margin-bottom:.8rem">
+    <p class="ayuda mb">
       <a class="boton secundario angosto"
          href="?desde={{ form.desde.value|date:'Y-m-d' }}&hasta={{ form.hasta.value|date:'Y-m-d' }}&formato=csv">
         Exportar a CSV
@@ -117,7 +134,7 @@
   {% comment %} Puesta en marcha, al pie y en texto: se usa una vez en la vida de la
      instalación. La etiqueta dice para qué sirve, porque un enlace de borrado
      sin contexto se pulsa por curiosidad. {% endcomment %}
-  <p class="ayuda" style="margin-top:1.5rem">
+  <p class="ayuda mt">
     <strong>Puesta en marcha.</strong>
     ¿Quedaron boletos y turnos de las pruebas?
     <a href="{% url 'web:mantenimiento' %}">Borrar movimientos de prueba…</a>

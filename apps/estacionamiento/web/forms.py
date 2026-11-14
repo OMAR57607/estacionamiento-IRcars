@@ -19,16 +19,32 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from ..domain.corte import MINIMO_JUSTIFICACION, justificacion_suficiente
-from ..models import TipoCajon
+from ..models import TipoCajon, TipoVehiculo
 from ..services_metricas import MINIMO_VISITAS, TOP_CLIENTES
 
 
-class EntradaForm(forms.Form):
-    """Ingreso de un vehículo."""
+class CapturaForm(forms.Form):
+    """
+    La captura única de la caja: una placa y el tipo de vehículo.
+
+    Sustituye a los dos formularios que había, uno para la entrada y otro para
+    la salida. En el teléfono quedaban apilados con el mismo campo de placa, y
+    el operador tecleaba en el equivocado: recibía un error en lugar de la
+    operación. Ahora hay un solo campo y dos botones, y el servidor decide qué
+    hacer según el estado de esa placa —si está dentro, si es pensionado—.
+
+    Los nombres de los campos (`placa`, `tipo_cajon`) se conservan: son el
+    contrato con los envíos de la propia caja y con cualquier integración que
+    ya los use.
+    """
 
     placa = forms.CharField(
         max_length=15,
         label="Placa",
+        error_messages={
+            "required": "Teclee la placa que ve en el vehículo.",
+            "max_length": "Una placa no tiene más de 15 caracteres.",
+        },
         widget=forms.TextInput(
             attrs={
                 "autofocus": True,
@@ -40,43 +56,47 @@ class EntradaForm(forms.Form):
                 "spellcheck": "false",
                 "class": "campo campo-grande",
                 "placeholder": "ABC-123",
+                # Mejora progresiva: mayúsculas al teclear y filtro del patio.
+                "data-mayusculas": "",
+                "data-filtra": "#patio",
             }
         ),
     )
     tipo_cajon = forms.ChoiceField(
-        choices=TipoCajon.choices,
+        # Rótulos cortos: cada opción es un botón de un tercio del ancho del
+        # teléfono. El largo («personas con discapacidad») va en la ayuda.
+        choices=[
+            (TipoCajon.AUTOMOVIL, "Automóvil"),
+            (TipoCajon.MOTOCICLETA, "Moto"),
+            (TipoCajon.ACCESIBLE, "Accesible"),
+        ],
         initial=TipoCajon.AUTOMOVIL,
         required=False,
         label="Tipo de vehículo",
         help_text=(
             "Decide el precio: la motocicleta tiene su propia tarifa. "
-            "«Accesible» es un cajón reservado y cobra como automóvil."
+            "«Accesible» es el cajón reservado a personas con discapacidad y "
+            "cobra como automóvil."
         ),
-        widget=forms.Select(attrs={"class": "campo"}),
+        # Radios y no un desplegable: la elección es de tres opciones, se hace
+        # en cada entrada y decide el precio. Un toque, con las opciones a la
+        # vista, en lugar de dos toques y un menú del sistema.
+        widget=forms.RadioSelect,
     )
+
+    def clean_placa(self):
+        # Una placa hecha solo de espacios o guiones pasaría la validación de
+        # «requerido» y llegaría vacía al servicio, que la rechazaría con un
+        # mensaje menos claro que este.
+        placa = self.cleaned_data["placa"]
+        if not placa.replace(" ", "").replace("-", "").strip():
+            raise forms.ValidationError("Teclee la placa que ve en el vehículo.")
+        return placa
 
     def clean_tipo_cajon(self):
         # El campo es opcional en el formulario para simplificar la captura
         # cuando no se administran cajones; el valor por omisión es automóvil.
         return self.cleaned_data.get("tipo_cajon") or TipoCajon.AUTOMOVIL
-
-
-class BuscarPlacaForm(forms.Form):
-    """Búsqueda de la placa para cotizar la salida."""
-
-    placa = forms.CharField(
-        max_length=15,
-        label="Placa",
-        widget=forms.TextInput(
-            attrs={
-                "autocomplete": "off",
-                "autocapitalize": "characters",
-                "spellcheck": "false",
-                "class": "campo campo-grande",
-                "placeholder": "ABC-123",
-            }
-        ),
-    )
 
 
 class CobroForm(forms.Form):
@@ -104,6 +124,8 @@ class CobroForm(forms.Form):
                 "placeholder": "0.00",
                 # inputmode decimal abre el teclado numérico en móvil.
                 "inputmode": "decimal",
+                # El cambio estimado se escribe aquí mientras se teclea.
+                "data-cambio": "#cambio-estimado",
             }
         ),
         help_text="Déjelo vacío si no se recibe efectivo (cortesía o terminal).",
@@ -623,3 +645,161 @@ class MetricasForm(RangoFechasForm):
 
     def clean_top_clientes(self) -> int:
         return self.cleaned_data.get("top_clientes") or TOP_CLIENTES
+
+
+# --- Pensiones ---------------------------------------------------------------
+
+# Días que se ofrecen como botón al cobrar. Cubren al que paga el día, el fin
+# de semana, la semana y el mes; cualquier otra cantidad hasta el máximo del
+# dominio se puede teclear.
+DIAS_FRECUENTES = (1, 2, 3, 7, 15, 30)
+
+
+class PensionForm(forms.Form):
+    """
+    Alta de una pensión. Una columna y pocas preguntas.
+
+    El precio no se pregunta: sale del plan vigente. Que la caseta pudiera
+    teclear el precio de cada pensión sería la vía más simple de cobrar de
+    menos y quedarse con la diferencia.
+    """
+
+    placa = forms.CharField(
+        max_length=15,
+        label="Placa",
+        error_messages={"required": "Teclee la placa del vehículo."},
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": True,
+                "autocomplete": "off",
+                "autocapitalize": "characters",
+                "spellcheck": "false",
+                "class": "campo campo-grande",
+                "placeholder": "ABC-123",
+                "data-mayusculas": "",
+            }
+        ),
+    )
+    tipo_vehiculo = forms.ChoiceField(
+        choices=TipoVehiculo.choices,
+        initial=TipoVehiculo.AUTOMOVIL,
+        label="Tipo de vehículo",
+        help_text="Decide el tipo de cajón y la tarifa si se pasa de su vigencia.",
+        widget=forms.RadioSelect,
+    )
+    nombre_cliente = forms.CharField(
+        max_length=120,
+        label="Nombre del cliente",
+        error_messages={"required": "La pensión requiere el nombre del cliente."},
+        widget=forms.TextInput(attrs={"class": "campo", "autocomplete": "off"}),
+    )
+    telefono = forms.CharField(
+        max_length=20,
+        required=False,
+        label="Teléfono",
+        widget=forms.TextInput(
+            attrs={"class": "campo", "inputmode": "tel", "autocomplete": "off"}
+        ),
+    )
+    descripcion_vehiculo = forms.CharField(
+        max_length=80,
+        required=False,
+        label="Vehículo (opcional)",
+        help_text="Marca, modelo y color: ayuda a reconocerlo en el patio.",
+        widget=forms.TextInput(attrs={"class": "campo", "placeholder": "Jetta gris"}),
+    )
+    notas = forms.CharField(
+        required=False,
+        label="Notas (opcional)",
+        widget=forms.Textarea(attrs={"class": "campo", "rows": 2}),
+    )
+
+    def clean_telefono(self):
+        telefono = self.cleaned_data.get("telefono", "")
+        digitos = "".join(c for c in telefono if c.isdigit())
+        if telefono and not 8 <= len(digitos) <= 15:
+            raise forms.ValidationError("Revise el teléfono: debe tener de 8 a 15 dígitos.")
+        return digitos
+
+
+class DatosPensionForm(forms.Form):
+    """Corrección de los datos de contacto. La placa y el tipo no se editan."""
+
+    nombre_cliente = PensionForm.base_fields["nombre_cliente"]
+    telefono = PensionForm.base_fields["telefono"]
+    descripcion_vehiculo = PensionForm.base_fields["descripcion_vehiculo"]
+    notas = PensionForm.base_fields["notas"]
+    clean_telefono = PensionForm.clean_telefono
+
+
+class CobroPensionForm(forms.Form):
+    """
+    Cobro de días de pensión.
+
+    El periodo y el monto no viajan en el formulario: los recalcula el
+    servicio al cobrar. Lo único que decide quien cobra es cuántos días.
+    """
+
+    dias = forms.IntegerField(
+        min_value=1,
+        max_value=31,
+        initial=1,
+        label="Días a pagar",
+        error_messages={
+            "min_value": "Se paga al menos un día.",
+            "max_value": "No se pueden pagar más de 31 días de una vez.",
+        },
+        widget=forms.HiddenInput,
+    )
+    pago_recibido = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+        label="Pago recibido",
+        widget=forms.NumberInput(
+            attrs={
+                "step": "0.01",
+                "class": "campo campo-grande",
+                "placeholder": "0.00",
+                "inputmode": "decimal",
+                "data-cambio": "#cambio-estimado",
+            }
+        ),
+        help_text="Déjelo vacío si recibe el monto exacto.",
+    )
+
+
+class MotivoConClaveForm(forms.Form):
+    """
+    Baja de una pensión o cancelación de un pago: motivo escrito y contraseña.
+
+    Las dos acciones mueven algo con efecto económico y no se deshacen. La
+    contraseña convierte un toque de más en una decisión y deja la acción
+    atribuida a quien se autenticó.
+    """
+
+    motivo = forms.CharField(
+        max_length=500,
+        label="Motivo",
+        error_messages={"required": "Escriba el motivo."},
+        widget=forms.TextInput(attrs={"class": "campo"}),
+    )
+    clave = forms.CharField(
+        label="Su contraseña",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"class": "campo", "autocomplete": "current-password"}),
+    )
+
+
+class PrecioPensionForm(forms.Form):
+    precio_diario = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        label="Precio por día",
+        help_text="Lo que cuesta un día (24 horas) de pensión.",
+        widget=forms.NumberInput(
+            attrs={"step": "0.01", "class": "campo campo-grande", "inputmode": "decimal"}
+        ),
+    )

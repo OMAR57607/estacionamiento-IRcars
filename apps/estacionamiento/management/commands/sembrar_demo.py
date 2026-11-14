@@ -16,7 +16,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from apps.estacionamiento.models import Cajon, Tarifa, TipoCajon
+from apps.estacionamiento.models import Cajon, PlanPension, Tarifa, TipoCajon
 
 
 class Command(BaseCommand):
@@ -50,6 +50,17 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(f"Tarifa {'creada' if creada else 'existente'}: {tarifa}")
         )
+
+        # --- Pensión diaria -------------------------------------------------
+        # El precio lo siembra la migración 0009. Aquí solo se repone si alguien
+        # lo desactivó en una base de pruebas, para que la demostración de
+        # pensiones no falle al primer cobro.
+        plan_pension = PlanPension.objects.filter(activo=True).first()
+        if plan_pension is None:
+            plan_pension = PlanPension.objects.create(
+                nombre="Pensión diaria", precio_diario=Decimal("180.00"), activo=True
+            )
+        self.stdout.write(self.style.SUCCESS(f"Pensión: {plan_pension}"))
 
         # --- Inventario de cajones -----------------------------------------
         plan = [

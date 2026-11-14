@@ -46,6 +46,61 @@ Detalle de los controles en [BOLETO-QR.md](BOLETO-QR.md).
 
 ---
 
+## Pensión diaria
+
+El cliente que viene a diario paga **$180.00 por día** (24 horas) en lugar de
+la tarifa por hora. Es la primera de las extensiones que estaban pendientes y
+se construyó sobre los mismos servicios, sin un segundo motor de cobro.
+
+| Regla | Cómo se cumple |
+|---|---|
+| **Un día son 24 horas** | El periodo se mide en instantes, no en fechas: quien paga a las 22:00 tiene hasta las 22:00 del día siguiente |
+| **Si se pasa un minuto, entra la tarifa** | Al salir fuera de la vigencia se cobra **solo el excedente**, con la tarifa por hora exhibida y sin minutos de cortesía. Los segundos se truncan, como en todo cobro |
+| **A menos que renueve** | Renovar con el vehículo dentro empieza donde acabó la vigencia (o a la entrada, si entró ya vencido): el excedente queda cubierto y la estancia pasa a ser de pensión |
+| **Un vehículo por pensión** | Restricción única parcial en PostgreSQL: una pensión activa por placa |
+| **Solo efectivo, dentro del corte** | Cada pago exige turno abierto, respeta el freno del turno de otra jornada y suma al efectivo esperado en su propio renglón |
+| **Permisos** | Cualquier operador da de alta y cobra; solo el perfil administrativo cambia el precio, da de baja y cancela un pago, con su contraseña |
+
+**La pensión la decide la placa, no el operador.** Al registrar la entrada, la
+caja consulta si la placa tiene pensión vigente; nadie puede marcar a mano una
+estancia como «de pensión» para no cobrarla. El pensionado vigente no recibe
+boleto y sale sin cobro.
+
+**La salida cubierta no entra al corte.** Vale $0, igual que una cortesía, y por
+eso se cierra **sin turno**: adscribirla lo contaría como cortesía y ocultaría
+las cortesías reales entre las salidas de quien ya pagó su día. Corte,
+reportes y métricas cuentan las cortesías excluyendo pensiones, y la lista de
+clientes frecuentes excluye a quien ya tiene pensión, porque existe para decidir
+a quién ofrecerla.
+
+**Nada se edita ni se borra.** El precio se cambia creando un plan nuevo y cada
+pago copia el precio con que se cobró; una pensión se da de baja con motivo; un
+pago solo se cancela si es el último y su turno sigue abierto —después, la
+corrección va por un ajuste del corte—. Nombre y teléfono del cliente no llegan
+al boleto público, a la API ni a la bitácora.
+
+---
+
+## Caja rediseñada
+
+La interfaz se rediseñó con la identidad del logotipo —grafito y plata, con el
+azul reservado a la acción— y estos cambios de uso, detallados en
+[docs/REDISENO.md](docs/REDISENO.md):
+
+- **Una placa, un campo.** Un solo campo y dos botones (Entrada / Cobrar
+  salida). Una placa que ya está dentro ofrece su cobro; una que no está
+  sugiere las parecidas del patio.
+- **Un toque para lo frecuente.** Tipo de vehículo como botones y atajos de
+  billete al cobrar.
+- **El cambio, en grande.** Tras cobrar, el cambio a entregar ocupa su propia
+  tarjeta, de lectura única.
+- **Cuatro destinos en el pulgar:** Caja, Pensiones, Turno y Más. Métricas, que
+  no cabía, vive en Más.
+- **Mejora progresiva.** El filtro del patio, los atajos y el cambio estimado
+  los añade `caja.js`, sin dependencias; todo funciona igual sin él.
+
+---
+
 ## Corte de caja: corrección de un cierre equivocado
 
 Un turno se cerró declarando $140 menos de los que había en caja. El corte
@@ -140,11 +195,13 @@ aislada y reutilizable por cualquier interfaz futura.
   services.py           Casos de uso: entrada, cotización, cobro, cancelación
   services_caja.py      Casos de uso: turno, cierre ciego, corte y su corrección
   services_metricas.py  Consultas agregadas del periodo
+  services_pensiones.py Casos de uso: alta, cobro, baja y cancelación de pensiones
         │
         ▼
   domain/tarifas.py  Motor de tarificación    ─┐ lógica pura, sin Django,
   domain/corte.py    Corte de caja y su ajuste ─┤ sin ORM, sin reloj propio
   domain/metricas.py Hora pico, tramos, escalas ┤
+  domain/pensiones.py Periodos, vigencia, excedente┤
   domain/exceptions.py                          ─┘
         │
         ▼
@@ -154,8 +211,8 @@ aislada y reutilizable por cualquier interfaz futura.
 | Capa | Archivos | Responsabilidad |
 |---|---|---|
 | Interfaz | `web/`, `views.py`, `serializers.py`, `graficos.py`, `reportes_pdf.py` | Deserializar, delegar, presentar |
-| Aplicación | `services.py`, `services_caja.py`, `services_metricas.py` | Orquestar casos de uso, transacciones, concurrencia |
-| Dominio | `domain/tarifas.py`, `domain/corte.py`, `domain/metricas.py` | Calcular importes, diferencias y conclusiones. Sin framework, 100 % testeable |
+| Aplicación | `services.py`, `services_caja.py`, `services_metricas.py`, `services_pensiones.py` | Orquestar casos de uso, transacciones, concurrencia |
+| Dominio | `domain/tarifas.py`, `domain/corte.py`, `domain/metricas.py`, `domain/pensiones.py` | Calcular importes, diferencias y conclusiones. Sin framework, 100 % testeable |
 | Infraestructura | `models.py`, `migrations/` | Persistir y hacer cumplir la integridad |
 
 La pantalla de métricas y el PDF salen de una sola llamada a
@@ -211,6 +268,7 @@ python manage.py runserver
 |---|---|
 | Caja (la pantalla de uso diario) | http://localhost:8000/ |
 | Turno y corte | http://localhost:8000/turno/ |
+| Pensiones | http://localhost:8000/pensiones/ |
 | Métricas de operación | http://localhost:8000/reportes/metricas/ |
 | Reporte de operación en PDF | http://localhost:8000/reportes/metricas/pdf/ |
 | API (interfaz navegable de DRF) | http://localhost:8000/api/v1/ |
@@ -230,7 +288,7 @@ pytest apps/estacionamiento/tests/test_ajuste_corte.py    # solo la corrección 
 pytest apps/estacionamiento/tests/test_metricas.py        # solo las métricas
 ```
 
-La suite cubre **456 casos**, verificados contra **PostgreSQL 16 y SQLite**:
+La suite cubre **555 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 
 - **Motor de tarifas**: fronteras de cortesía, proporcionalidad, cobro mínimo,
   tope por día natural, precisión monetaria, validación de parámetros.
@@ -252,6 +310,15 @@ La suite cubre **456 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 - **Reporte en PDF**: que el archivo sea un PDF válido, que se descargue en
   lugar de abrirse, que no quede en ninguna caché, y que un periodo sin
   movimientos produzca documento en lugar de fallar.
+- **Pensión diaria**: que un día sean 24 horas, que pasarse 59 segundos no
+  cobre y un minuto sí —sin cortesía y solo el excedente—, que renovar con el
+  vehículo dentro cubra el excedente, que la vigencia se evalúe al instante y
+  no por fecha, que la base rechace dos pensiones activas para la misma placa,
+  que el pago caiga siempre en un turno y sume al corte, que las salidas
+  cubiertas no se cuenten como cortesías, y que la bitácora no lleve nombre ni
+  teléfono del cliente.
+- **Caja rediseñada**: la tabla de resolución de la captura única, los atajos
+  que alcanzan, el cambio de lectura única y fuera de la dirección.
 - **Contrato de la API**: códigos de estado, permisos, autenticación.
 
 Los motores de tarificación y de corte **no requieren base de datos**: son
@@ -431,7 +498,9 @@ hay credenciales en el repositorio.
 Lo construido es la base de operación. Las siguientes extensiones se apoyan en
 los mismos servicios, sin duplicar reglas de negocio:
 
-- **Pensiones mensuales** y validación de cortesías por comercio.
+- **Validación de cortesías por comercio.**
+- **Pensión con cajón fijo** y pago por transferencia o tarjeta: la pensión
+  actual asigna cualquier cajón libre y solo acepta efectivo.
 - **Controlador de hardware**: pluma, sensores de cajón, lector de QR.
 - **Impresión directa a la térmica.** El comprobante de corte ya se genera en
   texto plano y se guarda en archivo; falta enviarlo a la impresora sin pasar
@@ -447,5 +516,5 @@ Ya no figuran aquí los puntos que sí están construidos: el **corte de caja**
 por turno y operador —con cierre ciego, conciliación, historial y corrección
 auditable de un cierre equivocado—, el **panel de caja**, que es la propia
 aplicación web, la **consulta del boleto por el cliente** y el **reporte de
-operación** con horas pico, clientes frecuentes y salida en PDF, los tres
-descritos arriba.
+operación** con horas pico, clientes frecuentes y salida en PDF, y la
+**pensión diaria**, descritos arriba.

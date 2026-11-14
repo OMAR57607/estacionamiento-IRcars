@@ -149,6 +149,23 @@ class Turno(models.Model):
     )
     observaciones = models.TextField("observaciones", blank=True)
 
+    # --- Pensiones cobradas en el turno ------------------------------------
+    #
+    # Fotografía del cierre, como el resto de los campos de arriba. Va aparte
+    # de `total_cobrado` para que esa cifra conserve su significado —boletos
+    # cobrados— y el comprobante pueda decir de dónde salió cada peso. `NULL`
+    # en los turnos cerrados antes de que existieran las pensiones.
+    total_pensiones = models.DecimalField(
+        "total de pensiones cobradas",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    pagos_pension = models.PositiveIntegerField(
+        "pagos de pensión", null=True, blank=True
+    )
+
     # --- Corrección del corte (ver AjusteCorte) ----------------------------
     #
     # El corte cerrado es inmutable y los campos de arriba no se reescriben
@@ -402,6 +419,17 @@ class Folio(models.Model):
         null=True,
         blank=True,
     )
+    # Estancia cubierta por pensión. La decide la placa contra la base al
+    # registrar la entrada —nunca el operador— y puede asignarse después si
+    # el cliente renueva estando dentro.
+    pension = models.ForeignKey(
+        "Pension",
+        on_delete=models.PROTECT,
+        related_name="folios",
+        verbose_name="pensión",
+        null=True,
+        blank=True,
+    )
     turno = models.ForeignKey(
         "Turno",
         on_delete=models.PROTECT,
@@ -645,3 +673,242 @@ class AjusteCorte(models.Model):
 
     def __str__(self) -> str:
         return f"Ajuste de {self.monto:+.2f} al turno {self.turno_id}"
+
+
+# --- Pensión diaria ----------------------------------------------------------
+#
+# Mismo criterio que el resto de los registros con efecto económico: nada se
+# edita ni se borra. El precio se cambia creando un plan nuevo; una pensión se
+# da de baja con motivo; un pago se cancela con motivo y solo mientras su turno
+# siga abierto. Las reglas de cálculo viven en `domain/pensiones.py` y los
+# casos de uso en `services_pensiones.py`.
+
+
+class PlanPension(models.Model):
+    """
+    Precio de la pensión diaria.
+
+    Un solo plan activo para cualquier tipo de vehículo: es lo que decidió el
+    dueño. Se conserva el histórico completo, igual que con las tarifas, para
+    poder responder qué precio estaba exhibido en una fecha. Cada pago copia
+    además el precio que se cobró.
+    """
+
+    nombre = models.CharField("nombre", max_length=100)
+    precio_diario = models.DecimalField(
+        "precio por día",
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Lo que cuesta un día (24 horas) de pensión.",
+    )
+    activo = models.BooleanField("activo", default=True)
+    vigente_desde = models.DateTimeField("vigente desde", default=timezone.now)
+    creado_en = models.DateTimeField("creado en", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "plan de pensión"
+        verbose_name_plural = "planes de pensión"
+        ordering = ["-vigente_desde"]
+        constraints = [
+            # Dos precios activos dejarían el cobro a merced del orden de una
+            # consulta.
+            models.UniqueConstraint(
+                fields=["activo"],
+                condition=models.Q(activo=True),
+                name="uq_plan_pension_un_activo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(precio_diario__gt=Decimal("0.00")),
+                name="ck_plan_pension_precio_positivo",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.nombre} (${self.precio_diario}/día)"
+
+
+class EstadoPension(models.TextChoices):
+    ACTIVA = "ACTIVA", "Activa"
+    BAJA = "BAJA", "Dada de baja"
+
+
+class Pension(models.Model):
+    """
+    El contrato de pensión de un vehículo.
+
+    `vigente_hasta` es redundante respecto a los pagos, a propósito y por el
+    mismo motivo que la fotografía del corte: cada entrada de vehículo
+    pregunta si la placa está cubierta, y esa pregunta no debe recorrer
+    pagos. Solo lo escribe `services_pensiones`.
+
+    Nombre y teléfono son datos personales: no viajan al boleto público, no se
+    escriben en la bitácora y solo los ve personal con sesión.
+    """
+
+    placa = models.CharField("placa", max_length=15, db_index=True)
+    tipo_vehiculo = models.CharField(
+        "tipo de vehículo",
+        max_length=10,
+        choices=TipoVehiculo.choices,
+        default=TipoVehiculo.AUTOMOVIL,
+        help_text="Decide el tipo de cajón y la tarifa del excedente.",
+    )
+    nombre_cliente = models.CharField("nombre del cliente", max_length=120)
+    telefono = models.CharField("teléfono", max_length=20, blank=True)
+    descripcion_vehiculo = models.CharField(
+        "vehículo", max_length=80, blank=True, help_text="Marca, modelo y color."
+    )
+    estado = models.CharField(
+        "estado", max_length=10, choices=EstadoPension.choices, default=EstadoPension.ACTIVA
+    )
+    vigente_hasta = models.DateTimeField(
+        "vigente hasta",
+        null=True,
+        blank=True,
+        help_text="Fin del último periodo pagado. Vacío si nunca se cobró.",
+    )
+    notas = models.TextField("notas", blank=True)
+
+    alta_en = models.DateTimeField("alta", default=timezone.now)
+    alta_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pensiones_dadas_de_alta",
+        verbose_name="dio de alta",
+    )
+    baja_en = models.DateTimeField("baja", null=True, blank=True)
+    baja_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pensiones_dadas_de_baja",
+        verbose_name="dio de baja",
+    )
+    motivo_baja = models.TextField("motivo de la baja", blank=True)
+
+    class Meta:
+        verbose_name = "pensión"
+        verbose_name_plural = "pensiones"
+        ordering = ["placa"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["placa"],
+                condition=models.Q(estado=EstadoPension.ACTIVA),
+                name="uq_pension_activa_por_placa",
+            ),
+            # Una baja sin fecha o sin motivo es indistinguible de un borrado.
+            models.CheckConstraint(
+                condition=models.Q(estado=EstadoPension.ACTIVA)
+                | (models.Q(baja_en__isnull=False) & ~models.Q(motivo_baja="")),
+                name="ck_pension_baja_documentada",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["estado", "vigente_hasta"], name="idx_pension_estado_vig"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Pensión {self.placa}"
+
+    def save(self, *args, **kwargs):
+        # Misma normalización que el folio: es la llave con que se cruzan.
+        self.placa = self.placa.strip().upper().replace(" ", "")
+        self.telefono = "".join(c for c in self.telefono if c.isdigit())
+        super().save(*args, **kwargs)
+
+
+class EstadoPagoPension(models.TextChoices):
+    VIGENTE = "VIGENTE", "Vigente"
+    CANCELADO = "CANCELADO", "Cancelado"
+
+
+class PagoPension(models.Model):
+    """
+    El asiento de dinero de una pensión.
+
+    Siempre pertenece a un turno: el efectivo de la pensión entra al corte
+    igual que el de los boletos. Copia el precio del plan para que el recibo
+    se explique solo aunque el precio cambie después.
+    """
+
+    uuid = models.UUIDField("recibo", default=uuid.uuid4, editable=False, unique=True)
+    pension = models.ForeignKey(
+        Pension, on_delete=models.PROTECT, related_name="pagos", verbose_name="pensión"
+    )
+    periodo_desde = models.DateTimeField("cubre desde")
+    periodo_hasta = models.DateTimeField("cubre hasta")
+    dias = models.PositiveSmallIntegerField("días pagados")
+    monto = models.DecimalField("monto", max_digits=10, decimal_places=2)
+    pago_recibido = models.DecimalField(
+        "pago recibido", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    cambio = models.DecimalField(
+        "cambio entregado", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+
+    # --- Copia del plan en el momento del pago ------------------------------
+    plan = models.ForeignKey(
+        PlanPension, on_delete=models.PROTECT, related_name="pagos", verbose_name="plan"
+    )
+    plan_nombre = models.CharField("plan aplicado", max_length=100)
+    plan_precio_diario = models.DecimalField(
+        "precio diario aplicado", max_digits=10, decimal_places=2
+    )
+
+    turno = models.ForeignKey(
+        Turno, on_delete=models.PROTECT, related_name="cobros_pension", verbose_name="turno"
+    )
+    operador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="pagos_pension",
+        verbose_name="cobró",
+    )
+    estado = models.CharField(
+        "estado",
+        max_length=10,
+        choices=EstadoPagoPension.choices,
+        default=EstadoPagoPension.VIGENTE,
+    )
+    cancelado_en = models.DateTimeField("cancelado en", null=True, blank=True)
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pagos_pension_cancelados",
+        verbose_name="canceló",
+    )
+    motivo_cancelacion = models.TextField("motivo de la cancelación", blank=True)
+    creado_en = models.DateTimeField("cobrado en", default=timezone.now)
+
+    class Meta:
+        verbose_name = "pago de pensión"
+        verbose_name_plural = "pagos de pensión"
+        ordering = ["-creado_en"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(periodo_hasta__gt=models.F("periodo_desde")),
+                name="ck_pago_pension_periodo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(monto__gt=Decimal("0.00")),
+                name="ck_pago_pension_monto_positivo",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(estado=EstadoPagoPension.VIGENTE)
+                | (models.Q(cancelado_en__isnull=False) & ~models.Q(motivo_cancelacion="")),
+                name="ck_pago_pension_cancelacion_documentada",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["turno", "estado"], name="idx_pago_pension_turno"),
+            models.Index(fields=["pension", "periodo_hasta"], name="idx_pago_pension_periodo"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Pago {self.uuid} · {self.pension.placa} · ${self.monto}"

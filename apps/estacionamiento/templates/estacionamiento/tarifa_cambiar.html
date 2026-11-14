@@ -21,7 +21,7 @@
 
 {% if form_clave %}
 
-  <div class="tarjeta" style="max-width:480px">
+  <div class="tarjeta angosta">
     <h2>Desbloquear el precio</h2>
     <p>
       Confirme la contraseña de <strong>{{ user.get_username }}</strong> para
@@ -33,7 +33,7 @@
       <input type="hidden" name="tipo" value="{{ tipo }}">
       <label for="{{ form_clave.clave.id_for_label }}">{{ form_clave.clave.label }}</label>
       {{ form_clave.clave }}
-      <button type="submit" class="boton" style="margin-top:1rem">Desbloquear</button>
+      <button type="submit" class="boton mt">Desbloquear</button>
     </form>
   </div>
 
@@ -46,7 +46,7 @@
         {% if vigente %}Cambiar el precio{% else %}Configurar el precio{% endif %}
         de {{ tipo_etiqueta|lower }}
       </h2>
-      <p class="ayuda" style="margin-top:0">
+      <p class="ayuda mt-0">
         {% if vigente %}
           Los campos traen el precio que está en uso. Lo que no toque, no cambia.
         {% else %}
@@ -64,11 +64,11 @@
            {% endcomment %}
         <input type="hidden" name="tipo" value="{{ tipo }}">
         {% for campo in form %}
-          <div style="margin-bottom:.8rem">
+          <div class="mb">
             <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
             {{ campo }}
             {% if campo.help_text %}<p class="ayuda">{{ campo.help_text }}</p>{% endif %}
-            {% for e in campo.errors %}<p class="ayuda" style="color:var(--error)">{{ e }}</p>{% endfor %}
+            {% for e in campo.errors %}<p class="ayuda texto-error">{{ e }}</p>{% endfor %}
           </div>
         {% endfor %}
 
@@ -85,7 +85,7 @@
       <h2>Precio de {{ tipo_etiqueta|lower }} en uso</h2>
       {% if vigente %}
         <p class="importe-destacado">{{ vigente.cuota_hora|pesos }}</p>
-        <p class="detalle-cobro" style="margin-top:-.4rem">
+        <p class="detalle-cobro mt-neg">
           por hora
           <span class="ayuda">· desde el {{ vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
         </p>
@@ -98,7 +98,7 @@
           <tbody>
           {% for ejemplo in ejemplos %}
             <tr>
-              <th style="text-transform:none;font-size:.92rem">{{ ejemplo.etiqueta }}</th>
+              <th class="th-llano">{{ ejemplo.etiqueta }}</th>
               <td class="numero">
                 {% if ejemplo.es_cortesia %}gratis{% else %}{{ ejemplo.importe|pesos }}{% endif %}
               </td>

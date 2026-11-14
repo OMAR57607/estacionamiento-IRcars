@@ -49,6 +49,12 @@ class ResumenCorte:
     folios_cortesia: int
     efectivo_declarado: Decimal | None = None
     diferencia: Decimal | None = None
+    # Pensiones cobradas en el turno. Con valor por omisión para que los
+    # resúmenes ya grabados y quien no cobra pensiones sigan siendo válidos.
+    # `total_cobrado` conserva su significado —boletos— y esto va aparte:
+    # el comprobante debe decir de dónde salió cada peso.
+    total_pensiones: Decimal = Decimal("0.00")
+    pagos_pension: int = 0
 
     @property
     def cuadra(self) -> bool:
@@ -71,6 +77,8 @@ class ResumenCorte:
             "efectivo_esperado": str(self.efectivo_esperado),
             "folios_cobrados": self.folios_cobrados,
             "folios_cortesia": self.folios_cortesia,
+            "total_pensiones": str(self.total_pensiones),
+            "pagos_pension": self.pagos_pension,
             "efectivo_declarado": (
                 str(self.efectivo_declarado)
                 if self.efectivo_declarado is not None
@@ -88,6 +96,7 @@ def calcular_corte(
     fondo_inicial: Decimal,
     importes_cobrados: Sequence[Decimal],
     efectivo_declarado: Decimal | None = None,
+    importes_pension: Sequence[Decimal] = (),
 ) -> ResumenCorte:
     """
     Calcula el corte a partir del fondo inicial y los importes del turno.
@@ -97,8 +106,10 @@ def calcular_corte(
     pero sí son operación, y su volumen es un indicador de control —un turno
     con muchas cortesías merece revisión—.
 
-    El efectivo esperado es fondo inicial más lo cobrado. Si el operador aún
-    no declara su conteo, la diferencia queda indeterminada (`None`), no cero.
+    El efectivo esperado es fondo inicial más lo cobrado en boletos más lo
+    cobrado en pensiones: las dos cosas son efectivo que entró a la misma
+    caja. Si el operador aún no declara su conteo, la diferencia queda
+    indeterminada (`None`), no cero.
     """
     cobros = [Decimal(importe) for importe in importes_cobrados]
 
@@ -106,7 +117,9 @@ def calcular_corte(
     cortesias = len(cobros) - len(con_cobro)
 
     total_cobrado = sum(con_cobro, Decimal("0.00"))
-    efectivo_esperado = Decimal(fondo_inicial) + total_cobrado
+    pensiones = [Decimal(importe) for importe in importes_pension]
+    total_pensiones = sum(pensiones, Decimal("0.00"))
+    efectivo_esperado = Decimal(fondo_inicial) + total_cobrado + total_pensiones
 
     diferencia = None
     if efectivo_declarado is not None:
@@ -118,6 +131,8 @@ def calcular_corte(
         efectivo_esperado=_redondear(efectivo_esperado),
         folios_cobrados=len(con_cobro),
         folios_cortesia=cortesias,
+        total_pensiones=_redondear(total_pensiones),
+        pagos_pension=len(pensiones),
         efectivo_declarado=(
             _redondear(Decimal(efectivo_declarado))
             if efectivo_declarado is not None

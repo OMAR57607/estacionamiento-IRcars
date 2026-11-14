@@ -1,0 +1,50 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda static %}
+
+{% block titulo %}Recibo de pensión{% endblock %}
+
+{% comment %}
+  Recibo imprimible. Lo que el cliente puede pedir ante una aclaración: qué
+  periodo pagó, a qué precio, cuánto entregó y quién le cobró.
+{% endcomment %}
+
+{% block contenido %}
+<div class="tarjeta angosta centrada">
+  <div class="fila-flex">
+    <img src="{% static 'estacionamiento/icono-192.png' %}" alt="" width="48" height="48">
+    <div>
+      <strong>{{ nombre_comercial }}</strong><br>
+      <span class="ayuda">Recibo de pensión · {{ pago.uuid|stringformat:"s"|slice:":8"|upper }}</span>
+    </div>
+  </div>
+
+  {% if pago.estado == 'CANCELADO' %}
+    <div class="aviso error mt">
+      <strong>Pago cancelado</strong> el {{ pago.cancelado_en|date:"d/m/Y H:i" }}: {{ pago.motivo_cancelacion }}
+    </div>
+  {% endif %}
+
+  <p class="cifra">{{ pago.monto|pesos }}</p>
+  <dl class="pares">
+    <div><dt>Placa</dt><dd>{{ pago.pension.placa }}</dd></div>
+    <div><dt>Cubre desde</dt><dd>{{ pago.periodo_desde|date:"d/m/Y H:i" }}</dd></div>
+    <div><dt>Hasta</dt><dd>{{ pago.periodo_hasta|date:"d/m/Y H:i" }}</dd></div>
+    <div><dt>Días</dt><dd>{{ pago.dias }} × {{ pago.plan_precio_diario|pesos }}</dd></div>
+    {% if pago.pago_recibido is not None %}
+      <div><dt>Recibido</dt><dd>{{ pago.pago_recibido|pesos }}</dd></div>
+      <div><dt>Cambio</dt><dd>{{ pago.cambio|pesos }}</dd></div>
+    {% endif %}
+    <div><dt>Cobrado</dt><dd>{{ pago.creado_en|date:"d/m/Y H:i" }} · {{ pago.operador }}</dd></div>
+  </dl>
+  <p class="ayuda mt">
+    Precio vigente del plan «{{ pago.plan_nombre }}» al momento del pago. Si la
+    estancia rebasa la vigencia, el tiempo excedente se cobra con la tarifa por
+    hora exhibida.
+  </p>
+
+  <div class="acciones-fila no-imprimir mt">
+    <a class="boton angosto" href="{% url 'web:caja' %}">Ir a la caja</a>
+    <a class="boton fantasma angosto" href="{% url 'web:pension' pago.pension_id %}">Ver la pensión</a>
+  </div>
+</div>
+{% endblock %}

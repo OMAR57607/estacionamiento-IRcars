@@ -47,6 +47,51 @@ No se borra: queda registrado quién lo canceló y por qué.
 
 ---
 
+## La caja: una placa, un campo
+
+Hay **un solo campo de placa** y dos botones: **Entrada** y **Cobrar salida**.
+Si se equivoca de botón, la caja lo resuelve: una placa que ya está dentro
+le ofrece su cobro, y una que no está le sugiere las parecidas del patio.
+
+- El **tipo de vehículo** son tres botones: Automóvil, Moto, Accesible.
+- Al cobrar, toque el **billete** que le dieron ($50, $100…) o «Exacto».
+- Después de cobrar, la pantalla muestra **en grande el cambio a entregar**.
+  Toque «Siguiente vehículo» para seguir.
+- Al teclear la placa, la lista de vehículos dentro se filtra sola.
+
+---
+
+## Pensión diaria — $180 por día
+
+| | Qué hace | Dónde |
+|---|---|---|
+| **Alta** | Placa, tipo, nombre y teléfono. El precio no se teclea. | Pensiones → *Nueva pensión* |
+| **Cobra** | Elija los días (1, 2, 3, 7…). La pantalla dice desde y hasta cuándo cubre. Necesita **turno abierto**: el dinero entra al corte. | Pensiones → *Cobrar* |
+| **Entra** | Teclee la placa y *Entrada*, como cualquiera. Si la pensión está vigente, **no hay boleto**: la caja dice «Entrada de pensionado». | Caja |
+| **Sale** | Teclee la placa y *Cobrar salida*. Si está dentro de su vigencia: **Sin cobro** → *Registrar salida*. | Caja |
+
+**Cada día son 24 horas** desde que empieza el periodo, no un día de
+calendario.
+
+**Si se pasa un minuto, se cobra por hora.** Solo el tiempo que rebasó su
+vigencia, con la tarifa por hora y sin los minutos gratis. La caja lo avisa en
+la tarjeta de cobro.
+
+**A menos que renueve.** Si el cliente renueva antes de salir, la pensión nueva
+empieza donde acabó la anterior y **cubre el tiempo que se pasó**: ya no paga
+excedente. La caja le ofrece «Renovar pensión» en ese momento.
+
+**Si la pensión ya estaba vencida al entrar**, la caja lo avisa y el vehículo
+entra por hora con su boleto. Si renueva antes de salir, su estancia queda
+cubierta desde que entró.
+
+**Un vehículo por pensión.** Dos coches del mismo cliente son dos pensiones.
+
+**Dar de baja, cancelar un pago o cambiar el precio** solo lo hace el perfil
+administrativo, con su contraseña.
+
+---
+
 ## Tres cosas que conviene entender
 
 **El precio que se cobra es el que se le exhibió al cliente al entrar**, aunque
@@ -71,4 +116,7 @@ desaparecer.
 | «No tiene un turno de caja abierto» | Pestaña Turno → abrir turno. |
 | No le deja cobrar y habla de un turno anterior | Cierre ese turno: cuente el efectivo y haga el corte. Luego abra uno nuevo. |
 | El cliente dice que su boleto no abre | Un boleto ya cobrado deja de consultarse pasadas 24 horas. Es normal. |
-| La placa ya está adentro | Ese vehículo tiene un folio abierto. Búsquelo en el tablero: o es él, o se capturó mal una placa. |
+| La placa ya está adentro | La caja le ofrece cobrarlo. Si no es él, se capturó mal una placa: cancele el folio equivocado con el motivo. |
+| «Ya tiene una pensión activa» | Esa placa ya es pensionada. Búsquela en Pensiones y cobre días ahí. |
+| No deja cobrar la pensión | Hace falta turno abierto, del día. El pago entra al corte. |
+| Un pensionado sale y le cobra | Se pasó de su vigencia. Ofrezca renovar: la renovación cubre ese tiempo. |

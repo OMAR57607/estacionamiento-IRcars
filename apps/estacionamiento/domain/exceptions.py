@@ -75,3 +75,38 @@ class AjusteNoAplicable(ErrorDominio):
     bitácora— o la justificación no explica nada. Un ajuste de caja sin
     motivo escrito es indistinguible de un faltante encubierto.
     """
+
+
+# --- Pensiones ---------------------------------------------------------------
+
+
+class PlanNoConfigurado(ErrorDominio):
+    """No hay precio de pensión vigente: no se puede dar de alta ni cobrar."""
+
+
+class PensionYaExiste(ErrorDominio):
+    """
+    La placa ya tiene una pensión activa.
+
+    Dos pensiones activas para la misma placa dejarían sin respuesta la
+    pregunta que se hace en cada entrada —¿está cubierta?— y partirían los
+    pagos del cliente entre dos registros.
+    """
+
+
+class PensionNoEncontrada(ErrorDominio):
+    """No existe la pensión solicitada."""
+
+
+class PensionDeBaja(ErrorDominio):
+    """La pensión fue dada de baja y no admite cobros ni cambios."""
+
+
+class PagoNoCancelable(ErrorDominio):
+    """
+    El pago ya no puede cancelarse.
+
+    Solo se cancela el último pago de una pensión y mientras su turno siga
+    abierto. Un pago cuyo turno ya se cortó forma parte de un corte firmado:
+    si estaba mal, se corrige con un ajuste del corte, no borrándolo.
+    """
