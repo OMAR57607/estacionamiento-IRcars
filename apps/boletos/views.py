@@ -124,6 +124,17 @@ def _calcular_presentacion(boleto: BoletoVista, ahora) -> dict:
     if boleto.estado == "CANCELADO":
         return {"minutos": None, "importe": None, "es_estimado": False, "cotizacion": None}
 
+    if boleto.es_pension:
+        # El importe por hora no aplica a una estancia de pensión, y estimarlo
+        # le mostraría al cliente una cifra que no va a pagar. Tampoco se
+        # calcula un excedente: dependería de su vigencia, que esta página no
+        # expone.
+        try:
+            minutos = minutos_transcurridos(boleto.entrada_en, ahora)
+        except ErrorDominio:
+            minutos = None
+        return {"minutos": minutos, "importe": None, "es_estimado": False, "cotizacion": None}
+
     try:
         minutos = minutos_transcurridos(boleto.entrada_en, ahora)
         cotizacion = cotizar(minutos, boleto.a_parametros())

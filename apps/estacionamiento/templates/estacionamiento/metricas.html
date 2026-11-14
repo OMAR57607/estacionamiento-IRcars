@@ -78,6 +78,38 @@
   </div>
 </div>
 
+{# ------------------------------------------------------------ Pensiones #}
+{% comment %} Cuatro cifras, sin gráfica. Solo si hay pensiones: un periodo de antes
+   de que existieran no gana una sección vacía. {% endcomment %}
+{% if metricas.pensiones.activas or metricas.pensiones.pagos %}
+<div class="tarjeta">
+  <h2>Pensiones</h2>
+  <div class="indicadores">
+    <div class="indicador">
+      <div class="rotulo">Ingreso por pensiones</div>
+      <div class="valor">{{ metricas.pensiones.ingreso|pesos }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Días cobrados</div>
+      <div class="valor">{{ metricas.pensiones.dias }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Activas hoy</div>
+      <div class="valor">{{ metricas.pensiones.activas }}</div>
+    </div>
+    <div class="indicador{% if metricas.pensiones.vencidas %} alerta{% endif %}">
+      <div class="rotulo">Vencidas hoy</div>
+      <div class="valor">{{ metricas.pensiones.vencidas }}</div>
+    </div>
+  </div>
+  <p class="ayuda">
+    El ingreso va aparte del cobrado en boletos y se cuenta por fecha de pago.
+    Quien ya tiene pensión activa no aparece entre los clientes frecuentes:
+    esa lista sirve para decidir a quién ofrecerla.
+  </p>
+</div>
+{% endif %}
+
 {# ----------------------------------------------------------- Horas pico #}
 <div class="tarjeta">
   <h2>Horas pico</h2>

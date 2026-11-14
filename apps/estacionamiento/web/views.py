@@ -40,6 +40,7 @@ from .. import (
     services_caja,
     services_mantenimiento,
     services_metricas,
+    services_pensiones,
 )
 from ..domain.exceptions import ErrorDominio, VehiculoYaDentro
 from ..domain.tarifas import ParametrosTarifa, cotizar
@@ -650,6 +651,7 @@ def corte(request, turno_id: int):
         Folio.objects.filter(turno=turno_consultado, estado=EstadoFolio.CERRADO)
         .order_by("salida_en")[:MAXIMO_FILAS]
     )
+    contexto["pagos_pension"] = services_pensiones.pagos_del_turno(turno_consultado)
     return render(request, "estacionamiento/corte.html", contexto)
 
 
@@ -1086,6 +1088,9 @@ def _exportar_csv(folios) -> HttpResponse:
             "cuota_hora_aplicada",
             "operador_salida",
             "turno",
+            # Distingue la salida cubierta por pensión de una cortesía: las
+            # dos valen $0 y el contador no tendría otra forma de separarlas.
+            "pension",
         ]
     )
     for folio in folios:
@@ -1104,6 +1109,7 @@ def _exportar_csv(folios) -> HttpResponse:
                 folio.tarifa_cuota_hora,
                 folio.operador_salida or "",
                 folio.turno_id or "",
+                "sí" if folio.pension_id else "no",
             ]
         )
     return respuesta

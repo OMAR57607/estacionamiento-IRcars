@@ -41,7 +41,14 @@
       <tr><th>Apertura</th><td>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Cierre</th><td>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</td></tr>
       <tr><th>Cambio con que abrió</th><td class="numero">{{ resumen.fondo_inicial|pesos }}</td></tr>
-      <tr><th>Cobrado en el turno</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
+      <tr><th>Cobrado en boletos</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
+      {% comment %} La pensión va en su propio renglón y no sumada a los boletos: el
+         comprobante debe decir de dónde salió cada peso, y «cobrado en el
+         turno» conserva el significado que tenía en los cortes anteriores.
+         {% endcomment %}
+      {% if resumen.pagos_pension %}
+        <tr><th>Pensiones cobradas ({{ resumen.pagos_pension }})</th><td class="numero">{{ resumen.total_pensiones|pesos }}</td></tr>
+      {% endif %}
       <tr><th>Debería haber en caja</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
       <tr><th>Contado al cerrar</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
 
@@ -139,6 +146,36 @@
             {{ a.diferencia_anterior|pesos_con_signo }} →
             <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
           </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if pagos_pension %}
+<div class="tarjeta">
+  <h2>Pensiones cobradas en el turno ({{ pagos_pension|length }})</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr>
+          <th>Placa</th>
+          <th>Cubre desde</th>
+          <th>Hasta</th>
+          <th class="numero">Días</th>
+          <th class="numero">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in pagos_pension %}
+        <tr>
+          <td class="placa">{{ p.pension.placa }}</td>
+          <td>{{ p.periodo_desde|date:"d/m H:i" }}</td>
+          <td>{{ p.periodo_hasta|date:"d/m H:i" }}</td>
+          <td class="numero">{{ p.dias }}</td>
+          <td class="numero">{{ p.monto|pesos }}</td>
         </tr>
       {% endfor %}
       </tbody>

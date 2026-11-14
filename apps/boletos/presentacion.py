@@ -65,6 +65,11 @@ class BoletoVista:
     # Momento en que el boleto dejó de estar en curso; `None` si sigue dentro.
     fin_de_ciclo: datetime | None
 
+    # Estancia cubierta por pensión. Solo el hecho, no la vigencia ni el
+    # nombre: el enlace es público y reenviable, y la fecha de vencimiento de
+    # alguien no es asunto de quien reciba el mensaje.
+    es_pension: bool = False
+
     @property
     def esta_abierto(self) -> bool:
         return self.estado == "ABIERTO"
@@ -111,6 +116,7 @@ def desde_folio(folio) -> BoletoVista:
         cobro_minimo=parametros.cobro_minimo,
         tope_diario=parametros.tope_diario,
         fin_de_ciclo=_fin_de_ciclo(folio.estado, folio.salida_en, folio.actualizado_en),
+        es_pension=bool(folio.pension_id),
     )
 
 

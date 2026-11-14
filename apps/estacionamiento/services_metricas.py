@@ -40,7 +40,17 @@ from .domain.metricas import (
     porcentaje,
     ticket_promedio,
 )
-from .models import EstadoFolio, EstadoTurno, Folio, TipoVehiculo, Turno
+from .models import (
+    EstadoFolio,
+    EstadoPagoPension,
+    EstadoPension,
+    EstadoTurno,
+    Folio,
+    PagoPension,
+    Pension,
+    TipoVehiculo,
+    Turno,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +69,13 @@ MINIMO_VISITAS = 2
 # PostgreSQL y SQLite no deciden lo mismo.
 DINERO = DecimalField(max_digits=14, decimal_places=2)
 CERO = Decimal("0.00")
+
+# Qué es una cortesía: un boleto cerrado en $0 **que no es de pensión**. La
+# salida cubierta de un pensionado también vale $0, y contarla como cortesía
+# inflaría el indicador de control y escondería las cortesías reales entre
+# las salidas de quien ya pagó su día.
+ES_CORTESIA = Q(importe=CERO, pension__isnull=True)
+ES_PENSION = Q(pension__isnull=False)
 
 
 def _cobrados(desde: datetime, hasta: datetime):
@@ -201,7 +218,7 @@ def dias_del_periodo(desde: datetime, hasta: datetime) -> list[dict]:
         .annotate(
             folios=Count("id"),
             ingreso=Coalesce(Sum("importe"), CERO, output_field=DINERO),
-            cortesias=Count("id", filter=Q(importe=CERO)),
+            cortesias=Count("id", filter=ES_CORTESIA),
         )
         .order_by("dia")
     )
@@ -255,8 +272,13 @@ def clientes_frecuentes(
 
     cobrados = _cobrados(desde, hasta)
 
+    # Quien ya tiene pensión activa no es candidato a ofrecérsela: la métrica
+    # existe para decidir a quién proponerla. Sus estancias sí cuentan en el
+    # ingreso del periodo, que es el denominador de la participación.
+    con_pension = Pension.objects.filter(estado=EstadoPension.ACTIVA).values("placa")
     agrupado = (
-        cobrados.values("placa")
+        cobrados.exclude(placa__in=con_pension)
+        .values("placa")
         .annotate(
             visitas=Count("id"),
             gasto=Coalesce(Sum("importe"), CERO, output_field=DINERO),
@@ -366,16 +388,19 @@ def composicion(desde: datetime, hasta: datetime) -> dict:
         .annotate(
             folios=Count("id"),
             ingreso=Coalesce(Sum("importe"), CERO, output_field=DINERO),
-            cortesias=Count("id", filter=Q(importe=CERO)),
+            cortesias=Count("id", filter=ES_CORTESIA),
         )
         .order_by("-ingreso")
     ]
 
     agregados = cobrados.aggregate(
-        folios=Count("id"), cortesias=Count("id", filter=Q(importe=CERO))
+        folios=Count("id"),
+        cortesias=Count("id", filter=ES_CORTESIA),
+        pensionados=Count("id", filter=ES_PENSION),
     )
     folios = agregados["folios"] or 0
     cortesias = agregados["cortesias"] or 0
+    pensionados = agregados["pensionados"] or 0
 
     return {
         "por_tipo": por_tipo,
@@ -385,15 +410,28 @@ def composicion(desde: datetime, hasta: datetime) -> dict:
         "boletos": [
             {
                 "etiqueta": "Con cobro",
-                "conteo": folios - cortesias,
-                "porcentaje": porcentaje(folios - cortesias, folios),
+                "conteo": folios - cortesias - pensionados,
+                "porcentaje": porcentaje(folios - cortesias - pensionados, folios),
             },
             {
                 "etiqueta": "Cortesía",
                 "conteo": cortesias,
                 "porcentaje": porcentaje(cortesias, folios),
             },
-        ],
+        ]
+        # La pensión solo aparece si la hubo: un reporte de antes de que
+        # existiera no debe ganar una fila en cero que nadie entiende.
+        + (
+            [
+                {
+                    "etiqueta": "Pensión",
+                    "conteo": pensionados,
+                    "porcentaje": porcentaje(pensionados, folios),
+                }
+            ]
+            if pensionados
+            else []
+        ),
         "permanencia": distribuir_permanencia(
             cobrados.values_list("minutos", flat=True).iterator()
         ),
@@ -462,6 +500,36 @@ def cortes_del_periodo(desde: datetime, hasta: datetime) -> dict:
     }
 
 
+def pensiones_del_periodo(desde: datetime, hasta: datetime) -> dict:
+    """
+    Lo que dejaron las pensiones en el periodo y cómo están hoy.
+
+    El ingreso se cuenta por fecha de cobro, igual que el de los boletos se
+    cuenta por fecha de salida. La situación (activas, por vencer, vencidas)
+    es la de este momento: no tiene sentido preguntar cuántas estaban
+    vencidas hace un mes.
+    """
+    from . import services_pensiones
+
+    agregados = PagoPension.objects.filter(
+        estado=EstadoPagoPension.VIGENTE, creado_en__gte=desde, creado_en__lte=hasta
+    ).aggregate(
+        ingreso=Coalesce(Sum("monto"), CERO, output_field=DINERO),
+        pagos=Count("id"),
+        dias=Coalesce(Sum("dias"), 0),
+    )
+    situacion = services_pensiones.conteos()
+    return {
+        "ingreso": agregados["ingreso"],
+        "pagos": agregados["pagos"],
+        "dias": agregados["dias"],
+        "activas": situacion["ACTIVAS"],
+        "por_vencer": situacion["POR_VENCER"],
+        "vencidas": situacion["VENCIDA"],
+        "sin_pago": situacion["SIN_PAGO"],
+    }
+
+
 # --- Fachada -----------------------------------------------------------------
 
 
@@ -496,4 +564,5 @@ def metricas_por_rango(
         ),
         "composicion": composicion(desde, hasta),
         "caja": cortes_del_periodo(desde, hasta),
+        "pensiones": pensiones_del_periodo(desde, hasta),
     }

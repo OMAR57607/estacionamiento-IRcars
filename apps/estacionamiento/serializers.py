@@ -48,6 +48,12 @@ class FolioSerializer(serializers.ModelSerializer):
     cajon_tipo = serializers.CharField(source="cajon.tipo", read_only=True)
     tarifa_nombre = serializers.CharField(source="tarifa.nombre", read_only=True)
     estado_etiqueta = serializers.CharField(source="get_estado_display", read_only=True)
+    # Solo el hecho de que la estancia es de pensión: los datos del cliente no
+    # salen por la API.
+    es_pension = serializers.SerializerMethodField()
+
+    def get_es_pension(self, folio) -> bool:
+        return folio.pension_id is not None
 
     class Meta:
         model = Folio
@@ -59,6 +65,7 @@ class FolioSerializer(serializers.ModelSerializer):
             "tarifa_nombre",
             "estado",
             "estado_etiqueta",
+            "es_pension",
             "entrada_en",
             "salida_en",
             "minutos",

@@ -643,6 +643,28 @@ def construir_reporte(metricas: dict, *, resumen: dict, solicitado_por: str = ""
             Paragraph("Ninguna placa repitió visita en el periodo.", estilos["vacio"])
         ]))
 
+    # --- Pensiones -----------------------------------------------------------
+    # Solo si hay algo que contar: un reporte de antes de que existieran no
+    # debe ganar una sección vacía. Sin gráfica: son cuatro cifras.
+    pensiones = metricas.get("pensiones") or {}
+    if pensiones.get("activas") or pensiones.get("pagos"):
+        partes.append(Paragraph("Pensiones", estilos["seccion"]))
+        partes.append(_indicadores(
+            [
+                ("Ingreso por pensiones", pesos(pensiones["ingreso"])),
+                ("Días cobrados", f"{pensiones['dias']:,}"),
+                ("Pensiones activas", f"{pensiones['activas']:,}"),
+                ("Vencidas hoy", f"{pensiones['vencidas']:,}"),
+            ],
+            estilos,
+        ))
+        partes.append(Paragraph(
+            "El ingreso por pensiones va aparte del cobrado en boletos y se cuenta "
+            "por fecha de pago. Activas y vencidas son la situación al generar el "
+            "reporte.",
+            estilos["nota"],
+        ))
+
     # --- Control de caja ----------------------------------------------------
     partes.append(Paragraph("Control de caja", estilos["seccion"]))
     partes.append(_indicadores(

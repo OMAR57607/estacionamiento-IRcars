@@ -62,6 +62,23 @@
     <div class="rotulo">Turnos cortados</div>
     <div class="valor">{{ datos.turnos_cerrados }}</div>
   </div>
+  {% comment %} Las pensiones van aparte del total de boletos: así «Total cobrado»
+     sigue significando lo mismo que en los reportes anteriores. Solo
+     aparecen si hubo alguna en el periodo. {% endcomment %}
+  {% if datos.pagos_pension or datos.salidas_pension %}
+  <div class="indicador">
+    <div class="rotulo">Pensiones cobradas</div>
+    <div class="valor">{{ datos.pensiones_cobradas|pesos }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Días de pensión</div>
+    <div class="valor">{{ datos.dias_pension }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Ingreso total</div>
+    <div class="valor">{{ datos.ingreso_total|pesos }}</div>
+  </div>
+  {% endif %}
 </div>
 
 <div class="tarjeta">
