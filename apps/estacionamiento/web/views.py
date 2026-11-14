@@ -41,19 +41,18 @@ from .. import (
     services_mantenimiento,
     services_metricas,
 )
-from ..domain.exceptions import ErrorDominio
+from ..domain.exceptions import ErrorDominio, VehiculoYaDentro
 from ..domain.tarifas import ParametrosTarifa, cotizar
 from ..models import EstadoFolio, EstadoTurno, Folio, Tarifa, TipoVehiculo, Turno
 from .forms import (
     AbrirTurnoForm,
     AjusteCorteForm,
-    BuscarPlacaForm,
     CancelarFolioForm,
+    CapturaForm,
     CerrarTurnoForm,
     ClaveOperadorForm,
     CobroForm,
     ConfirmarClaveForm,
-    EntradaForm,
     MetricasForm,
     OperadorEditarForm,
     OperadorNuevoForm,
@@ -230,16 +229,23 @@ def caja(request):
     La cotización y el cobro son dos pasos separados a propósito: el operador
     informa el monto, recibe el efectivo y solo entonces cierra. Un botón único
     convertiría cualquier error de captura en un folio cerrado e inmutable.
+
+    Desde el rediseño hay **una sola captura de placa** con dos botones. El
+    servidor decide qué hacer según el estado de esa placa, y los casos que
+    antes eran un error —entrada de una placa que ya está dentro, cobro de una
+    que no— se resuelven ofreciendo lo que el operador seguramente quería.
     """
     contexto = _contexto_base(request)
     contexto["seccion"] = "caja"
     contexto.update(
         {
-            "form_entrada": EntradaForm(),
-            "form_buscar": BuscarPlacaForm(),
+            "form_captura": CapturaForm(),
             "form_cobro": None,
             "cotizacion": None,
             "folio_cotizado": None,
+            # Resultado del último cobro, de lectura única: se muestra una vez
+            # tras la redirección y desaparece al recargar.
+            "resultado": request.session.pop(CLAVE_RESULTADO_COBRO, None),
         }
     )
 
@@ -247,7 +253,7 @@ def caja(request):
         accion = request.POST.get("accion")
         try:
             if accion == "entrada":
-                return _procesar_entrada(request)
+                return _procesar_entrada(request, contexto)
             if accion == "cotizar":
                 return _procesar_cotizacion(request, contexto)
             if accion == "cobrar":
@@ -260,22 +266,82 @@ def caja(request):
             # suficientes para que el operador sepa qué hacer.
             messages.error(request, str(exc))
 
-    contexto["patio"] = services.folios_en_patio()
-    contexto["ocupacion"] = services.consultar_ocupacion()
-    return render(request, "estacionamiento/caja.html", contexto)
+    return _pintar_caja(request, contexto)
 
 
-def _procesar_entrada(request):
-    form = EntradaForm(request.POST)
-    if not form.is_valid():
-        messages.error(request, "Revise la placa capturada.")
-        return redirect("web:caja")
+# Clave de sesión del resultado del cobro. El cambio a entregar no viaja en la
+# dirección: una URL con importes queda en el historial del navegador.
+CLAVE_RESULTADO_COBRO = "caja_resultado_cobro"
 
-    folio = services.registrar_entrada(
-        placa=form.cleaned_data["placa"],
-        tipo_cajon=form.cleaned_data["tipo_cajon"],
-        operador=request.user,
+# Billetes que se ofrecen como atajo de pago. Configurables porque dependen de
+# lo que circula en la zona y de la cuota; por omisión, los de uso común.
+ATAJOS_DE_PAGO_POR_OMISION = (50, 100, 200, 500)
+
+
+def _pintar_caja(request, contexto, status: int = 200):
+    """Completa lo que toda versión de la caja muestra y la dibuja."""
+    contexto.setdefault("patio", services.folios_en_patio())
+    contexto.setdefault("ocupacion", services.consultar_ocupacion())
+    return render(request, "estacionamiento/caja.html", contexto, status=status)
+
+
+def _atajos_para(importe: Decimal) -> list[int]:
+    """
+    Billetes con los que tiene sentido pagar este importe.
+
+    Solo los que alcanzan: un atajo de $50 ante un cobro de $80 es un botón que
+    siempre termina en «pago insuficiente».
+    """
+    billetes = getattr(settings, "IRCARS_ATAJOS_DE_PAGO", ATAJOS_DE_PAGO_POR_OMISION)
+    return [b for b in billetes if Decimal(b) >= importe]
+
+
+def _preparar_cobro(contexto, folio, cotizacion) -> None:
+    """Pone en el contexto la tarjeta de cobro de un folio ya cotizado."""
+    form = CobroForm(initial={"folio": folio.uuid})
+    # El importe viaja al campo para el cambio estimado del navegador. Es solo
+    # una ayuda visual: el cobro lo recalcula el servidor.
+    form.fields["pago_recibido"].widget.attrs["data-importe"] = str(cotizacion.importe)
+    contexto.update(
+        {
+            "folio_cotizado": folio,
+            "cotizacion": cotizacion,
+            "form_cobro": form,
+            "atajos": _atajos_para(cotizacion.importe),
+        }
     )
+
+
+def _procesar_entrada(request, contexto):
+    form = CapturaForm(request.POST)
+    if not form.is_valid():
+        # Se vuelve a dibujar en lugar de redirigir: el error aparece junto al
+        # campo y lo tecleado se conserva.
+        contexto["form_captura"] = form
+        return _pintar_caja(request, contexto, status=400)
+
+    placa = form.cleaned_data["placa"]
+    try:
+        folio = services.registrar_entrada(
+            placa=placa,
+            tipo_cajon=form.cleaned_data["tipo_cajon"],
+            operador=request.user,
+        )
+    except VehiculoYaDentro:
+        # No es un error de quien opera: casi siempre es el vehículo que sale
+        # y se tecleó en «Entrada». Se le ofrece directamente su cobro.
+        existente = services.buscar_folio_abierto_por_placa(placa)
+        if existente is None:
+            raise
+        messages.info(
+            request,
+            f"{existente.placa} ya estaba dentro desde las "
+            f"{timezone.localtime(existente.entrada_en):%H:%M}. "
+            "Si está saliendo, cobre aquí.",
+        )
+        _preparar_cobro(contexto, existente, services.cotizar_folio(existente))
+        return _pintar_caja(request, contexto)
+
     ubicacion = f" · cajón {folio.cajon.codigo}" if folio.cajon else ""
     messages.success(
         request,
@@ -360,34 +426,39 @@ def _qr_o_nada(url: str):
 
 
 def _procesar_cotizacion(request, contexto):
-    form = BuscarPlacaForm(request.POST)
+    form = CapturaForm(request.POST)
     if not form.is_valid():
-        messages.error(request, "Capture la placa a cobrar.")
-        return redirect("web:caja")
+        contexto["form_captura"] = form
+        return _pintar_caja(request, contexto, status=400)
 
-    folio = services.buscar_folio_abierto_por_placa(form.cleaned_data["placa"])
+    placa = form.cleaned_data["placa"]
+    folio = services.buscar_folio_abierto_por_placa(placa)
     if folio is None:
-        messages.warning(
-            request,
-            "No hay ningún vehículo dentro con esa placa. Verifique la captura "
-            "o búsquela en la lista de vehículos.",
+        # En lugar de un «no existe» seco, las placas del patio que contienen
+        # lo tecleado —el operador suele recordar solo una parte— y la opción
+        # de registrar la entrada, por si se pulsó el botón equivocado.
+        buscado = services.normalizar_placa(placa)
+        patio = services.folios_en_patio()
+        # Sin guiones de ninguno de los dos lados: «ABC12» debe sugerir
+        # «ABC-1234», que es como el operador lo recuerda a medias.
+        sin_guion = buscado.replace("-", "")
+        contexto.update(
+            {
+                "patio": patio,
+                "sugerencias": [
+                    f for f in patio if sin_guion in f["placa"].replace("-", "")
+                ][:5],
+                "placa_no_encontrada": buscado,
+                "form_captura": form,
+            }
         )
-        return redirect("web:caja")
+        return _pintar_caja(request, contexto)
 
-    cotizacion = services.cotizar_folio(folio)
     # La cotización se renderiza directamente, sin redirección: es una
     # operación de solo lectura y el resultado debe quedar en pantalla junto al
     # formulario de cobro.
-    contexto.update(
-        {
-            "folio_cotizado": folio,
-            "cotizacion": cotizacion,
-            "form_cobro": CobroForm(initial={"folio": folio.uuid}),
-            "patio": services.folios_en_patio(),
-            "ocupacion": services.consultar_ocupacion(),
-        }
-    )
-    return render(request, "estacionamiento/caja.html", contexto)
+    _preparar_cobro(contexto, folio, services.cotizar_folio(folio))
+    return _pintar_caja(request, contexto)
 
 
 def _procesar_cobro(request):
@@ -421,18 +492,17 @@ def _procesar_cobro(request):
         exigir_turno=True,
     )
 
-    if cotizacion.es_cortesia:
-        messages.success(
-            request, f"Salida de {folio.placa} registrada en cortesía (sin cobro)."
-        )
-    elif folio.cambio is not None and folio.cambio > 0:
-        messages.success(
-            request,
-            f"Cobrado ${folio.importe:,.2f} de {folio.placa}. "
-            f"CAMBIO A ENTREGAR: ${folio.cambio:,.2f}",
-        )
-    else:
-        messages.success(request, f"Cobrado ${folio.importe:,.2f} de {folio.placa}.")
+    # El resultado se muestra como tarjeta propia y no como un aviso más: el
+    # cambio es la cifra que se dice en voz alta, y en un aviso tenía el tamaño
+    # de cualquier mensaje. Viaja por la sesión, de lectura única, y la
+    # redirección tras POST se conserva: recargar no cobra dos veces.
+    request.session[CLAVE_RESULTADO_COBRO] = {
+        "placa": folio.placa,
+        "importe": str(folio.importe),
+        "pago_recibido": str(folio.pago_recibido) if folio.pago_recibido is not None else None,
+        "cambio": str(folio.cambio) if folio.cambio is not None else None,
+        "es_cortesia": cotizacion.es_cortesia,
+    }
     return redirect("web:caja")
 
 

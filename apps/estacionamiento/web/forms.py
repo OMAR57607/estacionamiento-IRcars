@@ -23,12 +23,28 @@ from ..models import TipoCajon
 from ..services_metricas import MINIMO_VISITAS, TOP_CLIENTES
 
 
-class EntradaForm(forms.Form):
-    """Ingreso de un vehículo."""
+class CapturaForm(forms.Form):
+    """
+    La captura única de la caja: una placa y el tipo de vehículo.
+
+    Sustituye a los dos formularios que había, uno para la entrada y otro para
+    la salida. En el teléfono quedaban apilados con el mismo campo de placa, y
+    el operador tecleaba en el equivocado: recibía un error en lugar de la
+    operación. Ahora hay un solo campo y dos botones, y el servidor decide qué
+    hacer según el estado de esa placa —si está dentro, si es pensionado—.
+
+    Los nombres de los campos (`placa`, `tipo_cajon`) se conservan: son el
+    contrato con los envíos de la propia caja y con cualquier integración que
+    ya los use.
+    """
 
     placa = forms.CharField(
         max_length=15,
         label="Placa",
+        error_messages={
+            "required": "Teclee la placa que ve en el vehículo.",
+            "max_length": "Una placa no tiene más de 15 caracteres.",
+        },
         widget=forms.TextInput(
             attrs={
                 "autofocus": True,
@@ -40,43 +56,47 @@ class EntradaForm(forms.Form):
                 "spellcheck": "false",
                 "class": "campo campo-grande",
                 "placeholder": "ABC-123",
+                # Mejora progresiva: mayúsculas al teclear y filtro del patio.
+                "data-mayusculas": "",
+                "data-filtra": "#patio",
             }
         ),
     )
     tipo_cajon = forms.ChoiceField(
-        choices=TipoCajon.choices,
+        # Rótulos cortos: cada opción es un botón de un tercio del ancho del
+        # teléfono. El largo («personas con discapacidad») va en la ayuda.
+        choices=[
+            (TipoCajon.AUTOMOVIL, "Automóvil"),
+            (TipoCajon.MOTOCICLETA, "Moto"),
+            (TipoCajon.ACCESIBLE, "Accesible"),
+        ],
         initial=TipoCajon.AUTOMOVIL,
         required=False,
         label="Tipo de vehículo",
         help_text=(
             "Decide el precio: la motocicleta tiene su propia tarifa. "
-            "«Accesible» es un cajón reservado y cobra como automóvil."
+            "«Accesible» es el cajón reservado a personas con discapacidad y "
+            "cobra como automóvil."
         ),
-        widget=forms.Select(attrs={"class": "campo"}),
+        # Radios y no un desplegable: la elección es de tres opciones, se hace
+        # en cada entrada y decide el precio. Un toque, con las opciones a la
+        # vista, en lugar de dos toques y un menú del sistema.
+        widget=forms.RadioSelect,
     )
+
+    def clean_placa(self):
+        # Una placa hecha solo de espacios o guiones pasaría la validación de
+        # «requerido» y llegaría vacía al servicio, que la rechazaría con un
+        # mensaje menos claro que este.
+        placa = self.cleaned_data["placa"]
+        if not placa.replace(" ", "").replace("-", "").strip():
+            raise forms.ValidationError("Teclee la placa que ve en el vehículo.")
+        return placa
 
     def clean_tipo_cajon(self):
         # El campo es opcional en el formulario para simplificar la captura
         # cuando no se administran cajones; el valor por omisión es automóvil.
         return self.cleaned_data.get("tipo_cajon") or TipoCajon.AUTOMOVIL
-
-
-class BuscarPlacaForm(forms.Form):
-    """Búsqueda de la placa para cotizar la salida."""
-
-    placa = forms.CharField(
-        max_length=15,
-        label="Placa",
-        widget=forms.TextInput(
-            attrs={
-                "autocomplete": "off",
-                "autocapitalize": "characters",
-                "spellcheck": "false",
-                "class": "campo campo-grande",
-                "placeholder": "ABC-123",
-            }
-        ),
-    )
 
 
 class CobroForm(forms.Form):
@@ -104,6 +124,8 @@ class CobroForm(forms.Form):
                 "placeholder": "0.00",
                 # inputmode decimal abre el teclado numérico en móvil.
                 "inputmode": "decimal",
+                # El cambio estimado se escribe aquí mientras se teclea.
+                "data-cambio": "#cambio-estimado",
             }
         ),
         help_text="Déjelo vacío si no se recibe efectivo (cortesía o terminal).",
