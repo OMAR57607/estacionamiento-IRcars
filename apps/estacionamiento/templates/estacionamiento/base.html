@@ -52,20 +52,27 @@
   </a>
 
   <nav class="barra-secciones">
-    <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>
-    <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>Turno y corte</a>
+    <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo" aria-current="page"{% endif %}>Caja</a>
+    <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo" aria-current="page"{% endif %}>Turno y corte</a>
     {% if es_administrativo %}
-      <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>Reportes</a>
+      <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo" aria-current="page"{% endif %}>Reportes</a>
       {% comment %} Entrada propia y no un enlace dentro de Reportes: es la pantalla que
          el dueño abre para decidir —horarios, personal, quién vuelve— y
          esconderla dentro del listado de boletos la deja sin usar. {% endcomment %}
-      <a href="{% url 'web:metricas' %}" {% if seccion == 'metricas' %}class="activo"{% endif %}>Métricas</a>
-      <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>Operadores</a>
+      <a href="{% url 'web:metricas' %}" {% if seccion == 'metricas' %}class="activo" aria-current="page"{% endif %}>Métricas</a>
+      <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo" aria-current="page"{% endif %}>Operadores</a>
     {% endif %}
     {% comment %} «Precio» y no «Tarifa»: el rótulo anterior obligaba a saber que el
        precio se consulta y se cambia ahí. {% endcomment %}
-    <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>Precio</a>
+    <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo" aria-current="page"{% endif %}>Precio</a>
   </nav>
+
+  {% comment %} En el teléfono no cabe el nombre del operador: queda el estado del
+     turno, que es lo que decide si se puede cobrar, como enlace a su
+     pantalla. {% endcomment %}
+  <a class="pildora-turno{% if not turno_actual %} sin-turno{% endif %}" href="{% url 'web:turno' %}">
+    {% if turno_actual %}Turno {{ turno_actual.pk }}{% else %}Sin turno{% endif %}
+  </a>
 
   <div class="barra-operador">
     <a class="operador" href="{% url 'web:clave' %}" title="Cambiar mi contraseña">
@@ -109,8 +116,12 @@
    de modo que el mismo icono sale de un tamaño y un grosor distintos en cada
    aparato, y en algunos no existe. Un trazo propio se ve igual en todos y
    hereda el color del enlace activo. {% endcomment %}
-<nav class="barra-inferior no-imprimir">
-  <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>
+<nav class="barra-inferior no-imprimir" aria-label="Secciones">
+  {% comment %} Cuatro destinos y no cinco o seis: con más, cada objetivo táctil se
+     estrecha por debajo de lo que el pulgar acierta, y Métricas ni siquiera
+     cabía. Lo demás vive en «Más», que es una página y no un menú
+     desplegable. {% endcomment %}
+  <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo" aria-current="page"{% endif %}>
     <span class="icono" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round" stroke-linejoin="round">
@@ -121,7 +132,9 @@
     <span>Caja</span>
   </a>
 
-  <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo"{% endif %}>
+  {# destino-pensiones #}
+
+  <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo" aria-current="page"{% endif %}>
     <span class="icono" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round" stroke-linejoin="round">
@@ -132,41 +145,15 @@
     <span>Turno</span>
   </a>
 
-  <a href="{% url 'web:tarifa' %}" {% if seccion == 'tarifa' %}class="activo"{% endif %}>
+  <a href="{% url 'web:mas' %}" {% if seccion in secciones_de_mas %}class="activo" aria-current="page"{% endif %}>
     <span class="icono" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
            stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 3v18"/>
-        <path d="M16.5 7.5C16.5 5.8 14.5 4.8 12 4.8S7.5 5.8 7.5 7.8s2 2.7 4.5 3.2
-                 S16.5 12.7 16.5 14.7s-2 3-4.5 3-4.5-1-4.5-2.7"/>
+        <path d="M4 7h16M4 12h16M4 17h16"/>
       </svg>
     </span>
-    <span>Precio</span>
+    <span>Más</span>
   </a>
-
-  {% if es_administrativo %}
-    <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo"{% endif %}>
-      <span class="icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
-        </svg>
-      </span>
-      <span>Reportes</span>
-    </a>
-
-    <a href="{% url 'web:operadores' %}" {% if seccion == 'operadores' %}class="activo"{% endif %}>
-      <span class="icono" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="8" r="3.2"/>
-          <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>
-          <path d="M16 11.2a3.2 3.2 0 1 0 0-6.4M17 14.3c2.2.5 3.8 2.3 3.8 4.7"/>
-        </svg>
-      </span>
-      <span>Equipo</span>
-    </a>
-  {% endif %}
 </nav>
 {% endif %}
 

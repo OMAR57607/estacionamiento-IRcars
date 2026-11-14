@@ -93,7 +93,30 @@ def _contexto_base(request) -> dict:
             services_caja.estado_del_turno(turno_actual) if turno_actual else None
         ),
         "es_administrativo": _es_administrativo(request.user),
+        # Secciones que en el teléfono viven dentro de «Más»: la pestaña se
+        # marca activa en cualquiera de ellas, para que el operador sepa
+        # dónde está y cómo volver.
+        "secciones_de_mas": SECCIONES_DE_MAS,
     }
+
+
+SECCIONES_DE_MAS = ("mas", "tarifa", "reportes", "metricas", "operadores", "mantenimiento", "clave")
+
+
+@login_required
+@require_safe
+def mas(request):
+    """
+    Las secciones que no caben en la barra inferior del teléfono.
+
+    Es una página y no un menú desplegable: funciona sin JavaScript, se puede
+    abrir en otra pestaña y el botón «atrás» del teléfono hace lo esperado.
+    Lo que muestra depende del perfil, igual que la cabecera de escritorio:
+    un operador no ve destinos que le negarían el acceso.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "mas"
+    return render(request, "estacionamiento/mas.html", contexto)
 
 
 # ---------------------------------------------------------------------- Caja
@@ -116,6 +139,7 @@ class CambiarClave(PasswordChangeView):
 
     template_name = "estacionamiento/clave.html"
     success_url = reverse_lazy("web:caja")
+    extra_context = {"seccion": "clave"}
 
     def form_valid(self, form):
         messages.success(

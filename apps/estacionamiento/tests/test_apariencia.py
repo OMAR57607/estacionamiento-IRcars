@@ -212,7 +212,7 @@ class TestNavegacion:
         contenido = sesion.get(reverse("web:caja"), secure=True).content.decode()
 
         assert "barra-inferior" in contenido
-        for destino in ("web:caja", "web:turno", "web:tarifa"):
+        for destino in ("web:caja", "web:turno", "web:tarifa", "web:mas"):
             assert reverse(destino) in contenido
 
     def test_los_iconos_no_dependen_de_la_fuente_del_telefono(self, sesion):
@@ -229,6 +229,38 @@ class TestNavegacion:
         assert 'stroke="currentColor"' in contenido, (
             "El icono debe heredar el color del enlace activo"
         )
+
+    def test_mas_ofrece_metricas_solo_al_perfil_administrativo(self, client):
+        """
+        Métricas no cabía en la barra del teléfono y quedaba inalcanzable.
+
+        Vive ahora en «Más», que muestra a cada quien solo los destinos que
+        puede abrir: ofrecerle a un cajero una pantalla que lo rechaza es una
+        invitación a probar.
+        """
+        usuarios = get_user_model().objects
+        cajero = usuarios.create_user(username="cajero2", password=CLAVE)
+        duena = usuarios.create_user(username="duena", password=CLAVE, is_staff=True)
+
+        client.force_login(cajero)
+        contenido = client.get(reverse("web:mas"), secure=True).content.decode()
+        assert reverse("web:metricas") not in contenido
+        assert reverse("web:tarifa") in contenido
+        assert reverse("web:clave") in contenido
+
+        client.force_login(duena)
+        contenido = client.get(reverse("web:mas"), secure=True).content.decode()
+        assert reverse("web:metricas") in contenido
+        assert reverse("web:operadores") in contenido
+
+    def test_el_destino_activo_se_anuncia(self, sesion):
+        """`aria-current` dice al lector de pantalla en qué sección está."""
+        contenido = sesion.get(reverse("web:caja"), secure=True).content.decode()
+        assert 'aria-current="page"' in contenido
+
+    def test_cerrar_sesion_desde_mas_va_por_post(self, sesion):
+        contenido = sesion.get(reverse("web:mas"), secure=True).content.decode()
+        assert f'method="post" action="{reverse("logout")}"' in contenido
 
     def test_la_navegacion_no_se_imprime(self, sesion):
         """El comprobante de corte se firma en papel y no lleva menús."""

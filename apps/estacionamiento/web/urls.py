@@ -16,6 +16,8 @@ urlpatterns = [
     # llevan la huella de su contenido.
     path("manifiesto.json", views.manifiesto, name="manifiesto"),
     path("turno/", views.turno, name="turno"),
+    # Secciones que no caben en la barra inferior del teléfono.
+    path("mas/", views.mas, name="mas"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
     # Corrección de un corte ya cerrado. En su propia dirección y no como un
     # formulario más del comprobante: llegar aquí es un acto deliberado del

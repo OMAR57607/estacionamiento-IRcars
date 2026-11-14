@@ -1,0 +1,90 @@
+{% extends "estacionamiento/base.html" %}
+
+{% block titulo %}Más{% endblock %}
+
+{% comment %}
+  Las secciones que no caben en la barra inferior del teléfono.
+
+  Cada entrada dice para qué sirve y no solo cómo se llama: «Métricas» no le
+  dice al dueño que ahí están las horas pico y los clientes que vuelven. Lo que
+  ve cada quien depende de su perfil, igual que en la cabecera de escritorio.
+{% endcomment %}
+
+{% block contenido %}
+<div class="encabezado-pantalla"><h1>Más</h1></div>
+
+<div class="tarjeta angosta">
+  <ul class="menu">
+    <li>
+      <a href="{% url 'web:tarifa' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M16.5 7.5C16.5 5.8 14.5 4.8 12 4.8S7.5 5.8 7.5 7.8s2 2.7 4.5 3.2S16.5 12.7 16.5 14.7s-2 3-4.5 3-4.5-1-4.5-2.7"/></svg>
+        </span>
+        <strong>Precio</strong>
+        <small>Tarifa por hora{% if es_administrativo %} y cómo cambiarla{% endif %}</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+    {% if es_administrativo %}
+    <li>
+      <a href="{% url 'web:reportes' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/></svg>
+        </span>
+        <strong>Reportes</strong>
+        <small>Boletos cobrados por fecha y exportación</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'web:metricas' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        </span>
+        <strong>Métricas</strong>
+        <small>Horas pico, clientes frecuentes y PDF</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'web:operadores' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 11.2a3.2 3.2 0 1 0 0-6.4M17 14.3c2.2.5 3.8 2.3 3.8 4.7"/></svg>
+        </span>
+        <strong>Equipo</strong>
+        <small>Operadores, accesos y permisos</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'web:mantenimiento' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+        </span>
+        <strong>Mantenimiento</strong>
+        <small>Borrar los movimientos de prueba</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+    {% endif %}
+    <li>
+      <a href="{% url 'web:clave' %}">
+        <span class="icono" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        </span>
+        <strong>Mi contraseña</strong>
+        <small>Sesión de {{ user.get_username }}</small>
+        <span class="flecha" aria-hidden="true">›</span>
+      </a>
+    </li>
+  </ul>
+</div>
+
+{% comment %} El cierre de sesión va por POST, como en la cabecera: un GET permitiría
+   cerrar la sesión del operador desde un enlace incrustado en otra página.
+   {% endcomment %}
+<form method="post" action="{% url 'logout' %}" class="angosta">
+  {% csrf_token %}
+  <button type="submit" class="boton fantasma">Cerrar sesión</button>
+</form>
+{% endblock %}
