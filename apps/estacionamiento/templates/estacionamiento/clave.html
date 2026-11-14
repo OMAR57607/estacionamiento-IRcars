@@ -3,7 +3,7 @@
 {% block titulo %}Cambiar contraseña{% endblock %}
 
 {% block contenido %}
-<div class="tarjeta" style="max-width:460px;margin:0 auto">
+<div class="tarjeta angosta centrada">
   <h2>Cambiar su contraseña</h2>
 
   <p class="ayuda">
@@ -34,7 +34,7 @@
     <label for="{{ form.new_password2.id_for_label }}">Repita la contraseña nueva</label>
     {{ form.new_password2 }}
 
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem">
+    <div class="acciones-fila mt">
       <button type="submit" class="boton">Cambiar contraseña</button>
       <a class="boton secundario" href="{% url 'web:caja' %}">Volver a la caja</a>
     </div>

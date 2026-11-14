@@ -61,7 +61,7 @@
     <button type="submit" class="boton">Cobrar y cerrar folio</button>
   </form>
 
-  <p class="ayuda" style="margin-top:.8rem">
+  <p class="ayuda mt">
     <a href="{% url 'web:cancelar' folio_cotizado.uuid %}">
       Cancelar este folio por error de captura
     </a>
@@ -79,7 +79,7 @@
       <input type="hidden" name="accion" value="entrada">
       <label for="{{ form_entrada.placa.id_for_label }}">Placa</label>
       {{ form_entrada.placa }}
-      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" style="margin-top:.7rem">Tipo de vehículo</label>
+      <label for="{{ form_entrada.tipo_cajon.id_for_label }}" class="mt">Tipo de vehículo</label>
       {{ form_entrada.tipo_cajon }}
       {% comment %} Esta elección decide el precio desde que la motocicleta tiene tarifa
          propia. Antes solo escogía cajón y pasarla por alto no costaba nada;
@@ -99,7 +99,7 @@
       {{ form_buscar.placa }}
       <button type="submit" class="boton">Cotizar</button>
     </form>
-    <p class="ayuda" style="margin-top:.7rem">
+    <p class="ayuda mt">
       La cotización no cierra el folio: informe el monto, reciba el efectivo y
       cobre después.
     </p>
@@ -109,7 +109,7 @@
 
 {# --------------------------------------------------------- Ocupación #}
 {% if ocupacion.capacidad_total %}
-<div class="indicadores" style="margin-bottom:1rem">
+<div class="indicadores mb">
   <div class="indicador">
     <div class="rotulo">Dentro</div>
     <div class="valor">{{ ocupacion.ocupados_total }}</div>
@@ -163,7 +163,7 @@
         <span class="celda-acciones">
           {% comment %} Formulario en lugar de enlace: cotizar es idempotente, pero el
              POST mantiene una sola vía de entrada a la lógica. {% endcomment %}
-          <form method="post" style="margin:0">
+          <form method="post" class="m-0">
             {% csrf_token %}
             <input type="hidden" name="accion" value="cotizar">
             <input type="hidden" name="placa" value="{{ fila.placa }}">

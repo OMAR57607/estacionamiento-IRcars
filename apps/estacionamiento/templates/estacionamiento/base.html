@@ -13,8 +13,10 @@
   {% comment %} Color de la barra del navegador y de la ventana cuando la aplicación se
      añade a la pantalla de inicio. Sin esto, el teléfono la enmarca en blanco
      y se nota que es una página y no una aplicación. {% endcomment %}
-  <meta name="theme-color" content="#1b4f91" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1823" media="(prefers-color-scheme: dark)">
+  {% comment %} Grafito de la marca en los dos temas: es el color de la cabecera, y la
+     barra del navegador debe continuarla sin un corte de color. {% endcomment %}
+  <meta name="theme-color" content="#1f2128" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
 
   {% comment %} El icono es el logotipo de la marca, en mapa de bits. Se declaran dos
      tamaños en lugar de un SVG porque el logotipo no es vectorial: a 32 px el
@@ -30,8 +32,13 @@
   <meta name="apple-mobile-web-app-title" content="{{ nombre_comercial }}">
 
   <link rel="stylesheet" href="{% static 'estacionamiento/estilos.css' %}">
+  {% comment %} Mejora progresiva: filtro del patio, atajos de pago y cambio estimado.
+     Toda operación se completa igual sin este archivo; el servidor es la
+     única autoridad sobre los importes. {% endcomment %}
+  <script src="{% static 'estacionamiento/caja.js' %}" defer></script>
 </head>
-<body>
+<body class="{% block clase_cuerpo %}{% endblock %}">
+<a class="saltar" href="#contenido">Saltar al contenido</a>
 
 {% if user.is_authenticated %}
 {% comment %} Cabecera compacta y pegada arriba. En un teléfono, la navegación
@@ -39,7 +46,10 @@
    identidad y lo propio del operador, y las secciones bajan a la barra
    inferior, al alcance del pulgar. {% endcomment %}
 <header class="barra no-imprimir">
-  <span class="marca">{{ nombre_comercial }}</span>
+  <a class="marca" href="{% url 'web:caja' %}">
+    <img src="{% static 'estacionamiento/icono-192.png' %}" alt="" width="30" height="30">
+    <span>{{ nombre_comercial }}</span>
+  </a>
 
   <nav class="barra-secciones">
     <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo"{% endif %}>Caja</a>
@@ -77,10 +87,13 @@
 </header>
 {% endif %}
 
-<main class="contenido">
+<main class="contenido" id="contenido">
+  {% comment %} `role="status"` hace que un lector de pantalla anuncie el aviso sin
+     mover el foco; los errores usan `alert`, que interrumpe, porque la
+     operación no se hizo. {% endcomment %}
   {% if messages %}
     {% for mensaje in messages %}
-      <div class="aviso {{ mensaje.tags }}">{{ mensaje }}</div>
+      <div class="aviso {{ mensaje.tags }}" role="{% if mensaje.level_tag == 'error' %}alert{% else %}status{% endif %}">{{ mensaje }}</div>
     {% endfor %}
   {% endif %}
 

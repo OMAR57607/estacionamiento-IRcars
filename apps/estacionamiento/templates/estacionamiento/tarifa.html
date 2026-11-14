@@ -24,9 +24,9 @@
   <div class="tarjeta">
     <h2>{{ precio.etiqueta }}</h2>
     {% if precio.vigente %}
-      <p style="margin:0"><span class="etiqueta cuadra">Precio bloqueado</span></p>
+      <p class="m-0"><span class="etiqueta cuadra">Precio bloqueado</span></p>
       <p class="importe-destacado">{{ precio.vigente.cuota_hora|pesos }}</p>
-      <p class="detalle-cobro" style="margin-top:-.4rem">
+      <p class="detalle-cobro mt-neg">
         por hora<br>
         <span class="ayuda">En uso desde el {{ precio.vigente.vigente_desde|date:"d/m/Y H:i" }}</span>
       </p>
@@ -50,21 +50,21 @@
       </table>
 
       {% if es_administrativo %}
-        <a href="{% url 'web:tarifa_cambiar' %}?tipo={{ precio.tipo }}" class="boton secundario" style="margin-top:1rem">Cambiar precio de {{ precio.etiqueta|lower }}…</a>
+        <a href="{% url 'web:tarifa_cambiar' %}?tipo={{ precio.tipo }}" class="boton secundario mt">Cambiar precio de {{ precio.etiqueta|lower }}…</a>
         <p class="ayuda">
           Para cambiarlo hay que confirmar su contraseña. El cambio queda
           registrado a su nombre.
         </p>
       {% else %}
-        <p class="ayuda" style="margin-top:1rem">
+        <p class="ayuda mt">
           Solo lo cambia el personal administrativo. Desde una caja se consulta,
           no se modifica.
         </p>
       {% endif %}
     {% else %}
-      <p style="margin:0"><span class="etiqueta faltante">Falta configurar este precio</span></p>
-      <p class="importe-destacado" style="color:var(--tinta-suave)">—</p>
-      <p class="detalle-cobro" style="margin-top:-.4rem">sin precio configurado</p>
+      <p class="m-0"><span class="etiqueta faltante">Falta configurar este precio</span></p>
+      <p class="importe-destacado apagado">—</p>
+      <p class="detalle-cobro mt-neg">sin precio configurado</p>
       <div class="aviso error">
         No se puede registrar la entrada de un vehículo de este tipo hasta
         configurar su precio.
@@ -92,14 +92,14 @@
       </ul>
     {% endif %}
     {% if precio.ejemplos %}
-      <p class="ayuda" style="margin-top:0">
+      <p class="ayuda mt-0">
         Lo que pagaría según el tiempo que se quede, con el precio vigente.
       </p>
       <table>
         <tbody>
         {% for ejemplo in precio.ejemplos %}
           <tr>
-            <th style="text-transform:none;font-size:.92rem">{{ ejemplo.etiqueta }}</th>
+            <th class="th-llano">{{ ejemplo.etiqueta }}</th>
             <td class="numero">
               {% if ejemplo.es_cortesia %}gratis{% else %}{{ ejemplo.importe|pesos }}{% endif %}
             </td>
@@ -117,7 +117,7 @@
 
 <div class="tarjeta">
   <h2>Cambios de precio</h2>
-  <p class="ayuda" style="margin-top:0">
+  <p class="ayuda mt-0">
     Cada cambio queda registrado. Los cobros ya hechos conservan el precio con
     que se calcularon, y así puede demostrarse qué precio estuvo exhibido en
     cada fecha ante una aclaración del cliente o una verificación de la

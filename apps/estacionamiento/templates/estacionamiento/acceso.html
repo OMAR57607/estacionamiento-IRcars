@@ -1,10 +1,18 @@
 {% extends "estacionamiento/base.html" %}
+{% load static %}
 
 {% block titulo %}Acceso{% endblock %}
+
+{% block clase_cuerpo %}acceso{% endblock %}
 
 {% block contenido %}
 <div class="pantalla-acceso">
   <div class="caja-acceso">
+    {% comment %} El logotipo encima de la tarjeta, sobre el grafito de la marca: es
+       la primera pantalla que ve el operador y la que identifica al negocio.
+       {% endcomment %}
+    <img class="logo-acceso" src="{% static 'estacionamiento/icono-192.png' %}" alt="" width="96" height="96">
+    <p class="nombre-acceso">{{ nombre_comercial }}</p>
     <div class="tarjeta">
       <h2>Acceso a la caja</h2>
 
@@ -27,14 +35,14 @@
                autofocus autocomplete="username" required
                autocapitalize="none" autocorrect="off" spellcheck="false">
 
-        <label for="id_password" style="margin-top:.8rem">Contraseña</label>
+        <label for="id_password" class="mt">Contraseña</label>
         <input type="password" name="password" id="id_password" class="campo"
                autocomplete="current-password" required>
 
         <button type="submit" class="boton">Entrar</button>
       </form>
 
-      <p class="ayuda" style="margin-top:1rem">
+      <p class="ayuda mt">
         Cada movimiento queda registrado a nombre del operador que lo realiza.
         El corte de caja se le atribuye a esa misma persona.
       </p>

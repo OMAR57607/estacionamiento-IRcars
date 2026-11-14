@@ -174,8 +174,10 @@ def manifiesto(request):
             "scope": "/",
             "display": "standalone",
             "orientation": "portrait",
-            "background_color": "#f4f6f8",
-            "theme_color": "#1b4f91",
+            # El grafito de la marca: la ventana de la aplicación instalada
+            # arranca del mismo color que su cabecera y su pantalla de acceso.
+            "background_color": "#1f2128",
+            "theme_color": "#1f2128",
             "lang": "es-MX",
             "icons": [
                 icono("icono-192.png", 192, "any"),

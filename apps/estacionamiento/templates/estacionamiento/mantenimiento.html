@@ -4,10 +4,10 @@
 
 {% block contenido %}
 
-<div class="tarjeta" style="max-width:640px">
+<div class="tarjeta angosta">
   <h2>Dejar la base como recién instalada</h2>
 
-  <p class="ayuda" style="margin-top:0">
+  <p class="ayuda mt-0">
     Tras las pruebas de instalación quedan boletos y turnos que no
     corresponden a ninguna operación real. Dejarlos envenena el primer corte
     de caja y cualquier reporte posterior, porque después nadie distingue un
@@ -17,7 +17,7 @@
   {% comment %} Las cifras antes del botón, y no en un aviso posterior: un número
      inesperado —diez boletos donde se esperaban dos— es lo único que detiene
      a tiempo a quien ya decidió pulsar. {% endcomment %}
-  <h3 style="margin-bottom:.4rem">Se va a borrar</h3>
+  <h3 class="mb">Se va a borrar</h3>
   <table>
     <tbody>
       <tr><th>Boletos (folios)</th><td class="numero">{{ resumen.folios }}</td></tr>
@@ -40,7 +40,7 @@
     </div>
   {% endif %}
 
-  <h3 style="margin-bottom:.4rem">Se conserva</h3>
+  <h3 class="mb">Se conserva</h3>
   <table>
     <tbody>
       <tr><th>Su usuario y su contraseña</th><td>sí</td></tr>
@@ -64,7 +64,7 @@
     {% csrf_token %}
 
     {% if resumen.precios_historicos %}
-      <label style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:.8rem">
+      <label class="casilla mb">
         <input type="checkbox" name="historico_precios" value="1">
         <span>
           Borrar también {{ resumen.precios_historicos }} precio(s) viejo(s) del
