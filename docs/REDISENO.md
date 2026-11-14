@@ -71,20 +71,35 @@ duplicar marcado.
 
 ---
 
-## 2. Decisiones de negocio (valor por omisión entre paréntesis)
+## 2. Decisiones de negocio — confirmadas
 
-Confirmarlas con el dueño cambia ajustes, no arquitectura.
+Confirmadas por el dueño el 14/11/2026. **Sustituyen a la propuesta mensual
+original**: la pensión es **diaria** y su vigencia se mide en horas y minutos,
+no en fechas. Donde el resto de este documento dice «mensualidad», «mes» o
+`DateField`, rige lo de esta sección.
 
-| Id | Decisión | Por omisión | Ajuste |
-|---|---|---|---|
-| D1 | Vehículo con pensión **vencida** que entra | Entra como rotación (cobro por hora) con aviso visible y botón «Renovar pensión» | — |
-| D2 | Periodo de la mensualidad | Un mes por aniversario: del día *d* al día anterior al mismo *d* del mes siguiente (31 ene → 28/29 feb) | — |
-| D3 | Renovación tras vencer | Si se paga dentro de los días de gracia, el periodo continúa sin hueco; pasado ese plazo, el periodo nuevo empieza el día del pago | `IRCARS_PENSION_DIAS_GRACIA` (0) |
-| D4 | Vehículos por pensión | Uno. Dos autos del mismo cliente son dos pensiones | — |
-| D5 | Forma de pago | Solo efectivo, dentro de un turno abierto (igual que los boletos) | — |
-| D6 | Quién opera qué | Operador: alta, cobro de mensualidad, entrada y salida. Administrativo: precio de los planes, baja de una pensión, cancelación de un pago | — |
-| D7 | Pensión que vence con el vehículo dentro | La salida no se cobra (entró cubierto), pero la tarjeta de salida y el patio avisan del vencimiento y ofrecen renovar | — |
-| D8 | Aviso de vencimiento próximo | La pensión se marca «Por vencer» a 5 días | `IRCARS_PENSION_AVISO_DIAS` (5) |
+| Id | Decisión | Regla implementada |
+|---|---|---|
+| D1 | Precio | **$180.00 por día** (24 horas). Un solo plan activo para cualquier tipo de vehículo; lo siembra la migración y solo el perfil administrativo lo cambia, con contraseña |
+| D2 | Periodo | Cada día pagado cubre 24 horas. Se pueden pagar varios días a la vez (1 a 31) |
+| D3 | Vencimiento | **Si la estancia rebasa la vigencia en un minuto completo, ese excedente se cobra con la tarifa por hora vigente**, sin minutos de cortesía (la cortesía es para quien entra, no para quien se pasa). Los segundos se truncan, como en todo cobro |
+| D4 | «A menos que renueve» | Renovar cubre la estancia en curso sin huecos: si la pensión está vigente, el periodo nuevo empieza donde acaba el anterior; si venció y el vehículo está dentro, empieza al vencimiento (o a la entrada, si entró ya vencido) y la estancia pasa a ser de pensión; si no está dentro, empieza al pagar |
+| D5 | Vehículos por pensión | Uno |
+| D6 | Forma de pago | Solo efectivo, dentro de un turno abierto |
+| D7 | Permisos | Los actuales: el operador da de alta, cobra días y registra entradas y salidas; el perfil administrativo cambia el precio, da de baja y cancela un pago |
+| D8 | Aviso | La pensión se marca «Por vencer» en sus últimas 2 horas (`IRCARS_PENSION_AVISO_HORAS`) |
+
+Consecuencias en la arquitectura de §6:
+
+- `Pension.vigente_hasta` y `PagoPension.periodo_desde/hasta` son `DateTimeField`.
+- `PlanPension.precio_diario` sustituye a `precio_mensual`; `PagoPension.dias`
+  sustituye a `meses`.
+- El dominio trabaja con `datetime` y `timedelta(days=…)`; desaparecen
+  `sumar_meses` y los días de gracia (D4 los hace innecesarios).
+- Un folio de pensión que sale **dentro** de la vigencia se cierra en $0, sin
+  turno. Si sale **fuera**, el excedente se cobra como cualquier boleto:
+  exige turno, entra al corte como cobro de boleto y su folio copia los
+  parámetros de tarifa aplicados.
 
 **Marco legal que el diseño ya atiende** (PROFECO / LFPC y LFPDPPP):
 

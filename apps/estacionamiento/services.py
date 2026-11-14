@@ -33,12 +33,15 @@ from .domain.exceptions import (
     SinTurnoAbierto,
     VehiculoYaDentro,
 )
+from .domain import pensiones as dominio_pensiones
 from .domain.tarifas import Cotizacion, cotizar, minutos_transcurridos
 from .models import (
     Cajon,
     EstadoFolio,
+    EstadoPension,
     EstadoTurno,
     Folio,
+    Pension,
     Tarifa,
     TipoCajon,
     TipoVehiculo,
@@ -179,6 +182,19 @@ def registrar_entrada(
             "salida o verifique si se trata de una placa duplicada."
         )
 
+    # Pensión: la decide la placa contra la base, nunca el operador. Si la
+    # vigencia cubre este instante, la estancia es de pensión; si venció, el
+    # vehículo entra como cualquier otro y paga por hora, salvo que renueve.
+    pension = (
+        Pension.objects.filter(placa=placa, estado=EstadoPension.ACTIVA).first()
+    )
+    if pension is not None and dominio_pensiones.cubre(
+        momento=momento, vigente_hasta=pension.vigente_hasta
+    ):
+        tipo_cajon = _cajon_de_pensionado(pension, tipo_cajon)
+    else:
+        pension = None
+
     # El precio lo decide el vehículo, no el cajón: un auto en un cajón
     # accesible paga tarifa de auto.
     tarifa = obtener_tarifa_vigente(
@@ -190,6 +206,7 @@ def registrar_entrada(
     folio = Folio.objects.create(
         placa=placa,
         cajon=cajon,
+        pension=pension,
         tarifa=tarifa,
         estado=EstadoFolio.ABIERTO,
         entrada_en=momento,
@@ -198,13 +215,30 @@ def registrar_entrada(
     )
 
     logger.info(
-        "Entrada registrada | folio=%s placa=%s cajon=%s tarifa=%s",
+        "Entrada registrada | folio=%s placa=%s cajon=%s tarifa=%s pension=%s",
         folio.uuid,
         folio.placa,
         cajon.codigo if cajon else "sin-inventario",
         tarifa.nombre,
+        pension.pk if pension else "-",
     )
     return folio
+
+
+def _cajon_de_pensionado(pension: Pension, elegido: str) -> str:
+    """
+    Tipo de cajón para un pensionado.
+
+    El tipo de vehículo lo fija la pensión, no lo que se tocó en pantalla: una
+    motocicleta pensionada va a cajón de moto aunque el operador dejara
+    «Automóvil». Lo único que se respeta de la elección es el cajón accesible,
+    que es una necesidad de quien conduce y no una clase de vehículo.
+    """
+    if pension.tipo_vehiculo == TipoVehiculo.MOTOCICLETA:
+        return TipoCajon.MOTOCICLETA
+    if elegido == TipoCajon.ACCESIBLE:
+        return TipoCajon.ACCESIBLE
+    return TipoCajon.AUTOMOVIL
 
 
 def obtener_turno_abierto(operador) -> Turno | None:
@@ -251,14 +285,27 @@ def folios_en_patio(momento: datetime | None = None) -> list[dict]:
     Alimenta el tablero del operador. Los minutos se calculan en memoria
     porque dependen del instante de consulta, no de un dato almacenado: no
     existe forma de indexarlos ni razón para persistirlos.
+
+    Los pensionados llevan además su vigencia, para que el patio avise del que
+    se está pasando mientras todavía está dentro y puede renovar.
     """
+    from datetime import timedelta
+
+    from django.conf import settings
+
     momento = momento or timezone.now()
+    aviso = timedelta(hours=getattr(settings, "IRCARS_PENSION_AVISO_HORAS", 2))
     filas = []
     for folio in (
-        Folio.objects.select_related("cajon")
+        Folio.objects.select_related("cajon", "pension")
         .filter(estado=EstadoFolio.ABIERTO)
         .order_by("entrada_en")
     ):
+        vigencia = None
+        if folio.pension_id:
+            vigencia = dominio_pensiones.estado_vigencia(
+                ahora=momento, vigente_hasta=folio.pension.vigente_hasta, aviso=aviso
+            )
         filas.append(
             {
                 "uuid": str(folio.uuid),
@@ -266,6 +313,9 @@ def folios_en_patio(momento: datetime | None = None) -> list[dict]:
                 "cajon": folio.cajon.codigo if folio.cajon else "—",
                 "entrada_en": folio.entrada_en,
                 "minutos": max(0, _minutos_transcurridos(folio.entrada_en, momento)),
+                "es_pension": bool(folio.pension_id),
+                "pension_id": folio.pension_id,
+                "vigencia": vigencia,
             }
         )
     return filas
@@ -283,8 +333,34 @@ def cotizar_folio(folio: Folio, momento: datetime | None = None) -> Cotizacion:
         raise FolioYaCerrado(
             f"El folio {folio.uuid} ya fue liquidado el {folio.salida_en:%Y-%m-%d %H:%M}."
         )
+    if folio.pension_id:
+        # De un pensionado solo se cobra lo que exceda su vigencia.
+        return cotizar_salida_pension(folio, momento).cotizacion
     minutos = _minutos_transcurridos(folio.entrada_en, momento)
     return cotizar(minutos, folio.tarifa.a_parametros())
+
+
+def cotizar_salida_pension(
+    folio: Folio, momento: datetime | None = None
+) -> dominio_pensiones.SalidaPension:
+    """
+    Lo que pagaría al salir ahora un vehículo en pensión.
+
+    La vigencia se lee de la pensión en este momento, no de cuando entró: si
+    el cliente renovó estando dentro, la renovación cuenta.
+    """
+    momento = momento or timezone.now()
+    vigente_hasta = (
+        Pension.objects.filter(pk=folio.pension_id)
+        .values_list("vigente_hasta", flat=True)
+        .first()
+    )
+    return dominio_pensiones.cotizar_salida(
+        entrada=folio.entrada_en,
+        salida=momento,
+        vigente_hasta=vigente_hasta,
+        parametros=folio.tarifa.a_parametros(),
+    )
 
 
 @transaction.atomic
@@ -313,16 +389,15 @@ def registrar_salida(
     lo activa, porque ahí se maneja efectivo; la API lo deja desactivado para
     permitir integraciones que no operan caja (pensiones, cobro con terminal,
     conciliaciones automáticas).
+
+    **Pensionados.** Si la estancia quedó entera dentro de la vigencia, el
+    folio se cierra en $0 y **sin turno**: no mueve efectivo y no pertenece a
+    ningún corte. Adscribirlo al turno lo contaría como cortesía y ocultaría
+    las cortesías reales entre las salidas de pensión. Si la estancia rebasó la
+    vigencia, el excedente se cobra como cualquier boleto: con turno, con
+    validación del pago y con copia de la tarifa aplicada.
     """
     momento = momento or timezone.now()
-
-    if turno is None and operador is not None:
-        turno = obtener_turno_abierto(operador)
-    if exigir_turno and turno is None:
-        raise SinTurnoAbierto(
-            "No hay un turno de caja abierto. Abra turno antes de cobrar: un "
-            "ingreso sin turno queda fuera del corte."
-        )
 
     # select_for_update sin skip_locked: aquí sí se debe esperar, porque el
     # folio es único y la segunda transacción debe ver el estado ya cerrado.
@@ -348,7 +423,23 @@ def registrar_salida(
         )
 
     minutos = _minutos_transcurridos(folio.entrada_en, momento)
-    cotizacion = cotizar(minutos, folio.tarifa.a_parametros())
+    salida_pension = None
+    if folio.pension_id:
+        salida_pension = cotizar_salida_pension(folio, momento)
+        cotizacion = salida_pension.cotizacion
+    else:
+        cotizacion = cotizar(minutos, folio.tarifa.a_parametros())
+
+    if salida_pension is not None and cotizacion.importe == 0:
+        return _cerrar_estancia_cubierta(folio, salida_pension, operador, momento), cotizacion
+
+    if turno is None and operador is not None:
+        turno = obtener_turno_abierto(operador)
+    if exigir_turno and turno is None:
+        raise SinTurnoAbierto(
+            "No hay un turno de caja abierto. Abra turno antes de cobrar: un "
+            "ingreso sin turno queda fuera del corte."
+        )
 
     cambio = None
     if pago_recibido is not None:
@@ -365,10 +456,14 @@ def registrar_salida(
     folio.importe = cotizacion.importe
     folio.pago_recibido = pago_recibido
     folio.cambio = cambio
-    folio.desglose = cotizacion.desglose()
+    folio.desglose = (
+        salida_pension.desglose() if salida_pension else cotizacion.desglose()
+    )
     # Copia de la tarifa: el importe queda reproducible de forma permanente.
+    # Al excedente de una pensión se le aplicó sin cortesía, y eso es lo que
+    # se copia: la copia debe reproducir el importe, no la tarifa exhibida.
     folio.tarifa_cuota_hora = parametros.cuota_hora
-    folio.tarifa_minutos_cortesia = parametros.minutos_cortesia
+    folio.tarifa_minutos_cortesia = 0 if salida_pension else parametros.minutos_cortesia
     folio.tarifa_fraccion_minutos = parametros.fraccion_minutos
     folio.tarifa_minutos_tolerancia = parametros.minutos_tolerancia
     folio.tarifa_cobro_minimo = parametros.cobro_minimo
@@ -387,6 +482,34 @@ def registrar_salida(
         cotizacion.es_cortesia,
     )
     return folio, cotizacion
+
+
+def _cerrar_estancia_cubierta(folio, salida_pension, operador, momento) -> Folio:
+    """
+    Cierra en $0 la estancia de un pensionado que salió dentro de su vigencia.
+
+    Sin turno, sin pago y sin copia de tarifa: no hubo cobro que reproducir.
+    El desglose sí se guarda, porque dice hasta cuándo estaba cubierto y es lo
+    que responde una aclaración.
+    """
+    folio.salida_en = momento
+    folio.minutos = salida_pension.minutos_totales
+    folio.importe = Decimal("0.00")
+    folio.pago_recibido = None
+    folio.cambio = None
+    folio.desglose = salida_pension.desglose()
+    folio.estado = EstadoFolio.CERRADO
+    folio.operador_salida = operador
+    folio.turno = None
+    folio.save()
+    logger.info(
+        "Salida de pensionado | folio=%s placa=%s minutos=%s pension=%s",
+        folio.uuid,
+        folio.placa,
+        folio.minutos,
+        folio.pension_id,
+    )
+    return folio
 
 
 @transaction.atomic
