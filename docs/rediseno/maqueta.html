@@ -1,0 +1,368 @@
+<title>Rediseño Caja RJ Cars</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Disposición: lienzo de tableros; cada tablero es un teléfono de 340 px con
+   una pantalla de la caja rediseñada. Los tokens son los de docs/REDISENO.md §4. */
+:root {
+  --marca: #1f2128; --sobre-marca: #f2f3f5; --marca-plata: #c9ccd3;
+  --tinta: #16181d; --tinta-suave: #5b616c;
+  --fondo: #f3f4f6; --superficie: #ffffff; --superficie-alt: #f8f9fa;
+  --borde: #dcdfe4; --borde-fuerte: #b9bec7;
+  --acento: #1b4f91; --acento-oscuro: #143a6b; --acento-tenue: #eaf1fa; --sobre-acento: #ffffff;
+  --exito: #1b6b2f; --exito-fondo: #e8f5ec;
+  --alerta: #8a5a00; --alerta-fondo: #fdf4e3;
+  --error: #a01818; --error-fondo: #fdecec;
+  --pension: #5b3fa8; --pension-fondo: #efeafb;
+  --lienzo: #e6e8ec; --marco: #0c0d10;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --marca: #15171c; --sobre-marca: #e8eaee; --marca-plata: #a9adb6;
+    --tinta: #e9ebef; --tinta-suave: #9da3ae;
+    --fondo: #0e1014; --superficie: #191c22; --superficie-alt: #20242b;
+    --borde: #2c313a; --borde-fuerte: #434a56;
+    --acento: #5b9bf0; --acento-oscuro: #7fb3f5; --acento-tenue: #16263d; --sobre-acento: #0b1420;
+    --exito: #5fd38a; --exito-fondo: #10291b;
+    --alerta: #e3ad4a; --alerta-fondo: #2c2110;
+    --error: #f08a84; --error-fondo: #2e1414;
+    --pension: #b8a4f2; --pension-fondo: #231c3b;
+    --lienzo: #07080a; --marco: #000;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --marca: #15171c; --sobre-marca: #e8eaee; --marca-plata: #a9adb6;
+  --tinta: #e9ebef; --tinta-suave: #9da3ae;
+  --fondo: #0e1014; --superficie: #191c22; --superficie-alt: #20242b;
+  --borde: #2c313a; --borde-fuerte: #434a56;
+  --acento: #5b9bf0; --acento-oscuro: #7fb3f5; --acento-tenue: #16263d; --sobre-acento: #0b1420;
+  --exito: #5fd38a; --exito-fondo: #10291b;
+  --alerta: #e3ad4a; --alerta-fondo: #2c2110;
+  --error: #f08a84; --error-fondo: #2e1414;
+  --pension: #b8a4f2; --pension-fondo: #231c3b;
+  --lienzo: #07080a; --marco: #000;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--lienzo); color: var(--tinta);
+  font: 16px/1.5 var(--sans);
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.hoja { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+.portada h1 { margin: 0 0 6px; font-size: 1.75rem; letter-spacing: -.01em; text-wrap: balance; }
+.portada p { margin: 0; color: var(--tinta-suave); max-width: 65ch; }
+.nota { font-size: .8rem; color: var(--tinta-suave); margin-top: 8px !important; }
+
+.tableros { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 340px)); gap: 36px 28px; justify-content: center; }
+.tablero { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.tablero h2 { margin: 0; font-size: .95rem; }
+.tablero > p { margin: 0; font-size: .82rem; color: var(--tinta-suave); }
+
+/* --- Teléfono ----------------------------------------------------------- */
+.tel {
+  background: var(--fondo); border: 6px solid var(--marco); border-radius: 30px;
+  overflow: hidden; display: flex; flex-direction: column; min-height: 640px;
+}
+.barra { background: var(--marca); color: var(--sobre-marca); padding: 10px 14px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--marca-plata); }
+.barra .logo { font-weight: 700; letter-spacing: .14em; font-size: .9rem; margin-right: auto; }
+.barra .logo small { font-weight: 400; letter-spacing: .3em; font-size: .6rem; color: var(--marca-plata); margin-left: 6px; }
+.turno { font-size: .72rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--marca-plata); color: var(--sobre-marca); }
+.cuerpo { flex: 1; padding: 12px; display: grid; gap: 12px; align-content: start; }
+.nav { display: flex; background: var(--superficie); border-top: 1px solid var(--borde); }
+.nav span { flex: 1; display: grid; justify-items: center; gap: 2px; padding: 8px 2px 10px; font-size: .68rem; font-weight: 600; color: var(--tinta-suave); }
+.nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav .activo { color: var(--acento); }
+
+/* --- Componentes -------------------------------------------------------- */
+.tarjeta { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.tarjeta.destacada { border: 2px solid var(--acento); }
+.tarjeta.de-pension { border-left: 5px solid var(--pension); }
+.rotulo { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tinta-suave); font-weight: 600; margin: 0; }
+.etq { font-size: .82rem; font-weight: 600; margin: 0 0 -4px; }
+.campo { border: 1px solid var(--borde-fuerte); border-radius: 8px; background: var(--superficie); padding: 0 12px; min-height: 48px; display: flex; align-items: center; color: var(--tinta); }
+.campo.grande { min-height: 56px; font: 700 1.45rem var(--mono); letter-spacing: .06em; }
+.campo.foco { outline: 3px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+.campo .cursor { width: 2px; height: 1.3em; background: var(--acento); margin-left: 2px; }
+.campo.vacio-c { color: var(--tinta-suave); font-weight: 400; }
+.segmentado { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.segmentado span { min-height: 48px; display: grid; place-items: center; border: 1px solid var(--borde-fuerte); border-radius: 8px; font-size: .88rem; font-weight: 600; color: var(--tinta-suave); text-align: center; padding: 0 4px; }
+.segmentado .elegido { background: var(--acento-tenue); border: 2px solid var(--acento); color: var(--acento-oscuro); }
+.dobles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.boton { min-height: 48px; border-radius: 8px; display: grid; place-items: center; font-weight: 600; background: var(--acento); color: var(--sobre-acento); padding: 0 12px; text-align: center; }
+.boton.alto { min-height: 56px; font-size: 1.05rem; }
+.boton.fantasma { background: transparent; color: var(--tinta); border: 1px solid var(--borde-fuerte); }
+.boton.chico { min-height: 40px; font-size: .85rem; padding: 0 12px; }
+.boton.apagado { opacity: .45; }
+.atajos { display: flex; flex-wrap: wrap; gap: 6px; }
+.atajos span { flex: 1 1 56px; min-height: 44px; display: grid; place-items: center; border: 1px solid var(--borde-fuerte); border-radius: 8px; font-weight: 600; font-variant-numeric: tabular-nums; font-size: .92rem; }
+.atajos .elegido { background: var(--acento-tenue); border: 2px solid var(--acento); color: var(--acento-oscuro); }
+.cifra { font-size: 3rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; margin: 0; }
+.cifra.cambio { color: var(--exito); }
+.detalle { font-size: .88rem; color: var(--tinta-suave); margin: 0; }
+.detalle strong { color: var(--tinta); }
+.estimado { font-size: .9rem; margin: 0; color: var(--exito); font-weight: 600; }
+.pildora { display: inline-block; font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pildora.pension { background: var(--pension-fondo); color: var(--pension); }
+.pildora.vigente { background: var(--exito-fondo); color: var(--exito); }
+.pildora.por-vencer { background: var(--alerta-fondo); color: var(--alerta); }
+.pildora.vencida { background: var(--error-fondo); color: var(--error); }
+.aviso { border-left: 5px solid var(--alerta); background: var(--alerta-fondo); color: var(--alerta); border-radius: 8px; padding: 10px 12px; font-size: .85rem; font-weight: 500; }
+.aviso.ok { border-color: var(--exito); background: var(--exito-fondo); color: var(--exito); }
+.aviso u { font-weight: 700; }
+.cabeza-lista { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cabeza-lista small { color: var(--tinta-suave); font-size: .78rem; }
+.lista { display: grid; }
+.fila { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--borde); }
+.fila .placa { font: 700 1.2rem var(--mono); letter-spacing: .04em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fila .dato { grid-column: 1; font-size: .82rem; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.fila .accion { grid-column: 2; grid-row: 1 / span 2; }
+.fila.atenuada { opacity: .35; }
+.indicadores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.indicadores div { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 8px 10px; }
+.indicadores b { display: block; font-size: 1.4rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.indicadores span { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-suave); }
+.titulo-pantalla { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.titulo-pantalla h3 { margin: 0; font-size: 1.15rem; }
+.par { display: flex; justify-content: space-between; gap: 10px; font-size: .88rem; }
+.par span:first-child { color: var(--tinta-suave); }
+.par span:last-child { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.menu { display: grid; }
+.menu div { display: grid; grid-template-columns: 1fr auto; padding: 12px 0; border-top: 1px solid var(--borde); }
+.menu div:first-child { border-top: 0; }
+.menu b { font-size: .95rem; }
+.menu small { grid-column: 1; color: var(--tinta-suave); font-size: .8rem; }
+.menu i { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-style: normal; color: var(--tinta-suave); }
+.enlace { font-size: .82rem; color: var(--acento); margin: 0; text-decoration: underline; }
+</style>
+
+<div class="hoja">
+  <header class="portada">
+    <h1>Rediseño de la caja RJ Cars</h1>
+    <p>Pantallas de teléfono de la caja rediseñada y del módulo nuevo de pensiones. Es la referencia visual de <code>docs/REDISENO.md</code>: estructura, jerarquía y componentes.</p>
+    <p class="nota">Placas, nombres e importes son datos de ejemplo. La maqueta es estática y sigue el tema claro u oscuro del dispositivo.</p>
+  </header>
+
+  <div class="tableros">
+
+    <!-- 1 -->
+    <section class="tablero">
+      <h2>1 · Caja: una placa, un campo</h2>
+      <p>Un solo campo decide entrada o salida. Al teclear, el patio se filtra. El pensionado se reconoce por su placa.</p>
+      <div class="tel" data-nav="caja">
+        <div class="cuerpo">
+          <div class="tarjeta">
+            <p class="etq">Placa</p>
+            <div class="campo grande foco">NXK<span class="cursor"></span></div>
+            <div class="segmentado"><span class="elegido">Automóvil</span><span>Moto</span><span>Accesible</span></div>
+            <div class="dobles"><div class="boton alto">Entrada</div><div class="boton alto fantasma">Cobrar salida</div></div>
+          </div>
+          <div class="indicadores">
+            <div><b>41</b><span>Dentro</span></div>
+            <div><b>19</b><span>Libres</span></div>
+            <div><b>7</b><span>Pensión</span></div>
+          </div>
+          <div class="tarjeta">
+            <div class="cabeza-lista"><p class="rotulo">Vehículos dentro</p><small>2 de 41</small></div>
+            <div class="lista">
+              <div class="fila"><span class="placa">NXK4821</span><span class="dato">A-07 · 10:32 · 2 h 14 min</span><span class="accion boton chico">Cobrar</span></div>
+              <div class="fila"><span class="placa">NXK9S03 <span class="pildora pension">Pensión</span></span><span class="dato">B-02 · 07:58 · 4 h 48 min</span><span class="accion boton chico fantasma">Salida</span></div>
+              <div class="fila atenuada"><span class="placa">PBC193A</span><span class="dato">A-11 · 11:05 · 1 h 41 min</span><span class="accion boton chico">Cobrar</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="tablero">
+      <h2>2 · Cobro con atajos de pago</h2>
+      <p>El importe es la cifra más grande. Un billete es un toque; el cambio se estima al instante y lo confirma el servidor.</p>
+      <div class="tel" data-nav="caja">
+        <div class="cuerpo">
+          <div class="tarjeta destacada">
+            <p class="rotulo">Cobro de NXK4821</p>
+            <p class="detalle">Entrada <strong>10:32</strong> · Permanencia <strong>2 h 14 min</strong><br>Tarifa <strong>Automóvil $20.00/h</strong> · Cajón <strong>A-07</strong></p>
+            <p class="cifra">$44.67</p>
+            <div class="atajos"><span>Exacto</span><span>$50</span><span class="elegido">$100</span><span>$200</span><span>$500</span></div>
+            <p class="etq">Pago recibido</p>
+            <div class="campo grande">100.00</div>
+            <p class="estimado">Cambio estimado: $55.33</p>
+            <div class="boton alto">Cobrar y cerrar folio</div>
+            <div class="boton fantasma">Volver sin cobrar</div>
+            <p class="enlace">Cancelar folio por error de captura</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="tablero">
+      <h2>3 · Cambio a entregar</h2>
+      <p>Tras cobrar, la cifra que se dice en voz alta ocupa la pantalla. «Siguiente vehículo» recibe el foco.</p>
+      <div class="tel" data-nav="caja">
+        <div class="cuerpo">
+          <div class="tarjeta">
+            <p class="rotulo">Cobrado · NXK4821</p>
+            <p class="detalle">Importe <strong>$44.67</strong> · Recibido <strong>$100.00</strong></p>
+            <p class="etq">Cambio a entregar</p>
+            <p class="cifra cambio">$55.33</p>
+            <div class="boton alto">Siguiente vehículo</div>
+          </div>
+          <div class="tarjeta">
+            <p class="etq">Placa</p>
+            <div class="campo grande vacio-c">ABC-123</div>
+            <div class="segmentado"><span class="elegido">Automóvil</span><span>Moto</span><span>Accesible</span></div>
+            <div class="dobles"><div class="boton alto">Entrada</div><div class="boton alto fantasma">Cobrar salida</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="tablero">
+      <h2>4 · Salida de pensionado</h2>
+      <p>Sin cobro, sin turno y sin QR. Si la pensión está por vencer, la misma tarjeta ofrece renovarla.</p>
+      <div class="tel" data-nav="caja">
+        <div class="cuerpo">
+          <div class="aviso ok">Entrada de pensionado <strong>TLK552B</strong> · vigente hasta 14/12.</div>
+          <div class="tarjeta de-pension">
+            <p class="rotulo">Salida de NXK9S03 <span class="pildora por-vencer">Por vencer</span></p>
+            <p class="detalle">Laura Méndez · Jetta gris<br>Entrada <strong>07:58</strong> · Permanencia <strong>4 h 48 min</strong></p>
+            <p class="detalle"><strong>Sin cobro:</strong> estancia cubierta por pensión.</p>
+            <div class="aviso">La pensión vence el <strong>17/11</strong> (en 3 días). <u>Cobrar mensualidad</u></div>
+            <div class="boton alto">Registrar salida</div>
+            <div class="boton fantasma">Volver</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section class="tablero">
+      <h2>5 · Pensiones</h2>
+      <p>Lista con búsqueda por placa, nombre o teléfono, sin distinguir mayúsculas. Primero lo que requiere atención.</p>
+      <div class="tel" data-nav="pensiones">
+        <div class="cuerpo">
+          <div class="titulo-pantalla"><h3>Pensiones</h3><div class="boton chico">Nueva pensión</div></div>
+          <div class="indicadores">
+            <div><b>23</b><span>Activas</span></div>
+            <div><b>3</b><span>Por vencer</span></div>
+            <div><b>2</b><span>Vencidas</span></div>
+          </div>
+          <div class="campo vacio-c">Buscar placa, nombre o teléfono</div>
+          <div class="segmentado"><span class="elegido">Todas</span><span>Por vencer</span><span>Vencidas</span></div>
+          <div class="tarjeta">
+            <div class="lista">
+              <div class="fila"><span class="placa">RTM7710 <span class="pildora vencida">Vencida</span></span><span class="dato">Óscar Paredes · venció 02/11</span><span class="accion boton chico">Cobrar</span></div>
+              <div class="fila"><span class="placa">NXK9S03 <span class="pildora por-vencer">Por vencer</span></span><span class="dato">Laura Méndez · hasta 17/11</span><span class="accion boton chico">Cobrar</span></div>
+              <div class="fila"><span class="placa">TLK552B <span class="pildora vigente">Vigente</span></span><span class="dato">Iván Robles · hasta 14/12</span><span class="accion boton chico fantasma">Ver</span></div>
+              <div class="fila"><span class="placa">M48ZKP <span class="pildora vigente">Vigente</span></span><span class="dato">Sara Ibarra · moto · hasta 30/11</span><span class="accion boton chico fantasma">Ver</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="tablero">
+      <h2>6 · Alta de pensión</h2>
+      <p>Una columna, pocas preguntas. El precio sale del plan vigente: no se teclea en la caseta.</p>
+      <div class="tel" data-nav="pensiones">
+        <div class="cuerpo">
+          <div class="titulo-pantalla"><h3>Nueva pensión</h3></div>
+          <div class="tarjeta">
+            <p class="etq">Placa</p>
+            <div class="campo grande">VGH3120</div>
+            <p class="etq">Tipo de vehículo</p>
+            <div class="segmentado"><span class="elegido">Automóvil</span><span>Motocicleta</span></div>
+            <div class="par"><span>Plan vigente</span><span>Mensual automóvil · $1,200.00</span></div>
+            <p class="etq">Nombre del cliente</p>
+            <div class="campo">Daniela Ortiz</div>
+            <p class="etq">Teléfono</p>
+            <div class="campo">55 5550 0142</div>
+            <p class="etq">Vehículo (opcional)</p>
+            <div class="campo vacio-c">Marca, modelo y color</div>
+            <div class="boton alto">Guardar y cobrar primer mes</div>
+            <div class="boton fantasma">Guardar sin cobrar</div>
+            <p class="detalle">Los datos del cliente se usan solo para administrar su pensión. <span class="enlace">Aviso de privacidad</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="tablero">
+      <h2>7 · Cobro de mensualidad</h2>
+      <p>Periodo calculado por el sistema, en dos pasos como la caja. El pago entra al corte del turno abierto.</p>
+      <div class="tel" data-nav="pensiones">
+        <div class="cuerpo">
+          <div class="tarjeta destacada">
+            <p class="rotulo">Mensualidad de VGH3120</p>
+            <p class="detalle">Daniela Ortiz · <span class="pildora vencida">Sin pago</span></p>
+            <p class="etq">Meses a pagar</p>
+            <div class="segmentado"><span class="elegido">1</span><span>2</span><span>3</span><span>6</span><span>12</span></div>
+            <div class="par"><span>Periodo</span><span>14/11/2026 – 13/12/2026</span></div>
+            <div class="par"><span>Plan</span><span>Mensual automóvil</span></div>
+            <p class="cifra">$1,200.00</p>
+            <div class="atajos"><span class="elegido">Exacto</span><span>$1,500</span><span>$2,000</span></div>
+            <p class="etq">Pago recibido</p>
+            <div class="campo grande">1200.00</div>
+            <div class="boton alto">Cobrar mensualidad</div>
+            <p class="detalle">Precio vigente del plan al momento del pago. Se emite recibo.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section class="tablero">
+      <h2>8 · Más</h2>
+      <p>Cuatro destinos en el pulgar; el resto vive aquí. Métricas deja de ser inalcanzable desde el teléfono.</p>
+      <div class="tel" data-nav="mas">
+        <div class="cuerpo">
+          <div class="titulo-pantalla"><h3>Más</h3></div>
+          <div class="tarjeta">
+            <div class="menu">
+              <div><b>Precio</b><small>Tarifa por hora y planes de pensión</small><i>›</i></div>
+              <div><b>Reportes</b><small>Boletos y mensualidades por fecha</small><i>›</i></div>
+              <div><b>Métricas</b><small>Horas pico, clientes frecuentes, PDF</small><i>›</i></div>
+              <div><b>Equipo</b><small>Operadores y permisos</small><i>›</i></div>
+              <div><b>Mi contraseña</b><small>Cambiar la clave de acceso</small><i>›</i></div>
+            </div>
+          </div>
+          <div class="boton fantasma">Cerrar sesión</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<template id="t-barra">
+  <div class="barra"><span class="logo">RJ<small>CARS</small></span><span class="turno">Turno 128</span></div>
+</template>
+<template id="t-nav">
+  <div class="nav">
+    <span data-d="caja"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 15h3"/></svg>Caja</span>
+    <span data-d="pensiones"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4"/></svg>Pensiones</span>
+    <span data-d="turno"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg>Turno</span>
+    <span data-d="mas"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Más</span>
+  </div>
+</template>
+<script>
+// Cabecera y navegación se repiten en cada tablero: se clonan de una plantilla
+// para que la maqueta tenga una sola definición de cada una.
+document.querySelectorAll(".tel").forEach(function (tel) {
+  tel.prepend(document.getElementById("t-barra").content.cloneNode(true));
+  var nav = document.getElementById("t-nav").content.cloneNode(true);
+  var activo = nav.querySelector('[data-d="' + tel.dataset.nav + '"]');
+  if (activo) activo.classList.add("activo");
+  tel.append(nav);
+});
+</script>
