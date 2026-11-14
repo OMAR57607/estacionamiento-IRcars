@@ -1,0 +1,35 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Precio de la pensión{% endblock %}
+
+{% block contenido %}
+<div class="tarjeta angosta">
+  <h2>Precio de la pensión diaria</h2>
+  {% if plan %}
+    <p class="detalle-cobro">
+      Vigente: <strong>{{ plan.precio_diario|pesos }}</strong> por día, desde el
+      {{ plan.vigente_desde|date:"d/m/Y H:i" }}.
+    </p>
+  {% endif %}
+  <form method="post" class="pila">
+    {% csrf_token %}
+    <div>
+      <label for="{{ form.precio_diario.id_for_label }}">{{ form.precio_diario.label }}</label>
+      {{ form.precio_diario }}
+      {% for error in form.precio_diario.errors %}<p class="error-campo">{{ error }}</p>{% endfor %}
+      <p class="ayuda">{{ form.precio_diario.help_text }}</p>
+    </div>
+    <div>
+      <label for="{{ form_clave.clave.id_for_label }}">Su contraseña</label>
+      {{ form_clave.clave }}
+    </div>
+    <button type="submit" class="boton">Poner en vigencia</button>
+  </form>
+  <p class="ayuda mt">
+    Los pagos ya hechos conservan el precio con que se cobraron. El nuevo rige
+    desde el siguiente cobro y queda registrado a su nombre.
+  </p>
+  <p class="ayuda"><a href="{% url 'web:tarifa' %}">Volver a Precio sin cambiar nada</a></p>
+</div>
+{% endblock %}

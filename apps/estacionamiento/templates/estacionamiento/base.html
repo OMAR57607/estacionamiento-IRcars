@@ -53,6 +53,7 @@
 
   <nav class="barra-secciones">
     <a href="{% url 'web:caja' %}" {% if seccion == 'caja' %}class="activo" aria-current="page"{% endif %}>Caja</a>
+    <a href="{% url 'web:pensiones' %}" {% if seccion == 'pensiones' %}class="activo" aria-current="page"{% endif %}>Pensiones</a>
     <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo" aria-current="page"{% endif %}>Turno y corte</a>
     {% if es_administrativo %}
       <a href="{% url 'web:reportes' %}" {% if seccion == 'reportes' %}class="activo" aria-current="page"{% endif %}>Reportes</a>
@@ -132,7 +133,16 @@
     <span>Caja</span>
   </a>
 
-  {# destino-pensiones #}
+  <a href="{% url 'web:pensiones' %}" {% if seccion == 'pensiones' %}class="activo" aria-current="page"{% endif %}>
+    <span class="icono" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="5" width="16" height="15" rx="2"/>
+        <path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4"/>
+      </svg>
+    </span>
+    <span>Pensiones</span>
+  </a>
 
   <a href="{% url 'web:turno' %}" {% if seccion == 'turno' %}class="activo" aria-current="page"{% endif %}>
     <span class="icono" aria-hidden="true">

@@ -115,6 +115,30 @@
 </div>
 {% endfor %}
 
+{% comment %} La pensión vive aquí también: es un precio exhibido al público y quien
+   lo consulta o lo cambia lo busca en el mismo lugar que la tarifa por hora.
+   {% endcomment %}
+<div class="tarjeta de-pension angosta">
+  <h2>Pensión diaria</h2>
+  {% if plan_pension %}
+    <p class="cifra">{{ plan_pension.precio_diario|pesos }}</p>
+    <p class="detalle-cobro mt-neg">
+      por día (24 horas)<br>
+      <span class="ayuda">En uso desde el {{ plan_pension.vigente_desde|date:"d/m/Y H:i" }}</span>
+    </p>
+    <ul class="reglas">
+      <li>Cada día pagado cubre 24 horas desde que empieza el periodo.</li>
+      <li>Si la estancia rebasa la vigencia en un minuto completo, el excedente se cobra con la tarifa por hora, sin minutos gratis.</li>
+      <li>Renovar con el vehículo dentro cubre su estancia sin huecos.</li>
+    </ul>
+  {% else %}
+    <div class="aviso error">No hay precio de pensión configurado: no se pueden dar de alta ni cobrar pensiones.</div>
+  {% endif %}
+  {% if es_administrativo %}
+    <a href="{% url 'web:pension_precio' %}" class="boton secundario">Cambiar precio de la pensión…</a>
+  {% endif %}
+</div>
+
 <div class="tarjeta">
   <h2>Cambios de precio</h2>
   <p class="ayuda mt-0">

@@ -298,7 +298,17 @@ def _atajos_para(importe: Decimal) -> list[int]:
 
 
 def _preparar_cobro(contexto, folio, cotizacion) -> None:
-    """Pone en el contexto la tarjeta de cobro de un folio ya cotizado."""
+    """
+    Pone en el contexto la tarjeta de cobro de un folio ya cotizado.
+
+    De un pensionado se prepara además su situación: si la estancia quedó
+    cubierta, la tarjeta es de salida sin cobro; si se pasó, el importe es el
+    del excedente y la tarjeta ofrece renovar, que lo cubriría.
+    """
+    if folio.pension_id:
+        salida = services.cotizar_salida_pension(folio)
+        contexto["salida_pension"] = salida
+        contexto["vigencia_pension"] = services_pensiones.vigencia(folio.pension)
     form = CobroForm(initial={"folio": folio.uuid})
     # El importe viaja al campo para el cambio estimado del navegador. Es solo
     # una ayuda visual: el cobro lo recalcula el servidor.
@@ -344,6 +354,32 @@ def _procesar_entrada(request, contexto):
         return _pintar_caja(request, contexto)
 
     ubicacion = f" · cajón {folio.cajon.codigo}" if folio.cajon else ""
+    if folio.pension_id:
+        # El pensionado no recibe boleto: su estancia no se cobra por hora y
+        # no hay importe que consultar. Vuelve a la caja, lista para el
+        # siguiente vehículo.
+        hasta = timezone.localtime(folio.pension.vigente_hasta)
+        messages.success(
+            request,
+            f"Entrada de pensionado {folio.placa}{ubicacion} · cubierta hasta "
+            f"el {hasta:%d/%m a las %H:%M}.",
+        )
+        return redirect("web:caja")
+
+    vencida = services_pensiones.pension_activa_de(folio.placa)
+    if vencida is not None:
+        # Tiene pensión, pero no cubre este momento: entra por hora, y el
+        # operador debe poder decírselo y ofrecerle renovar.
+        cuando = (
+            f"venció el {timezone.localtime(vencida.vigente_hasta):%d/%m a las %H:%M}"
+            if vencida.vigente_hasta
+            else "nunca se ha cobrado"
+        )
+        messages.warning(
+            request,
+            f"La pensión de {folio.placa} {cuando}: esta estancia se cobra por "
+            "hora, salvo que renueve. Renovar ahora la cubre desde la entrada.",
+        )
     messages.success(
         request,
         f"Entrada registrada: {folio.placa} a las "
@@ -462,7 +498,36 @@ def _procesar_cotizacion(request, contexto):
     return _pintar_caja(request, contexto)
 
 
+def _salida_cubierta(uuid_folio) -> bool:
+    """
+    Si este folio es de un pensionado que sale dentro de su vigencia.
+
+    Esa salida no mueve efectivo, así que no le aplica el freno del turno de
+    otra jornada ni exige turno: la caseta no debe retener a quien ya pagó su
+    día porque alguien olvidó cerrar la caja.
+    """
+    folio = Folio.objects.filter(
+        uuid=uuid_folio, estado=EstadoFolio.ABIERTO, pension__isnull=False
+    ).first()
+    return folio is not None and services.cotizar_salida_pension(folio).importe == 0
+
+
 def _procesar_cobro(request):
+    form = CobroForm(request.POST)
+    if form.is_valid() and _salida_cubierta(form.cleaned_data["folio"]):
+        folio, _ = services.registrar_salida(
+            uuid_folio=form.cleaned_data["folio"], operador=request.user
+        )
+        request.session[CLAVE_RESULTADO_COBRO] = {
+            "placa": folio.placa,
+            "importe": "0.00",
+            "pago_recibido": None,
+            "cambio": None,
+            "es_cortesia": False,
+            "es_pension": True,
+        }
+        return redirect("web:caja")
+
     turno = services.obtener_turno_abierto(request.user)
     if turno is not None and services_caja.exige_cierre_antes_de_cobrar(turno):
         # Se frena el cobro, no la entrada: un vehículo en la rampa no puede
@@ -479,7 +544,6 @@ def _procesar_cobro(request):
         )
         return redirect("web:turno")
 
-    form = CobroForm(request.POST)
     if not form.is_valid():
         messages.error(request, "El pago capturado no es una cantidad válida.")
         return redirect("web:caja")
@@ -1563,6 +1627,7 @@ def tarifa(request):
         )
 
     contexto["precios"] = precios
+    contexto["plan_pension"] = services_pensiones.plan_vigente_o_nada()
     contexto["tarifas"] = Tarifa.objects.order_by("-vigente_desde")[:50]
     return render(request, "estacionamiento/tarifa.html", contexto)
 

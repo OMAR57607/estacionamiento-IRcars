@@ -44,8 +44,11 @@
      recibe el foco para que el ciclo siga sin buscar dónde tocar.
      {% endcomment %}
   <div class="tarjeta resultado" role="status">
-    <h2>Cobrado · {{ resultado.placa }}</h2>
-    {% if resultado.es_cortesia %}
+    <h2>{% if resultado.es_pension %}Salida registrada{% else %}Cobrado{% endif %} · {{ resultado.placa }}</h2>
+    {% if resultado.es_pension %}
+      <p class="cifra">Sin cobro</p>
+      <p class="detalle-cobro">Estancia cubierta por su pensión.</p>
+    {% elif resultado.es_cortesia %}
       <p class="cifra">Sin cobro</p>
       <p class="detalle-cobro">Salida dentro del tiempo de cortesía.</p>
     {% elif resultado.cambio and resultado.cambio != "0.00" %}
@@ -63,8 +66,39 @@
   </div>
 {% endif %}
 
+{# -------------------------------------------- Salida de pensionado cubierta #}
+{% comment %} Sin cobro, sin turno y sin campo de pago: la estancia quedó dentro de
+   la vigencia. Si está por vencer, la misma tarjeta ofrece renovar mientras
+   el cliente está delante. {% endcomment %}
+{% if salida_pension and salida_pension.cubierta %}
+<div class="tarjeta de-pension">
+  <h2>Salida de {{ folio_cotizado.placa }} <span class="pildora {{ vigencia_pension.clase }}">{{ vigencia_pension.etiqueta }}</span></h2>
+  <p class="detalle-cobro">
+    {{ folio_cotizado.pension.nombre_cliente }}{% if folio_cotizado.pension.descripcion_vehiculo %} · {{ folio_cotizado.pension.descripcion_vehiculo }}{% endif %}<br>
+    Entrada: <strong>{{ folio_cotizado.entrada_en|date:"d/m H:i" }}</strong> ·
+    Permanencia: <strong>{{ salida_pension.minutos_totales|duracion }}</strong><br>
+    Cubierta hasta: <strong>{{ salida_pension.vigente_hasta|date:"d/m H:i" }}</strong>
+  </p>
+  <p class="cifra">Sin cobro</p>
+  <p class="detalle-cobro mt-neg">Estancia cubierta por pensión.</p>
+  {% if vigencia_pension.value == 'POR_VENCER' %}
+    <div class="aviso warning">
+      La pensión vence a las {{ salida_pension.vigente_hasta|date:"H:i" }}.
+      <a href="{% url 'web:pension_cobrar' folio_cotizado.pension_id %}">Cobrar días</a>
+    </div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="cobrar">
+    {{ form_cobro.folio }}
+    <button type="submit" class="boton alto">Registrar salida</button>
+  </form>
+  <a class="boton fantasma" href="{% url 'web:caja' %}">Volver</a>
+</div>
+{% endif %}
+
 {# ------------------------------------------------- Cotización en curso #}
-{% if cotizacion and folio_cotizado %}
+{% if cotizacion and folio_cotizado and not salida_pension.cubierta %}
 <div class="tarjeta destacada">
   <h2>Cobro de {{ folio_cotizado.placa }}</h2>
 
@@ -77,6 +111,20 @@
     {% if cotizacion.tope_diario_aplicado %}<br><em>Se aplicó el tope diario.</em>{% endif %}
     {% if cotizacion.cobro_minimo_aplicado %}<br><em>Se aplicó el cobro mínimo.</em>{% endif %}
   </p>
+
+  {% if salida_pension %}
+    {% comment %} Pensionado que se pasó de su vigencia: se cobra solo el excedente,
+       por hora y sin cortesía. Renovar ahora lo cubriría, y es lo que el
+       dueño quiere que se ofrezca primero. {% endcomment %}
+    <div class="aviso warning">
+      <strong>Pensión vencida a las {{ salida_pension.vigente_hasta|date:"H:i" }}
+      del {{ salida_pension.vigente_hasta|date:"d/m" }}.</strong>
+      Se cobran {{ salida_pension.minutos_excedentes|duracion }} de excedente con
+      la tarifa por hora.
+      <a href="{% url 'web:pension_cobrar' folio_cotizado.pension_id %}">Renovar pensión</a>
+      lo cubre sin cobrar excedente.
+    </div>
+  {% endif %}
 
   <div class="cifra">{{ cotizacion.importe|pesos }}</div>
 
@@ -222,7 +270,18 @@
     <ul class="lista" id="patio" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
     {% for fila in patio %}
       <li class="lista-fila" data-placa="{{ fila.placa }}">
-        <span class="celda-principal">{{ fila.placa }}</span>
+        <span class="celda-principal">
+          {{ fila.placa }}
+          {% if fila.es_pension %}
+            {% if fila.vigencia.value == 'VENCIDA' %}
+              <span class="pildora vencida">Pensión vencida</span>
+            {% elif fila.vigencia.value == 'POR_VENCER' %}
+              <span class="pildora por-vencer">Pensión por vencer</span>
+            {% else %}
+              <span class="pildora pension">Pensión</span>
+            {% endif %}
+          {% endif %}
+        </span>
 
         {% comment %} Los tres datos van agrupados. En pantalla ancha el grupo se
            disuelve con `display: contents` y cada dato ocupa su columna; al
@@ -242,12 +301,17 @@
             {% csrf_token %}
             <input type="hidden" name="accion" value="cotizar">
             <input type="hidden" name="placa" value="{{ fila.placa }}">
-            <button type="submit" class="boton angosto">Cobrar</button>
+            <button type="submit" class="boton angosto">{% if fila.es_pension %}Salida{% else %}Cobrar{% endif %}</button>
           </form>
           {% comment %} Reabrir el boleto: el caso frecuente es el cliente que perdió el
-             enlace o quiere que se lo reenvíen. {% endcomment %}
-          <a class="boton secundario angosto"
-             href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+             enlace o quiere que se lo reenvíen. El pensionado lleva en su
+             lugar el enlace a su pensión. {% endcomment %}
+          {% if fila.es_pension %}
+            <a class="boton secundario angosto" href="{% url 'web:pension' fila.pension_id %}">Pensión</a>
+          {% else %}
+            <a class="boton secundario angosto"
+               href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+          {% endif %}
         </span>
       </li>
     {% endfor %}

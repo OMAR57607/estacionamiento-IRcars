@@ -1,0 +1,60 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Nueva pensión{% endblock %}
+
+{% comment %}
+  Alta de pensión: una columna, pocas preguntas. El precio sale del plan
+  vigente y se muestra, pero no se teclea en la caseta.
+{% endcomment %}
+
+{% block contenido %}
+<div class="encabezado-pantalla"><h1>Nueva pensión</h1></div>
+
+<div class="tarjeta angosta">
+  <form method="post" novalidate class="pila">
+    {% csrf_token %}
+
+    {% for campo in form %}
+      {% if campo.name == 'tipo_vehiculo' %}
+        <fieldset class="segmentado">
+          <legend>{{ campo.label }}</legend>
+          {% for opcion in campo %}
+            {{ opcion.tag }}<label for="{{ opcion.id_for_label }}">{{ opcion.choice_label }}</label>
+          {% endfor %}
+        </fieldset>
+        <p class="ayuda mt-neg">{{ campo.help_text }}</p>
+        {% if plan %}
+          <dl class="pares">
+            <div><dt>Precio vigente</dt><dd>{{ plan.precio_diario|pesos }} por día (24 horas)</dd></div>
+          </dl>
+        {% else %}
+          <div class="aviso error">No hay precio de pensión configurado: no se puede dar de alta.</div>
+        {% endif %}
+      {% else %}
+        <div>
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% for error in campo.errors %}<p class="error-campo" role="alert">{{ error }}</p>{% endfor %}
+          {% if campo.help_text %}<p class="ayuda">{{ campo.help_text }}</p>{% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <button type="submit" name="accion" value="cobrar" class="boton alto">Guardar y cobrar</button>
+    <button type="submit" name="accion" value="guardar" class="boton fantasma">Guardar sin cobrar</button>
+  </form>
+
+  {% comment %} Nombre y teléfono son datos personales (LFPDPPP): se dice para qué se
+     piden y, si el negocio publicó su aviso de privacidad, se enlaza. {% endcomment %}
+  <p class="ayuda mt">
+    El nombre y el teléfono se usan solo para administrar la pensión: no
+    aparecen en el boleto del cliente ni en los reportes.
+    {% if aviso_privacidad_url %}<a href="{{ aviso_privacidad_url }}" target="_blank" rel="noopener">Aviso de privacidad</a>.{% endif %}
+  </p>
+  <p class="ayuda">
+    Si el vehículo ya está dentro, al cobrar la pensión su estancia queda
+    cubierta desde que entró.
+  </p>
+</div>
+{% endblock %}

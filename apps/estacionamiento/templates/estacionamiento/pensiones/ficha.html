@@ -1,0 +1,167 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Pensión {{ pension.placa }}{% endblock %}
+
+{% block contenido %}
+<div class="encabezado-pantalla">
+  <h1>Pensión {{ pension.placa }}</h1>
+  {% if activa %}
+    <a class="boton" href="{% url 'web:pension_cobrar' pension.pk %}">Cobrar días</a>
+  {% endif %}
+</div>
+
+<div class="caja-rejilla">
+<div>
+  <div class="tarjeta de-pension">
+    <h2>Vigencia</h2>
+    {% if not activa %}
+      <p class="m-0"><span class="pildora baja">Dada de baja</span></p>
+      <p class="detalle-cobro">
+        El {{ pension.baja_en|date:"d/m/Y H:i" }} por {{ pension.baja_por|default:"—" }}.<br>
+        Motivo: {{ pension.motivo_baja }}
+      </p>
+    {% else %}
+      <p class="m-0"><span class="pildora {{ vigencia.clase }}">{{ vigencia.etiqueta }}</span></p>
+      {% if pension.vigente_hasta %}
+        <p class="cifra">{{ pension.vigente_hasta|date:"d/m H:i" }}</p>
+        <p class="detalle-cobro mt-neg">
+          {% if vigencia.value == 'VENCIDA' %}venció{% else %}cubierta hasta{% endif %}
+          el {{ pension.vigente_hasta|date:"l d \d\e F, H:i" }}
+        </p>
+        {% if vigencia.value == 'VENCIDA' %}
+          <div class="aviso warning">
+            Si entra o sale ahora, el tiempo fuera de la vigencia se cobra con la
+            tarifa por hora. Renovar con el vehículo dentro cubre ese tiempo.
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="detalle-cobro">Nunca se ha cobrado: hasta que pague, entra como cualquier vehículo.</p>
+      {% endif %}
+    {% endif %}
+    {% if dentro %}
+      <p class="detalle-cobro"><span class="pildora pension">Dentro</span> desde {{ dentro.entrada_en|date:"d/m H:i" }}</p>
+    {% endif %}
+  </div>
+
+  <div class="tarjeta">
+    <h2>Cliente</h2>
+    <dl class="pares">
+      <div><dt>Nombre</dt><dd>{{ pension.nombre_cliente }}</dd></div>
+      <div><dt>Teléfono</dt><dd>{{ pension.telefono|default:"—" }}</dd></div>
+      <div><dt>Vehículo</dt><dd>{{ pension.get_tipo_vehiculo_display }}{% if pension.descripcion_vehiculo %} · {{ pension.descripcion_vehiculo }}{% endif %}</dd></div>
+      <div><dt>Alta</dt><dd>{{ pension.alta_en|date:"d/m/Y" }} · {{ pension.alta_por|default:"—" }}</dd></div>
+    </dl>
+    {% if pension.notas %}<p class="detalle-cobro">{{ pension.notas|linebreaksbr }}</p>{% endif %}
+  </div>
+
+  {% if es_administrativo and activa %}
+  {% comment %} Acciones administrativas plegadas: no se usan a diario y lo que no
+     se deshace no debe estar a un toque. La baja y la cancelación piden la
+     contraseña en el mismo envío. {% endcomment %}
+  <div class="tarjeta">
+    <h2>Administración</h2>
+    <details class="detalle-plegado">
+      <summary>Corregir datos de contacto</summary>
+      <form method="post" class="pila">
+        {% csrf_token %}
+        {% for campo in form_datos %}
+          <div>
+            <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+            {{ campo }}
+            {% for error in campo.errors %}<p class="error-campo">{{ error }}</p>{% endfor %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="boton">Guardar datos</button>
+      </form>
+    </details>
+
+    {% if cancelable %}
+    <details class="detalle-plegado">
+      <summary>Cancelar el último pago ({{ cancelable.monto|pesos }})</summary>
+      <p class="ayuda">
+        Solo mientras su turno siga abierto. Devuelva el efectivo: deja de contar en el corte.
+      </p>
+      <form method="post" action="{% url 'web:pension_cancelar_pago' cancelable.pk %}" class="pila"
+            data-confirma="¿Cancelar el pago de {{ cancelable.monto|pesos }}?">
+        {% csrf_token %}
+        {% for campo in form_cancelar %}
+          <div><label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{{ campo }}</div>
+        {% endfor %}
+        <button type="submit" class="boton peligro">Cancelar el pago</button>
+      </form>
+    </details>
+    {% endif %}
+
+    <details class="detalle-plegado">
+      <summary>Dar de baja la pensión</summary>
+      <p class="ayuda">No se reembolsa nada. La placa queda libre para un alta futura.</p>
+      <form method="post" action="{% url 'web:pension_baja' pension.pk %}" class="pila"
+            data-confirma="¿Dar de baja la pensión de {{ pension.placa }}?">
+        {% csrf_token %}
+        {% for campo in form_baja %}
+          <div><label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{{ campo }}</div>
+        {% endfor %}
+        <button type="submit" class="boton peligro">Dar de baja</button>
+      </form>
+    </details>
+  </div>
+  {% endif %}
+</div>
+
+<div>
+  <div class="tarjeta">
+    <h2>Pagos</h2>
+    {% if pagos %}
+      <div class="tabla-envoltura">
+        <table>
+          <thead>
+            <tr><th>Cobrado</th><th>Cubre</th><th class="numero">Días</th><th class="numero">Importe</th><th></th></tr>
+          </thead>
+          <tbody>
+          {% for p in pagos %}
+            <tr>
+              <td>{{ p.creado_en|date:"d/m H:i" }}<br><span class="ayuda">{{ p.operador }} · turno {{ p.turno_id }}</span></td>
+              <td>{{ p.periodo_desde|date:"d/m H:i" }} – {{ p.periodo_hasta|date:"d/m H:i" }}</td>
+              <td class="numero">{{ p.dias }}</td>
+              <td class="numero">
+                {{ p.monto|pesos }}
+                {% if p.estado == 'CANCELADO' %}<br><span class="pildora vencida">Cancelado</span>{% endif %}
+              </td>
+              <td><a href="{% url 'web:pension_recibo' p.uuid %}">Recibo</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="vacio">Sin pagos todavía.</p>
+    {% endif %}
+  </div>
+
+  <div class="tarjeta">
+    <h2>Últimas estancias</h2>
+    {% if estancias %}
+      <div class="tabla-envoltura">
+        <table>
+          <thead><tr><th>Entrada</th><th>Salida</th><th class="numero">Cobrado</th></tr></thead>
+          <tbody>
+          {% for f in estancias %}
+            <tr>
+              <td>{{ f.entrada_en|date:"d/m H:i" }}</td>
+              <td>{% if f.salida_en %}{{ f.salida_en|date:"d/m H:i" }}{% else %}<span class="pildora pension">Dentro</span>{% endif %}</td>
+              <td class="numero">{% if f.importe %}{{ f.importe|pesos }}{% elif f.salida_en %}Sin cobro{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="vacio">Todavía no ha entrado con esta pensión.</p>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<p class="ayuda"><a href="{% url 'web:pensiones' %}">Volver a pensiones</a></p>
+{% endblock %}

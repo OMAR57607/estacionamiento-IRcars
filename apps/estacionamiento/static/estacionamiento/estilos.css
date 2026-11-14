@@ -795,6 +795,12 @@ th.th-llano { text-transform: none; font-size: 0.92rem; letter-spacing: 0; }
 }
 .segmentado input:focus-visible + label { outline: 3px solid var(--acento); outline-offset: 2px; }
 
+/* Los segmentados de enlaces —filtros, días a pagar— pueden tener cinco o
+   seis opciones: en lugar de estrecharse hasta salirse de la tarjeta, pasan
+   a un segundo renglón. */
+nav.segmentado { display: flex; flex-wrap: wrap; }
+nav.segmentado a { flex: 1 1 4.5rem; }
+
 /* Dos acciones del mismo peso, lado a lado: Entrada y Cobrar salida. */
 .acciones-dobles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-2); margin-top: var(--e-3); }
 .acciones-dobles .boton { margin: 0; }

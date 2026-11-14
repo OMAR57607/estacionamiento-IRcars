@@ -1,0 +1,72 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Cobrar pensión {{ pension.placa }}{% endblock %}
+
+{% comment %}
+  Cobro de días de pensión, en dos pasos como la caja: esta pantalla informa
+  el periodo y el monto; el botón cobra y lleva al recibo. El periodo lo
+  calcula el servidor con la misma regla con que cobra.
+{% endcomment %}
+
+{% block contenido %}
+{% if not puede_cobrar %}
+  <div class="aviso warning">
+    {% if turno_actual %}
+      <strong>El turno {{ turno_actual.pk }} viene de otra jornada.</strong>
+      Ciérrelo antes de cobrar: el efectivo de dos días en un mismo corte deja
+      la diferencia sin lectura posible.
+    {% else %}
+      <strong>No tiene un turno de caja abierto.</strong>
+      El pago de la pensión entra al corte: abra turno antes de cobrar.
+    {% endif %}
+    <a href="{% url 'web:turno' %}">Ir a turno</a>
+  </div>
+{% endif %}
+
+<div class="tarjeta destacada angosta">
+  <h2>Pensión de {{ pension.placa }}</h2>
+  <p class="detalle-cobro">
+    {{ pension.nombre_cliente }} ·
+    <span class="pildora {{ vigencia.clase }}">{{ vigencia.etiqueta }}</span>
+    {% if pension.vigente_hasta %}{% if vigencia.value == 'VENCIDA' %}desde el{% else %}hasta el{% endif %} {{ pension.vigente_hasta|date:"d/m H:i" }}{% endif %}
+  </p>
+
+  <nav class="segmentado" aria-label="Días a pagar">
+    {% for opcion in opciones_dias %}
+      <a href="?dias={{ opcion }}" {% if opcion == dias %}class="elegido" aria-current="true"{% endif %}>{{ opcion }} día{{ opcion|pluralize }}</a>
+    {% endfor %}
+  </nav>
+
+  <dl class="pares mt">
+    <div><dt>Cubre desde</dt><dd>{{ cotizacion.desde|date:"d/m/Y H:i" }}</dd></div>
+    <div><dt>Hasta</dt><dd>{{ cotizacion.hasta|date:"d/m/Y H:i" }}</dd></div>
+    <div><dt>Precio</dt><dd>{{ cotizacion.plan.precio_diario|pesos }} por día</dd></div>
+  </dl>
+  {% if cotizacion.cubre_estancia %}
+    <p class="ayuda">El vehículo está dentro: este pago cubre su estancia sin huecos.</p>
+  {% endif %}
+
+  <p class="cifra">{{ cotizacion.monto|pesos }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.dias }}
+    <div class="atajos" data-atajos hidden aria-label="Atajos de pago">
+      <button type="button" data-monto="{{ cotizacion.monto }}">Exacto</button>
+      {% for billete in atajos %}<button type="button" data-monto="{{ billete }}">${{ billete }}</button>{% endfor %}
+    </div>
+    <label for="{{ form.pago_recibido.id_for_label }}">{{ form.pago_recibido.label }}</label>
+    {{ form.pago_recibido }}
+    <p class="estimado" id="cambio-estimado" aria-live="polite"></p>
+    <p class="ayuda">{{ form.pago_recibido.help_text }}</p>
+    <button type="submit" class="boton alto" {% if not puede_cobrar %}disabled{% endif %}>Cobrar {{ dias }} día{{ dias|pluralize }} de pensión</button>
+  </form>
+  <a class="boton fantasma" href="{% url 'web:pension' pension.pk %}">Volver sin cobrar</a>
+
+  <p class="ayuda mt">
+    Precio vigente al momento del pago. Si la estancia rebasa la vigencia, el
+    tiempo excedente se cobra con la tarifa por hora.
+  </p>
+</div>
+{% endblock %}

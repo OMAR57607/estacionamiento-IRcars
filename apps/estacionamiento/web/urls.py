@@ -1,7 +1,7 @@
 """Rutas de la interfaz web de caja."""
 from django.urls import path
 
-from . import views
+from . import views, views_pensiones
 
 app_name = "web"
 
@@ -46,6 +46,20 @@ urlpatterns = [
     # la pantalla anterior: llegar aquí es un acto deliberado, y la vista exige
     # confirmar la contraseña antes de mostrar nada editable.
     path("tarifa/cambiar/", views.tarifa_cambiar, name="tarifa_cambiar"),
+    # Pensión diaria. El cambio de precio y las acciones que no se deshacen
+    # —baja, cancelación de un pago— van por POST y en su propia dirección.
+    path("pensiones/", views_pensiones.lista, name="pensiones"),
+    path("pensiones/nueva/", views_pensiones.alta, name="pension_nueva"),
+    path("pensiones/precio/", views_pensiones.precio, name="pension_precio"),
+    path("pensiones/<int:pk>/", views_pensiones.ficha, name="pension"),
+    path("pensiones/<int:pk>/cobrar/", views_pensiones.cobrar, name="pension_cobrar"),
+    path("pensiones/<int:pk>/baja/", views_pensiones.baja, name="pension_baja"),
+    path("pensiones/pago/<uuid:uuid>/", views_pensiones.recibo, name="pension_recibo"),
+    path(
+        "pensiones/pago/<int:pago_id>/cancelar/",
+        views_pensiones.cancelar_pago,
+        name="pension_cancelar_pago",
+    ),
     # Boleto recién emitido: el QR que el cliente escanea y el enlace que se
     # le puede enviar. Va antes de la cancelación por simple orden de uso.
     path("folio/<uuid:uuid>/boleto/", views.boleto, name="boleto"),

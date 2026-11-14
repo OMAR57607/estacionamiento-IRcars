@@ -1,0 +1,113 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Pensiones{% endblock %}
+
+{% comment %}
+  Lista de pensiones: primero lo que requiere atención —vencidas, sin pago,
+  por vencer— y después las vigentes. Cada estado lleva palabra en la píldora:
+  el color refuerza, no informa.
+{% endcomment %}
+
+{% block contenido %}
+<div class="encabezado-pantalla">
+  <h1>Pensiones</h1>
+  <a class="boton" href="{% url 'web:pension_nueva' %}">Nueva pensión</a>
+</div>
+
+{% if not plan %}
+  <div class="aviso error">
+    <strong>No hay precio de pensión configurado.</strong>
+    No se puede dar de alta ni cobrar hasta que el perfil administrativo lo fije
+    en <a href="{% url 'web:tarifa' %}">Precio</a>.
+  </div>
+{% endif %}
+
+<div class="indicadores compactos">
+  <div class="indicador">
+    <div class="rotulo">Activas</div>
+    <div class="valor">{{ conteos.ACTIVAS }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Por vencer</div>
+    <div class="valor">{{ conteos.POR_VENCER }}</div>
+  </div>
+  <div class="indicador{% if conteos.VENCIDA %} alerta{% endif %}">
+    <div class="rotulo">Vencidas</div>
+    <div class="valor">{{ conteos.VENCIDA }}</div>
+  </div>
+  {% if plan %}
+  <div class="indicador">
+    <div class="rotulo">Precio por día</div>
+    <div class="valor">{{ plan.precio_diario|pesos }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="tarjeta">
+  <form method="get" class="pila" role="search">
+    <label for="buscar-pension" class="solo-lector">Buscar pensión</label>
+    <input type="search" id="buscar-pension" name="q" value="{{ texto }}" class="campo"
+           placeholder="Buscar placa, nombre o teléfono" autocomplete="off">
+    {% if filtro %}<input type="hidden" name="estado" value="{{ filtro }}">{% endif %}
+  </form>
+
+  <nav class="segmentado mt" aria-label="Filtrar por estado">
+    {% for clave, etiqueta in filtros %}
+      <a href="?estado={{ clave }}{% if texto %}&amp;q={{ texto|urlencode }}{% endif %}"
+         {% if clave == filtro %}class="elegido" aria-current="true"{% endif %}>{{ etiqueta }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+<div class="tarjeta">
+  <h2>{{ total }} {% if total == 1 %}pensión{% else %}pensiones{% endif %}{% if texto %} para «{{ texto }}»{% endif %}</h2>
+  {% if filas %}
+    <ul class="lista" style="--columnas:9rem 1fr 1fr auto">
+    {% for fila in filas %}
+      {% with p=fila.pension %}
+      <li class="lista-fila">
+        <span class="celda-principal">{{ p.placa }}</span>
+        <span class="celda-datos">
+          <span class="celda-dato">
+            {% if p.estado == 'BAJA' %}
+              <span class="pildora baja">Baja</span>
+            {% else %}
+              <span class="pildora {{ fila.vigencia.clase }}">{{ fila.vigencia.etiqueta }}</span>
+            {% endif %}
+            {% if fila.dentro %}<span class="pildora pension">Dentro</span>{% endif %}
+          </span>
+          <span class="celda-dato">{{ p.nombre_cliente }}{% if p.descripcion_vehiculo %} · {{ p.descripcion_vehiculo }}{% endif %}</span>
+          <span class="celda-dato">
+            {% if p.vigente_hasta %}
+              {% if fila.vigencia.value == 'VENCIDA' %}Venció{% else %}Hasta{% endif %}
+              {{ p.vigente_hasta|date:"d/m H:i" }}
+            {% else %}Nunca se ha cobrado{% endif %}
+          </span>
+        </span>
+        <span class="celda-acciones">
+          {% if p.estado == 'ACTIVA' and fila.vigencia.value != 'VIGENTE' %}
+            <a class="boton angosto" href="{% url 'web:pension_cobrar' p.pk %}">Cobrar</a>
+          {% endif %}
+          <a class="boton fantasma angosto" href="{% url 'web:pension' p.pk %}">Ver</a>
+        </span>
+      </li>
+      {% endwith %}
+    {% endfor %}
+    </ul>
+    {% if pagina > 1 or hay_siguiente %}
+      <div class="acciones-fila mt">
+        {% if pagina > 1 %}<a class="boton fantasma angosto" href="?pagina={{ pagina|add:'-1' }}&amp;estado={{ filtro }}&amp;q={{ texto|urlencode }}">Anteriores</a>{% endif %}
+        {% if hay_siguiente %}<a class="boton fantasma angosto" href="?pagina={{ pagina|add:'1' }}&amp;estado={{ filtro }}&amp;q={{ texto|urlencode }}">Siguientes</a>{% endif %}
+      </div>
+    {% endif %}
+  {% elif texto or filtro %}
+    <p class="vacio">Ninguna pensión coincide. Pruebe con otra parte de la placa o del nombre.</p>
+  {% else %}
+    <p class="vacio">
+      Todavía no hay pensiones.
+      <a href="{% url 'web:pension_nueva' %}">Registre la primera</a>.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}
