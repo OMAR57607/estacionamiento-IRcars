@@ -162,6 +162,27 @@ def resumen_operativo(turno: Turno) -> dict:
     }
 
 
+def turnos_abiertos():
+    """
+    Turnos abiertos ahora mismo, del más antiguo al más reciente.
+
+    Es lo que el perfil administrativo necesita ver al entrar a «Turno y
+    corte»: qué cajas están operando, desde cuándo y con quién. Hasta ahora
+    esa pantalla solo resolvía el turno del propio usuario, de modo que el
+    dueño veía «Abrir turno de caja» mientras su cajero llevaba horas
+    cobrando, y la cifra esperada —que la vista dice no ocultarle— no
+    aparecía en ninguna parte.
+
+    No revela nada por sí misma: quien la invoque decide a quién mostrar los
+    importes. La regla del cierre ciego vive en la vista.
+    """
+    return (
+        Turno.objects.select_related("operador")
+        .filter(estado=EstadoTurno.ABIERTO)
+        .order_by("abierto_en")
+    )
+
+
 def calcular_resumen(turno: Turno, efectivo_declarado: Decimal | None = None) -> ResumenCorte:
     """
     Corte completo del turno, con importes.

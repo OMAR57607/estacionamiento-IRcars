@@ -46,33 +46,9 @@
          le impide detectar un desvío mientras todavía hay tiempo. {% endcomment %}
       {% comment %} La misma cuenta, en el mismo orden y con los mismos rótulos que
          el comprobante del corte. Antes omitía las pensiones: «cobrado» más
-         «cambio» no daba «debería haber» en cuanto se cobraba una. {% endcomment %}
-      <table class="cuenta">
-        <tbody>
-          <tr>
-            <td class="signo"></td>
-            <th>Cambio con que abrió</th>
-            <td class="numero">{{ esperado.fondo_inicial|pesos }}</td>
-          </tr>
-          <tr>
-            <td class="signo">+</td>
-            <th>Boletos cobrados ({{ esperado.folios_cobrados }})</th>
-            <td class="numero">{{ esperado.total_cobrado|pesos }}</td>
-          </tr>
-          {% if esperado.pagos_pension %}
-            <tr>
-              <td class="signo">+</td>
-              <th>Pensiones cobradas ({{ esperado.pagos_pension }})</th>
-              <td class="numero">{{ esperado.total_pensiones|pesos }}</td>
-            </tr>
-          {% endif %}
-          <tr class="fila-total">
-            <td class="signo">=</td>
-            <th>Debería haber en caja</th>
-            <td class="numero">{{ esperado.efectivo_esperado|pesos }}</td>
-          </tr>
-        </tbody>
-      </table>
+         «cambio» no daba «debería haber» en cuanto se cobraba una. Vive en un
+         fragmento porque la tarjeta de turnos de otros operadores la repite. {% endcomment %}
+      {% include "estacionamiento/_cuenta_esperada.html" with esperado=esperado %}
       <p class="ayuda">
         Esta cifra solo la ve usted, por ser el perfil administrativo. Al
         cajero no se le muestra: si conociera el total antes de contar, el
@@ -166,6 +142,46 @@
       <button type="submit" class="boton">Abrir turno</button>
     </form>
   </div>
+{% endif %}
+
+{# --------------------------------------------- Turnos de otros operadores #}
+{% if turnos_de_otros %}
+{% comment %} Solo llega al perfil administrativo (lo decide la vista). Va antes del
+   histórico porque es lo que está pasando ahora: qué cajas operan, desde
+   cuándo y cuánto debería haber en cada una. Sin botón de cierre: quién
+   puede cortar la caja de otro es una decisión de control que no está
+   tomada, y cortarla sin su conteo anularía el cierre ciego. {% endcomment %}
+<div class="tarjeta">
+  <h2>Turnos abiertos de otros operadores ({{ turnos_de_otros|length }})</h2>
+  {% for t in turnos_de_otros %}
+    <h3 class="subtitulo">
+      Turno {{ t.turno.pk }} · {{ t.turno.operador }}
+    </h3>
+    <p class="detalle-cobro mt-0">
+      Desde <strong>{{ t.turno.abierto_en|date:"d/m/Y H:i" }}</strong>
+      ({{ t.estado.horas_enteras }} h {{ t.estado.minutos_restantes }} min) ·
+      {{ t.avance.folios_cobrados }} cobrado{{ t.avance.folios_cobrados|pluralize }},
+      {{ t.avance.folios_cortesia }} sin costo
+    </p>
+    {% if t.estado.es_largo %}
+      <div class="aviso {% if t.estado.de_otro_dia %}error{% else %}warning{% endif %}">
+        {% if t.estado.de_otro_dia %}
+          <strong>Viene de otra jornada.</strong> {{ t.turno.operador }} no
+          puede cobrar hasta cerrarlo, y su corte mezclará el efectivo de dos
+          días.
+        {% else %}
+          <strong>Lleva más de {{ t.estado.horas_enteras }} horas abierto.</strong>
+          Conviene confirmar que no se olvidó cerrarlo.
+        {% endif %}
+      </div>
+    {% endif %}
+    {% include "estacionamiento/_cuenta_esperada.html" with esperado=t.esperado %}
+  {% endfor %}
+  <p class="ayuda">
+    Lo que debería haber en cada caja, para que pueda detectar un desvío
+    mientras el turno sigue abierto. Los operadores no ven esta tarjeta.
+  </p>
+</div>
 {% endif %}
 
 {# ------------------------------------------------------------ Histórico #}

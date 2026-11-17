@@ -665,6 +665,24 @@ def turno(request):
     else:
         contexto["form_abrir"] = AbrirTurnoForm()
 
+    # Las cajas que otros tienen abiertas, solo para el perfil administrativo.
+    # Al cajero no se le muestran: le darían el esperado de un compañero y,
+    # con él, una referencia para ajustar el suyo. El turno propio queda
+    # fuera de la lista porque ya ocupa la parte superior de la pantalla.
+    if contexto["es_administrativo"]:
+        ajenos = services_caja.turnos_abiertos()
+        if turno_actual is not None:
+            ajenos = ajenos.exclude(pk=turno_actual.pk)
+        contexto["turnos_de_otros"] = [
+            {
+                "turno": abierto,
+                "avance": services_caja.resumen_operativo(abierto),
+                "esperado": services_caja.calcular_resumen(abierto),
+                "estado": services_caja.estado_del_turno(abierto),
+            }
+            for abierto in ajenos
+        ]
+
     contexto["turnos_cerrados"] = (
         Turno.objects.select_related("operador")
         .filter(estado=EstadoTurno.CERRADO)
