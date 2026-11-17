@@ -15,7 +15,9 @@ Pestaña **Caja**. El ciclo de un vehículo son tres gestos.
 
 **3. Al entregar — cerrar turno**
 Pestaña **Turno** → **cuente todo el efectivo de la caja**, incluido el cambio con
-que abrió → captúrelo → *Cerrar turno y generar corte*.
+que abrió → captúrelo en *Efectivo contado* → *Cerrar turno…* → **revise la cifra
+en grande** → *Confirmar y cerrar turno*. Si la tecleó mal, *Corregir la cifra*.
+Después de confirmar ya no se puede cambiar.
 
 > **El sistema le avisa.** Si el turno lleva más de 12 horas abierto, la pantalla
 > de Caja lo advierte. Si quedó abierto de un día anterior, **no le dejará

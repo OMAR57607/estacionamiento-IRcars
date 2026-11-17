@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.estacionamiento import services, services_caja
-from apps.estacionamiento.models import Cajon, Tarifa, TipoCajon
+from apps.estacionamiento.models import Cajon, EstadoTurno, Tarifa, TipoCajon, Turno
 
 pytestmark = pytest.mark.django_db
 
@@ -124,6 +124,139 @@ class TestCierreCiego:
         client.force_login(duena)
         de_la_duena = client.get(reverse("web:turno")).content.decode()
         assert "¿Por qué no se muestra cuánto debería haber?" not in de_la_duena
+
+
+class TestConfirmacionDelCierre:
+    """
+    El cierre es definitivo, y un error de dedo —9825 por 982.50— producía un
+    faltante falso que solo se arregla con una corrección administrativa. Por
+    eso el conteo se confirma antes de cerrar.
+    """
+
+    @staticmethod
+    def _turno_abierto(operador):
+        _turno_con_un_cobro(operador)  # 500 de cambio + 60 cobrados
+        return services.obtener_turno_abierto(operador)
+
+    def test_un_solo_envío_no_cierra_el_turno(self, client, cajero):
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+
+        respuesta = client.post(
+            reverse("web:turno"), {"accion": "cerrar", "efectivo_declarado": "9825"}
+        )
+
+        turno.refresh_from_db()
+        assert respuesta.status_code == 200
+        assert turno.estado == EstadoTurno.ABIERTO
+        contenido = respuesta.content.decode()
+        assert "Confirme su conteo" in contenido
+        assert "$9,825.00" in contenido
+
+    @pytest.mark.parametrize("perfil", ["cajero", "duena"])
+    def test_la_confirmación_no_revela_lo_que_debería_haber(
+        self, client, cajero, duena, perfil
+    ):
+        """
+        Ni al cajero ni al dueño: con el esperado a la vista, «Corregir la
+        cifra» serviría para ajustar el conteo hasta que cuadre.
+        """
+        usuario = {"cajero": cajero, "duena": duena}[perfil]
+        self._turno_abierto(usuario)
+        client.force_login(usuario)
+
+        contenido = client.post(
+            reverse("web:turno"), {"accion": "cerrar", "efectivo_declarado": "999"}
+        ).content.decode()
+
+        assert "$999.00" in contenido
+        for revelador in ("$560.00", "$60.00", "Debería haber", "Faltante",
+                          "FALTANTE", "Sobrante", "SOBRANTE", "Diferencia"):
+            assert revelador not in contenido, revelador
+
+    def test_confirmar_cierra_y_lleva_al_comprobante(self, client, cajero):
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+
+        respuesta = client.post(
+            reverse("web:turno"),
+            {
+                "accion": "confirmar",
+                "turno": str(turno.pk),
+                "efectivo_declarado": "560.00",
+                "observaciones": "Sin novedad",
+            },
+        )
+
+        turno.refresh_from_db()
+        assert respuesta.status_code == 302
+        assert respuesta.url == reverse("web:corte", kwargs={"turno_id": turno.pk})
+        assert turno.estado == EstadoTurno.CERRADO
+        assert turno.efectivo_declarado == Decimal("560.00")
+        assert "Sin novedad" in turno.observaciones
+
+    def test_corregir_vuelve_al_formulario_con_lo_capturado(self, client, cajero):
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+
+        contenido = client.post(
+            reverse("web:turno"),
+            {
+                "accion": "corregir",
+                "turno": str(turno.pk),
+                "efectivo_declarado": "9825",
+                "observaciones": "Billete roto",
+            },
+        ).content.decode()
+
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
+        assert 'value="9825"' in contenido
+        assert 'value="Billete roto"' in contenido
+
+    def test_una_confirmación_de_otro_turno_no_se_aplica(self, client, cajero):
+        """
+        Si entre los dos pasos el turno se cerró y se abrió otro desde otra
+        pestaña, la cifra confirmada era la de otra caja.
+        """
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+
+        client.post(
+            reverse("web:turno"),
+            {"accion": "confirmar", "turno": str(turno.pk + 999),
+             "efectivo_declarado": "560.00"},
+        )
+
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
+
+    def test_un_doble_toque_lleva_al_comprobante_ya_generado(self, client, cajero):
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+        datos = {"accion": "confirmar", "turno": str(turno.pk),
+                 "efectivo_declarado": "560.00"}
+
+        client.post(reverse("web:turno"), datos)
+        segunda = client.post(reverse("web:turno"), datos)
+
+        assert segunda.status_code == 302
+        assert segunda.url == reverse("web:corte", kwargs={"turno_id": turno.pk})
+        assert Turno.objects.filter(operador=cajero).count() == 1
+
+    def test_una_cifra_alterada_en_la_confirmación_se_rechaza(self, client, cajero):
+        """La cifra viaja en un campo oculto: el servidor la valida otra vez."""
+        turno = self._turno_abierto(cajero)
+        client.force_login(cajero)
+
+        client.post(
+            reverse("web:turno"),
+            {"accion": "confirmar", "turno": str(turno.pk),
+             "efectivo_declarado": "-50"},
+        )
+
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
 
 
 class TestTurnosDeOtros:

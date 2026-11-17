@@ -86,11 +86,15 @@
         {{ form_cerrar.efectivo_declarado.label }}
       </label>
       {{ form_cerrar.efectivo_declarado }}
+      <p class="ayuda">{{ form_cerrar.efectivo_declarado.help_text }}</p>
+      {% for e in form_cerrar.efectivo_declarado.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
       <label for="{{ form_cerrar.observaciones.id_for_label }}" class="mt">
         {{ form_cerrar.observaciones.label }}
       </label>
       {{ form_cerrar.observaciones }}
-      <button type="submit" class="boton">Cerrar turno y generar corte</button>
+      {% comment %} Los puntos suspensivos avisan que hay un paso más: este botón ya
+         no cierra, lleva a confirmar la cifra. {% endcomment %}
+      <button type="submit" class="boton">Cerrar turno…</button>
     </form>
 
     <p class="ayuda mt">
@@ -111,8 +115,9 @@
           cobro queda atado a este turno.
         </li>
         <li>
-          <strong>Al entregar</strong> cuenta el efectivo, lo captura y cierra.
-          El sistema compara con lo que debería haber y registra la diferencia.
+          <strong>Al entregar</strong> cuenta el efectivo, lo captura, revisa
+          la cifra en la pantalla de confirmación y cierra. El sistema compara
+          con lo que debería haber y registra la diferencia.
         </li>
         <li>
           <strong>Los coches que sigan dentro</strong> no estorban: se quedan
