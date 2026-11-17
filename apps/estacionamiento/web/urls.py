@@ -19,6 +19,9 @@ urlpatterns = [
     # Secciones que no caben en la barra inferior del teléfono.
     path("mas/", views.mas, name="mas"),
     path("turno/<int:turno_id>/corte/", views.corte, name="corte"),
+    # Cierre de un turno ajeno por el perfil administrativo, cuando el
+    # operador se fue sin cortar. En su propia dirección, como la corrección.
+    path("turno/<int:turno_id>/cerrar/", views.cerrar_turno_de_otro, name="cerrar_turno_de_otro"),
     # Corrección de un corte ya cerrado. En su propia dirección y no como un
     # formulario más del comprobante: llegar aquí es un acto deliberado del
     # perfil administrativo, y la vista exige confirmar la contraseña antes

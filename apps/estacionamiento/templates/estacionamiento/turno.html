@@ -86,11 +86,15 @@
         {{ form_cerrar.efectivo_declarado.label }}
       </label>
       {{ form_cerrar.efectivo_declarado }}
+      <p class="ayuda">{{ form_cerrar.efectivo_declarado.help_text }}</p>
+      {% for e in form_cerrar.efectivo_declarado.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
       <label for="{{ form_cerrar.observaciones.id_for_label }}" class="mt">
         {{ form_cerrar.observaciones.label }}
       </label>
       {{ form_cerrar.observaciones }}
-      <button type="submit" class="boton">Cerrar turno y generar corte</button>
+      {% comment %} Los puntos suspensivos avisan que hay un paso más: este botón ya
+         no cierra, lleva a confirmar la cifra. {% endcomment %}
+      <button type="submit" class="boton">Cerrar turno…</button>
     </form>
 
     <p class="ayuda mt">
@@ -111,8 +115,9 @@
           cobro queda atado a este turno.
         </li>
         <li>
-          <strong>Al entregar</strong> cuenta el efectivo, lo captura y cierra.
-          El sistema compara con lo que debería haber y registra la diferencia.
+          <strong>Al entregar</strong> cuenta el efectivo, lo captura, revisa
+          la cifra en la pantalla de confirmación y cierra. El sistema compara
+          con lo que debería haber y registra la diferencia.
         </li>
         <li>
           <strong>Los coches que sigan dentro</strong> no estorban: se quedan
@@ -148,9 +153,11 @@
 {% if turnos_de_otros %}
 {% comment %} Solo llega al perfil administrativo (lo decide la vista). Va antes del
    histórico porque es lo que está pasando ahora: qué cajas operan, desde
-   cuándo y cuánto debería haber en cada una. Sin botón de cierre: quién
-   puede cortar la caja de otro es una decisión de control que no está
-   tomada, y cortarla sin su conteo anularía el cierre ciego. {% endcomment %}
+   cuándo y cuánto debería haber en cada una.
+
+   Cada turno ofrece cerrarlo, para cuando su operador se fue sin cortar
+   (decisión del dueño, 17/11/2026). El cierre pide contar el efectivo, el
+   motivo y la contraseña, y queda a nombre de quien cierra. {% endcomment %}
 <div class="tarjeta">
   <h2>Turnos abiertos de otros operadores ({{ turnos_de_otros|length }})</h2>
   {% for t in turnos_de_otros %}
@@ -176,6 +183,11 @@
       </div>
     {% endif %}
     {% include "estacionamiento/_cuenta_esperada.html" with esperado=t.esperado %}
+    <p class="mt-0">
+      <a class="boton secundario angosto" href="{% url 'web:cerrar_turno_de_otro' turno_id=t.turno.pk %}">
+        Cerrar este turno…
+      </a>
+    </p>
   {% endfor %}
   <p class="ayuda">
     Lo que debería haber en cada caja, para que pueda detectar un desvío
@@ -233,7 +245,7 @@
             {% if t.tiene_ajuste %}<br><span class="ayuda">Corregido después del cierre</span>{% endif %}
           </span>
           <span class="celda-datos">
-            <span class="celda-dato">{{ t.operador }}</span>
+            <span class="celda-dato">{{ t.operador }}{% if t.cerrado_por_otro %} · lo cerró {{ t.cerrado_por }}{% endif %}</span>
             <span class="celda-dato numero" data-rotulo="Cambio">{{ t.fondo_inicial|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Boletos">{{ t.total_cobrado|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Pensiones">{{ t.total_pensiones|pesos }}</span>

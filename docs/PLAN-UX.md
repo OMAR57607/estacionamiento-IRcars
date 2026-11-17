@@ -5,9 +5,9 @@ conteos». Ese commit dejó coherentes **turno, corte y corrección**. Este plan
 cubre lo que quedó fuera. Está escrito para ejecutarse **una fase por sesión,
 un commit por fase, con la suite en verde al cerrar cada una**.
 
-**Estado (17/11/2026):** fases 1, 2, 3, 4 y 6 hechas, un commit cada una en
-la rama `ccr-ed13b176-9k4v3d`. La **fase 5 sigue pendiente** del visto bueno
-del dueño. Las desviaciones respecto de lo escrito abajo están en el mensaje
+**Estado (17/11/2026):** las seis fases están hechas, un commit cada una en
+la rama `ccr-ed13b176-9k4v3d`. Las fases 1 a 4 y 6 se fusionaron en el pull
+request #31; la 5 se ejecutó después, con el visto bueno del dueño. Las desviaciones respecto de lo escrito abajo están en el mensaje
 de cada commit.
 
 Rigen todas las reglas de [`docs/REDISENO.md`](REDISENO.md) §0. Las que más se

@@ -38,8 +38,15 @@
   {% comment %} Quién y cuándo van en un renglón de texto y no dentro de la tabla:
      la tabla es la cuenta del efectivo, y mezclar en ella fechas y nombres
      obligaba a buscar dónde empezaban los importes. {% endcomment %}
+  {% comment %} Si lo cerró alguien distinto del operador, el comprobante lo dice: el
+     conteo es de quien cerró, y el motivo va en las observaciones. {% endcomment %}
   <p class="detalle-cobro">
-    Lo cerró <strong>{{ turno_corte.operador }}</strong> ·
+    {% if turno_corte.cerrado_por_otro %}
+      Turno de <strong>{{ turno_corte.operador }}</strong> ·
+      lo cerró <strong>{{ turno_corte.cerrado_por }}</strong> ·
+    {% else %}
+      Lo cerró <strong>{{ turno_corte.operador }}</strong> ·
+    {% endif %}
     abrió el <strong>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</strong> ·
     cerró el <strong>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</strong>
   </p>
@@ -166,8 +173,12 @@
     </button>
     {% if puede_ajustar %}
       {% comment %} Solo el perfil administrativo, y solo sobre un turno ya cerrado.
-         Quien cerró mal no se corrige a sí mismo: el control de caja descansa
-         en que la diferencia la constate alguien distinto de quien contó.
+         El cajero no se corrige a sí mismo: el control de caja descansa en que
+         su diferencia la constate alguien distinto de quien contó. Un
+         administrador sí puede corregir un corte que cerró él —el suyo o el de
+         un operador que lo olvidó— (decisión del dueño, 17/11/2026): si solo
+         hay una cuenta administrativa, prohibirlo dejaría ese error sin
+         corrección posible. La bitácora registra quién cerró y quién corrigió.
 
          La etiqueta cambia según lo que haya que hacer. «Cuadrar el corte»
          sobre un corte que ya cuadra no significa nada: ahí lo que se ofrece

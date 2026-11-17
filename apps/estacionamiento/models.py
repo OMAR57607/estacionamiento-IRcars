@@ -111,6 +111,19 @@ class Turno(models.Model):
     )
     abierto_en = models.DateTimeField("abierto en", default=timezone.now)
     cerrado_en = models.DateTimeField("cerrado en", null=True, blank=True)
+    # Quién contó el efectivo y cerró. Casi siempre es el propio operador; el
+    # perfil administrativo puede cerrar el turno de otro cuando éste se fue
+    # sin cortar. Sin este campo, ese corte aparecería firmado por un cajero
+    # que no contó nada. Nulo en los turnos cerrados antes de que existiera:
+    # entonces solo el operador podía cerrar, y es él quien cerró.
+    cerrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="turnos_cortados",
+        verbose_name="cerrado por",
+    )
 
     # --- Fotografía del corte (se graba al cerrar) -------------------------
     efectivo_declarado = models.DecimalField(
@@ -225,6 +238,16 @@ class Turno(models.Model):
 
     def __str__(self) -> str:
         return f"Turno {self.pk} · {self.operador} · {self.abierto_en:%Y-%m-%d %H:%M}"
+
+    @property
+    def quien_cerro(self):
+        """Quién contó y cerró: el operador, salvo que lo cerrara otro."""
+        return self.cerrado_por or self.operador
+
+    @property
+    def cerrado_por_otro(self) -> bool:
+        """Si el turno lo cerró alguien distinto de su operador."""
+        return self.cerrado_por_id is not None and self.cerrado_por_id != self.operador_id
 
     # Las tres propiedades siguientes existen para que ninguna pantalla,
     # reporte ni PDF tenga que recordar la regla «si hay ajuste usa el

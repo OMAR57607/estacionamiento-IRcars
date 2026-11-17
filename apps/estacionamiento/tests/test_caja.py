@@ -135,6 +135,67 @@ class TestAdscripcionDeCobros:
         assert services_caja.calcular_resumen(turno_b).total_cobrado == Decimal("60.00")
 
 
+class TestCierrePorOtro:
+    """
+    El perfil administrativo puede cerrar el turno de un operador que se fue
+    sin cortar. El servicio registra quién cerró y exige el motivo; quién
+    tiene permiso lo decide la vista.
+    """
+
+    def test_cerrar_el_turno_de_otro_exige_motivo(self, tarifa, operador, otro_operador):
+        turno = services_caja.abrir_turno(operador=operador)
+
+        with pytest.raises(ErrorConfiguracion):
+            services_caja.cerrar_turno(
+                turno_id=turno.pk, efectivo_declarado=Decimal("0.00"),
+                cerrado_por=otro_operador, motivo_cierre="olvido",
+            )
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
+
+    def test_el_corte_queda_a_nombre_de_quien_cerró_con_su_motivo(
+        self, tarifa, operador, otro_operador
+    ):
+        turno = services_caja.abrir_turno(operador=operador, fondo_inicial=Decimal("100.00"))
+        _cobrar("AAA111", 1, operador)  # $30
+
+        cerrado, resumen = services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("130.00"),
+            cerrado_por=otro_operador,
+            motivo_cierre="El operador terminó su jornada y no cerró.",
+        )
+
+        assert cerrado.cerrado_por == otro_operador
+        assert cerrado.cerrado_por_otro
+        assert cerrado.quien_cerro == otro_operador
+        assert cerrado.operador == operador  # el turno sigue siendo suyo
+        assert "[Cerrado por cajero2 en lugar de cajero]" in cerrado.observaciones
+        assert "no cerró" in cerrado.observaciones
+        assert cerrado.resumen["cerrado_por"] == "cajero2"
+        assert resumen.cuadra
+
+    def test_el_cierre_propio_no_pide_motivo(self, tarifa, operador):
+        turno = services_caja.abrir_turno(operador=operador)
+
+        cerrado, _ = services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("0.00"), cerrado_por=operador
+        )
+
+        assert cerrado.cerrado_por == operador
+        assert not cerrado.cerrado_por_otro
+
+    def test_un_turno_cerrado_antes_lo_firmó_su_operador(self, tarifa, operador):
+        """Los turnos sin `cerrado_por` —anteriores a la migración— son del operador."""
+        turno = services_caja.abrir_turno(operador=operador)
+        cerrado, _ = services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("0.00")
+        )
+
+        assert cerrado.cerrado_por is None
+        assert cerrado.quien_cerro == operador
+        assert not cerrado.cerrado_por_otro
+
+
 class TestResumenOperativo:
     def test_no_revela_importes_durante_el_turno(self, tarifa, operador):
         turno = services_caja.abrir_turno(operador=operador)

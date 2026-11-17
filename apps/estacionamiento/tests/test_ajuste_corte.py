@@ -414,6 +414,44 @@ class TestPantalla:
 
         assert "Cuadrar el corte" in contenido
 
+    def test_el_administrador_corrige_un_corte_que_cerró_él(
+        self, client, duena, cajero
+    ):
+        """
+        Decisión del dueño: cualquier administrador corrige, también el que
+        cerró —aquí, el turno de un cajero que se fue sin cortar—. Con una
+        sola cuenta administrativa, prohibirlo dejaría el error sin
+        corrección. El cajero sigue sin poder corregir nada.
+        """
+        turno = services_caja.abrir_turno(
+            operador=cajero, fondo_inicial=Decimal("100.00"),
+            momento=timezone.now() - timedelta(hours=4),
+        )
+        services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("40.00"),
+            cerrado_por=duena,
+            motivo_cierre="El operador se fue sin cerrar el turno.",
+        )
+        client.force_login(duena)
+
+        corte = client.get(
+            reverse("web:corte", kwargs={"turno_id": turno.pk})
+        ).content.decode()
+        assert "Cuadrar el corte" in corte
+
+        client.post(
+            reverse("web:ajustar_corte", kwargs={"turno_id": turno.pk}),
+            {
+                "efectivo_real": "100.00",
+                "motivo": MotivoAjuste.RECUENTO,
+                "justificacion": JUSTIFICACION,
+                "clave": CLAVE,
+            },
+        )
+        turno.refresh_from_db()
+        assert turno.quien_cerro == duena
+        assert turno.diferencia_vigente == Decimal("0.00")
+
     def test_la_fecha_del_cierre_se_lee(self, client, duena, cajero):
         """
         El fallo que esta prueba impide: en el formato de `date`, las letras

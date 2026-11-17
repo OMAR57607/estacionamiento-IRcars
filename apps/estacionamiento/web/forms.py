@@ -177,7 +177,11 @@ class CerrarTurnoForm(forms.Form):
         max_digits=10,
         decimal_places=2,
         min_value=Decimal("0.00"),
-        label="Cuente el efectivo que hay en caja e inclúyalo todo, también el cambio con que abrió",
+        # El rótulo dice qué cifra va; el texto de ayuda, cómo contarla. Antes
+        # todo era una etiqueta de dos renglones por encima del único campo
+        # que hay que llenar.
+        label="Efectivo contado",
+        help_text="Todo el efectivo de la caja, también el cambio con que abrió.",
         widget=forms.NumberInput(
             attrs={
                 "step": "0.01",
@@ -193,6 +197,57 @@ class CerrarTurnoForm(forms.Form):
         label="Observaciones (opcional)",
         widget=forms.TextInput(attrs={"class": "campo"}),
     )
+
+
+class CerrarTurnoDeOtroForm(forms.Form):
+    """
+    Cierre, por el perfil administrativo, del turno de otro operador.
+
+    Para cuando el cajero se fue sin cortar. Pide el efectivo que contó quien
+    cierra —el conteo sigue siendo físico— y el motivo, obligatorio: un corte
+    que no firmó su operador tiene que decir por qué. La contraseña se pide
+    en el paso de confirmación, que es donde se decide.
+    """
+
+    efectivo_declarado = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        label="Efectivo contado",
+        help_text="Cuente usted todo el efectivo de esa caja, también el cambio con que abrió.",
+        widget=forms.NumberInput(
+            attrs={
+                "step": "0.01",
+                "autofocus": True,
+                "class": "campo campo-grande",
+                "inputmode": "decimal",
+            }
+        ),
+    )
+    motivo = forms.CharField(
+        max_length=500,
+        label="Por qué lo cierra usted",
+        help_text="Quedará en el comprobante. Por ejemplo: el operador se fue sin cerrar.",
+        widget=forms.Textarea(
+            attrs={
+                "class": "campo",
+                "rows": 2,
+                "placeholder": "El operador terminó su jornada y no cerró el turno.",
+            }
+        ),
+    )
+
+    def clean_motivo(self) -> str:
+        # La misma regla que la justificación de un ajuste, y en el mismo
+        # sitio: el dominio. El servicio la vuelve a aplicar.
+        from ..domain.corte import justificacion_suficiente
+
+        motivo = self.cleaned_data["motivo"].strip()
+        if not justificacion_suficiente(motivo):
+            raise forms.ValidationError(
+                "Explique qué pasó con algo más que una palabra."
+            )
+        return motivo
 
 
 class RangoFechasForm(forms.Form):

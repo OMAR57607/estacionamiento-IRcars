@@ -136,6 +136,14 @@ Dos reglas de presentación que no se negocian:
 - **En la caseta se dice boleto y cambio**, no «folio» ni «fondo inicial».
   `folio` sigue siendo el término del código, de la API y del CSV.
 
+**Turno olvidado.** Si un operador se va sin cortar, el perfil
+administrativo cierra su turno desde «Turno y corte» → *Cerrar este turno…*.
+Cuenta el efectivo de esa caja sin ver lo que debería haber, escribe el
+motivo y confirma con su contraseña, como en la corrección de un corte. El
+corte queda a su nombre (`Turno.cerrado_por`), el motivo en las
+observaciones y la bitácora lo registra en `WARNING`. El comprobante dice
+«Turno de *operador* · lo cerró *quien cerró*».
+
 ---
 
 ## Corte de caja: corrección de un cierre equivocado
@@ -162,10 +170,13 @@ contra-asienta— y por el mismo motivo.
 - **El comprobante muestra las dos cifras.** Esa coexistencia es lo que hace
   del ajuste un acto auditable en lugar de un borrado: un faltante que puede
   desaparecer sin rastro no disuade a nadie de provocarlo.
-- **Quien cerró mal no se corrige a sí mismo.** La pantalla está restringida al
+- **El cajero no se corrige a sí mismo.** La pantalla está restringida al
   perfil administrativo y exige confirmar la contraseña, igual que el cambio de
-  precio. El cierre ciego descansa en que la diferencia la constate alguien
-  distinto de quien contó.
+  precio. El cierre ciego descansa en que la diferencia del cajero la constate
+  alguien distinto de quien contó. Un administrador sí puede corregir un corte
+  que cerró él mismo —el suyo o el de un operador que lo olvidó—: con una sola
+  cuenta administrativa, prohibirlo dejaría el error sin corrección. El turno
+  registra quién cerró y el ajuste quién corrigió.
 - **Varias correcciones se acumulan.** La segunda parte de la cifra vigente, no
   de la original, para que no se pisen.
 

@@ -1,0 +1,56 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Confirmar el cierre del turno {{ turno_actual.pk }}{% endblock %}
+
+{% block contenido %}
+
+{% comment %} Paso de confirmación del cierre ciego.
+
+   Muestra solo la cifra que el cajero capturó, en grande, para que un error
+   de dedo —9825 por 982.50— salte a la vista antes de quedar firmado.
+
+   No muestra lo que debería haber ni la diferencia, tampoco al perfil
+   administrativo: con el esperado a la vista, «Corregir la cifra» se
+   convertiría en una forma de ajustar el conteo hasta que cuadre, que es
+   exactamente lo que el cierre ciego impide. {% endcomment %}
+<div class="tarjeta angosta centrada">
+  <h2>Confirme su conteo</h2>
+
+  <p class="detalle-cobro mt-0">
+    Va a cerrar el turno <strong>{{ turno_actual.pk }}</strong> declarando
+    que en la caja hay:
+  </p>
+  <p class="cifra">{{ efectivo|pesos }}</p>
+
+  <p class="ayuda">
+    Revise que sea el total que contó, incluido el cambio con que abrió.
+    <strong>Después del cierre esta cifra no se puede cambiar:</strong>
+    corregirla requiere una autorización del perfil administrativo.
+  </p>
+
+  {% if observaciones %}
+    <p class="detalle-cobro">
+      <strong>Observaciones:</strong> {{ observaciones }}
+    </p>
+  {% endif %}
+
+  <form method="post" action="{% url 'web:turno' %}">
+    {% csrf_token %}
+    <input type="hidden" name="turno" value="{{ turno_actual.pk }}">
+    <input type="hidden" name="efectivo_declarado" value="{{ efectivo }}">
+    <input type="hidden" name="observaciones" value="{{ observaciones }}">
+    {% comment %} Ningún botón lleva el foco: con él, el mismo Enter que envió la
+       cifra la confirmaría al instante y este paso no detendría nada. {% endcomment %}
+    <div class="acciones-fila">
+      <button type="submit" name="accion" value="confirmar" class="boton">
+        Confirmar y cerrar turno
+      </button>
+      <button type="submit" name="accion" value="corregir" class="boton secundario">
+        Corregir la cifra
+      </button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

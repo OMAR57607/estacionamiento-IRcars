@@ -1,0 +1,85 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Cerrar el turno {{ turno_objetivo.pk }}{% endblock %}
+
+{% block contenido %}
+
+{% comment %} Cierre de un turno ajeno por el perfil administrativo. Dos pasos, como
+   el cierre propio: capturar y confirmar. La contraseña va en el segundo,
+   que es donde se decide.
+
+   No se muestra lo que debería haber, aunque quien cierra pueda verlo en
+   «Turno y corte»: aquí tiene que contar el efectivo de esa caja, y con la
+   cifra al lado del campo la tentación es teclearla. {% endcomment %}
+<div class="tarjeta angosta centrada">
+  <h2>Cerrar el turno {{ turno_objetivo.pk }} de {{ turno_objetivo.operador }}</h2>
+
+  <p class="detalle-cobro mt-0">
+    Abierto desde <strong>{{ turno_objetivo.abierto_en|date:"d/m/Y H:i" }}</strong>
+    ({{ estado.horas_enteras }} h {{ estado.minutos_restantes }} min).
+  </p>
+
+  {% if paso == "capturar" %}
+    <p class="ayuda">
+      Para cuando el operador se fue sin cortar. El corte quedará
+      <strong>a su nombre</strong>, con el motivo que escriba, y el operador lo
+      verá al consultar su turno.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="revisar">
+
+      <label for="{{ form.efectivo_declarado.id_for_label }}">{{ form.efectivo_declarado.label }}</label>
+      {{ form.efectivo_declarado }}
+      <p class="ayuda">{{ form.efectivo_declarado.help_text }}</p>
+      {% for e in form.efectivo_declarado.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+
+      <label for="{{ form.motivo.id_for_label }}" class="mt">{{ form.motivo.label }}</label>
+      {{ form.motivo }}
+      <p class="ayuda">{{ form.motivo.help_text }}</p>
+      {% for e in form.motivo.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+
+      <div class="acciones-fila mt">
+        <button type="submit" class="boton">Cerrar turno…</button>
+        <a class="boton secundario angosto" href="{% url 'web:turno' %}">Cancelar</a>
+      </div>
+    </form>
+
+  {% else %}
+    <p class="detalle-cobro">Va a cerrar este turno declarando que en la caja hay:</p>
+    <p class="cifra">{{ form.cleaned_data.efectivo_declarado|pesos }}</p>
+    <p class="detalle-cobro">
+      <strong>Motivo:</strong> {{ form.cleaned_data.motivo }}
+    </p>
+    <p class="ayuda">
+      Después del cierre esta cifra no se puede cambiar; corregirla requiere
+      un ajuste del corte. El cierre se registra a nombre de
+      <strong>{{ request.user }}</strong>.
+    </p>
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="efectivo_declarado" value="{{ form.cleaned_data.efectivo_declarado }}">
+      <input type="hidden" name="motivo" value="{{ form.cleaned_data.motivo }}">
+
+      {% comment %} El campo de contraseña lleva el foco: es lo único que falta, y un
+         Enter sin ella no cierra nada porque el servidor la exige. {% endcomment %}
+      <label for="{{ form_clave.clave.id_for_label }}">Su contraseña</label>
+      {{ form_clave.clave }}
+      {% for e in form_clave.clave.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+
+      <div class="acciones-fila mt">
+        <button type="submit" name="accion" value="confirmar" class="boton">
+          Confirmar y cerrar turno
+        </button>
+        <button type="submit" name="accion" value="corregir" class="boton secundario">
+          Corregir
+        </button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+
+{% endblock %}
