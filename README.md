@@ -136,6 +136,14 @@ Dos reglas de presentación que no se negocian:
 - **En la caseta se dice boleto y cambio**, no «folio» ni «fondo inicial».
   `folio` sigue siendo el término del código, de la API y del CSV.
 
+**Turno olvidado.** Si un operador se va sin cortar, el perfil
+administrativo cierra su turno desde «Turno y corte» → *Cerrar este turno…*.
+Cuenta el efectivo de esa caja sin ver lo que debería haber, escribe el
+motivo y confirma con su contraseña, como en la corrección de un corte. El
+corte queda a su nombre (`Turno.cerrado_por`), el motivo en las
+observaciones y la bitácora lo registra en `WARNING`. El comprobante dice
+«Turno de *operador* · lo cerró *quien cerró*».
+
 ---
 
 ## Corte de caja: corrección de un cierre equivocado

@@ -50,6 +50,7 @@ from .forms import (
     AjusteCorteForm,
     CancelarFolioForm,
     CapturaForm,
+    CerrarTurnoDeOtroForm,
     CerrarTurnoForm,
     ClaveOperadorForm,
     CobroForm,
@@ -708,7 +709,7 @@ def turno(request):
         ]
 
     contexto["turnos_cerrados"] = (
-        Turno.objects.select_related("operador")
+        Turno.objects.select_related("operador", "cerrado_por")
         .filter(estado=EstadoTurno.CERRADO)
         .order_by("-cerrado_en")[:50]
     )
@@ -759,6 +760,7 @@ def _confirmar_cierre(request, turno_actual):
             turno_id=turno_actual.pk,
             efectivo_declarado=form.cleaned_data["efectivo_declarado"],
             observaciones=form.cleaned_data.get("observaciones", ""),
+            cerrado_por=request.user,
         )
     except ErrorDominio as exc:
         messages.error(request, str(exc))
@@ -766,6 +768,92 @@ def _confirmar_cierre(request, turno_actual):
     # El resultado se pasa por la URL del comprobante en lugar de un mensaje:
     # el corte merece una pantalla propia, con el desglose completo e
     # imprimible.
+    return redirect("web:corte", turno_id=cerrado.pk)
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def cerrar_turno_de_otro(request, turno_id: int):
+    """
+    Cierra el turno de otro operador, cuando éste se fue sin cortar.
+
+    Un turno olvidado bloquea: si viene de otra jornada su operador ya no
+    puede cobrar en él, y su efectivo se va mezclando con el del día. Si el
+    operador no está para cerrarlo, solo quedaba esperar a que volviera.
+
+    Mismas garantías que la corrección del corte: solo el perfil
+    administrativo, con el motivo por escrito y su contraseña, y el corte
+    queda a su nombre (`Turno.cerrado_por`). Va en dos pasos como el cierre
+    propio —capturar y confirmar—, y la contraseña se pide al confirmar, que
+    es donde se decide; así nunca viaja en un campo oculto.
+
+    No muestra lo que debería haber. Quien cierra tiene que contar el
+    efectivo de esa caja, y con el esperado al lado del campo la tentación
+    es teclearlo en lugar de contar.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "turno"
+    turno_objetivo = (
+        Turno.objects.select_related("operador", "cerrado_por").filter(pk=turno_id).first()
+    )
+    if turno_objetivo is None:
+        messages.error(request, f"No existe el turno {turno_id}.")
+        return redirect("web:turno")
+    if turno_objetivo.estado != EstadoTurno.ABIERTO:
+        # Un doble toque en «Confirmar» o un cierre desde otro equipo: lo útil
+        # es el comprobante, no un error.
+        messages.info(request, f"El turno {turno_objetivo.pk} ya está cerrado.")
+        return redirect("web:corte", turno_id=turno_objetivo.pk)
+    if turno_objetivo.operador_id == request.user.pk:
+        # El propio turno se cierra por la vía normal, sin motivo ni contraseña.
+        return redirect("web:turno")
+
+    contexto["turno_objetivo"] = turno_objetivo
+    contexto["estado"] = services_caja.estado_del_turno(turno_objetivo)
+    contexto["paso"] = "capturar"
+    plantilla = "estacionamiento/turno_cerrar_otro.html"
+
+    if request.method != "POST":
+        contexto["form"] = CerrarTurnoDeOtroForm()
+        return render(request, plantilla, contexto)
+
+    accion = request.POST.get("accion")
+    form = CerrarTurnoDeOtroForm(request.POST)
+    contexto["form"] = form
+
+    if accion == "corregir":
+        return render(request, plantilla, contexto)
+
+    if not form.is_valid():
+        messages.error(request, "Revise el efectivo y el motivo.")
+        return render(request, plantilla, contexto)
+
+    contexto["paso"] = "confirmar"
+    contexto["form_clave"] = ConfirmarClaveForm()
+
+    if accion != "confirmar":
+        return render(request, plantilla, contexto)
+
+    form_clave = ConfirmarClaveForm(request.POST)
+    contexto["form_clave"] = form_clave
+    if not form_clave.is_valid() or not authenticate(
+        username=request.user.get_username(),
+        password=form_clave.cleaned_data["clave"],
+    ):
+        messages.error(request, "Contraseña incorrecta. El turno sigue abierto.")
+        return render(request, plantilla, contexto)
+
+    try:
+        cerrado, _ = services_caja.cerrar_turno(
+            turno_id=turno_objetivo.pk,
+            efectivo_declarado=form.cleaned_data["efectivo_declarado"],
+            cerrado_por=request.user,
+            motivo_cierre=form.cleaned_data["motivo"],
+        )
+    except ErrorDominio as exc:
+        messages.error(request, str(exc))
+        return redirect("web:turno")
     return redirect("web:corte", turno_id=cerrado.pk)
 
 
@@ -780,7 +868,7 @@ def corte(request, turno_id: int):
     contexto = _contexto_base(request)
     contexto["seccion"] = "turno"
     turno_consultado = (
-        Turno.objects.select_related("operador").filter(pk=turno_id).first()
+        Turno.objects.select_related("operador", "cerrado_por").filter(pk=turno_id).first()
     )
     if turno_consultado is None:
         messages.error(request, f"No existe el turno {turno_id}.")
@@ -842,7 +930,7 @@ def ajustar_corte(request, turno_id: int):
     contexto["seccion"] = "turno"
 
     turno_objetivo = (
-        Turno.objects.select_related("operador").filter(pk=turno_id).first()
+        Turno.objects.select_related("operador", "cerrado_por").filter(pk=turno_id).first()
     )
     if turno_objetivo is None:
         messages.error(request, f"No existe el turno {turno_id}.")

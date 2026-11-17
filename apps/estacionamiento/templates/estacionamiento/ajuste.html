@@ -13,7 +13,7 @@
        dentro: en el formato de `date`, las letras «a», «l» y «s» de «a las»
        son códigos —a. m./p. m., día de la semana y segundos— y producían
        «06/11/2026 p.m. Viernesp.m.00 22:00». {% endcomment %}
-    El corte que firmó <strong>{{ turno_corte.operador }}</strong> el
+    El corte que firmó <strong>{{ turno_corte.quien_cerro }}</strong> el
     {{ turno_corte.cerrado_en|date:"d/m/Y" }} a las
     {{ turno_corte.cerrado_en|date:"H:i" }} <strong>no se reescribe</strong>:
     la cifra que declaró queda registrada tal como la entregó. Lo que se

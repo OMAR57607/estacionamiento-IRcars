@@ -137,6 +137,7 @@ desaparecer.
 |---|---|
 | «No tiene un turno de caja abierto» | Pestaña Turno → abrir turno. |
 | No le deja cobrar y habla de un turno anterior | Cierre ese turno: cuente el efectivo y haga el corte. Luego abra uno nuevo. |
+| El operador se fue sin cerrar su turno | El dueño lo cierra: Turno → *Cerrar este turno…*, cuenta el efectivo de esa caja y escribe el motivo. El corte queda a su nombre. |
 | El cliente dice que su boleto no abre | Un boleto ya cobrado deja de consultarse pasadas 24 horas. Es normal. |
 | La placa ya está adentro | La caja le ofrece cobrarlo. Si no es él, se capturó mal una placa: cancele el boleto equivocado con el motivo. |
 | «Ya tiene una pensión activa» | Esa placa ya es pensionada. Búsquela en Pensiones y cobre días ahí. |

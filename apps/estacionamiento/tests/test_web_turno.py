@@ -259,6 +259,140 @@ class TestConfirmacionDelCierre:
         assert turno.estado == EstadoTurno.ABIERTO
 
 
+class TestCierreDeTurnoAjeno:
+    """
+    Si el operador se fue sin cortar, el dueño cierra su turno: cuenta el
+    efectivo, escribe el motivo y confirma con su contraseña. El corte queda
+    a su nombre.
+    """
+
+    MOTIVO = "El operador terminó su jornada y no cerró el turno."
+
+    @staticmethod
+    def _url(turno):
+        return reverse("web:cerrar_turno_de_otro", kwargs={"turno_id": turno.pk})
+
+    def _datos(self, **extra):
+        return {"efectivo_declarado": "560.00", "motivo": self.MOTIVO, **extra}
+
+    def test_la_tarjeta_de_turnos_ajenos_ofrece_cerrarlo(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert self._url(turno) in contenido
+        assert "Cerrar este turno" in contenido
+
+    def test_el_cajero_no_puede_cerrar_el_turno_de_otro(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(duena)
+        client.force_login(cajero)
+
+        respuesta = client.post(
+            self._url(turno), self._datos(accion="confirmar", clave=CLAVE)
+        )
+
+        turno.refresh_from_db()
+        assert respuesta.status_code == 302
+        assert turno.estado == EstadoTurno.ABIERTO
+
+    def test_capturar_y_revisar_no_muestran_lo_que_debería_haber(
+        self, client, cajero, duena
+    ):
+        """Quien cierra tiene que contar: con el esperado al lado, lo teclearía."""
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+
+        formulario = client.get(self._url(turno)).content.decode()
+        revision = client.post(
+            self._url(turno), self._datos(accion="revisar", efectivo_declarado="555")
+        ).content.decode()
+
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
+        assert "Efectivo contado" in formulario
+        assert "$555.00" in revision
+        assert self.MOTIVO in revision
+        for pagina in (formulario, revision):
+            assert "$560.00" not in pagina
+            assert "Debería haber" not in pagina
+
+    def test_sin_contraseña_correcta_el_turno_sigue_abierto(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+
+        respuesta = client.post(
+            self._url(turno), self._datos(accion="confirmar", clave="no-es-esta")
+        )
+
+        turno.refresh_from_db()
+        assert respuesta.status_code == 200
+        assert turno.estado == EstadoTurno.ABIERTO
+        assert "Contraseña incorrecta" in respuesta.content.decode()
+
+    def test_un_motivo_de_una_palabra_no_basta(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+
+        client.post(
+            self._url(turno), self._datos(accion="confirmar", clave=CLAVE, motivo="olvido")
+        )
+
+        turno.refresh_from_db()
+        assert turno.estado == EstadoTurno.ABIERTO
+
+    def test_confirmar_cierra_a_nombre_del_dueño(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+
+        respuesta = client.post(
+            self._url(turno), self._datos(accion="confirmar", clave=CLAVE)
+        )
+
+        turno.refresh_from_db()
+        assert respuesta.status_code == 302
+        assert respuesta.url == reverse("web:corte", kwargs={"turno_id": turno.pk})
+        assert turno.estado == EstadoTurno.CERRADO
+        assert turno.cerrado_por == duena
+        assert turno.operador == cajero
+        assert turno.efectivo_declarado == Decimal("560.00")
+
+    def test_el_comprobante_dice_quién_cerró_y_lo_ve_el_operador(
+        self, client, cajero, duena
+    ):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+        client.post(self._url(turno), self._datos(accion="confirmar", clave=CLAVE))
+
+        client.force_login(cajero)
+        contenido = client.get(
+            reverse("web:corte", kwargs={"turno_id": turno.pk})
+        ).content.decode()
+
+        assert "Turno de <strong>cajero</strong>" in contenido
+        assert "lo cerró <strong>duena</strong>" in contenido
+        assert self.MOTIVO in contenido
+
+    def test_el_propio_turno_se_cierra_por_la_vía_normal(self, client, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(duena)
+        client.force_login(duena)
+
+        respuesta = client.get(self._url(turno))
+
+        assert respuesta.status_code == 302
+        assert respuesta.url == reverse("web:turno")
+
+    def test_un_turno_ya_cerrado_lleva_a_su_comprobante(self, client, cajero, duena):
+        turno = TestConfirmacionDelCierre._turno_abierto(cajero)
+        client.force_login(duena)
+        client.post(self._url(turno), self._datos(accion="confirmar", clave=CLAVE))
+
+        segunda = client.post(self._url(turno), self._datos(accion="confirmar", clave=CLAVE))
+
+        assert segunda.status_code == 302
+        assert segunda.url == reverse("web:corte", kwargs={"turno_id": turno.pk})
+
+
 class TestTurnosDeOtros:
     """
     El dueño entraba a «Turno y corte» y veía «Abrir turno de caja» mientras

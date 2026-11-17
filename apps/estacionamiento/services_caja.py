@@ -223,6 +223,8 @@ def cerrar_turno(
     momento: datetime | None = None,
     observaciones: str = "",
     permitir_folios_abiertos: bool = True,
+    cerrado_por=None,
+    motivo_cierre: str = "",
 ) -> tuple[Turno, ResumenCorte]:
     """
     Caso de uso: cierre ciego y corte de caja.
@@ -235,6 +237,12 @@ def cerrar_turno(
     realidad operativa: al terminar un turno siempre quedan vehículos dentro,
     y sus folios se cobrarán en el siguiente. Ponerlo en falso fuerza a vaciar
     el patio antes de cortar, lo cual solo aplica a un cierre de jornada.
+
+    `cerrado_por` es quien contó y cierra. Si es alguien distinto del
+    operador —el perfil administrativo cerrando el turno de un cajero que se
+    fue sin cortar—, `motivo_cierre` es obligatorio y queda en las
+    observaciones: un corte que no firmó su operador tiene que decir por qué.
+    Quién puede hacerlo lo decide la vista, igual que en `ajustar_corte`.
     """
     momento = momento or timezone.now()
 
@@ -253,6 +261,13 @@ def cerrar_turno(
         raise TurnoYaCerrado(
             f"El turno {turno.pk} ya fue cortado el "
             f"{turno.cerrado_en:%Y-%m-%d %H:%M}."
+        )
+
+    cierre_ajeno = cerrado_por is not None and cerrado_por.pk != turno.operador_id
+    if cierre_ajeno and not justificacion_suficiente(motivo_cierre):
+        raise ErrorConfiguracion(
+            "Explique por qué cierra el turno de otro operador. El corte "
+            "quedará a su nombre y sin ese motivo no se entiende después."
         )
 
     if not permitir_folios_abiertos:
@@ -281,17 +296,31 @@ def cerrar_turno(
     turno.total_pensiones = resumen.total_pensiones
     turno.pagos_pension = resumen.pagos_pension
     turno.resumen = resumen.a_dict()
+    if cerrado_por is not None:
+        turno.cerrado_por = cerrado_por
+    if cierre_ajeno:
+        turno.resumen["cerrado_por"] = getattr(cerrado_por, "username", str(cerrado_por))
+        nota = (
+            f"[Cerrado por {getattr(cerrado_por, 'username', cerrado_por)} en "
+            f"lugar de {getattr(turno.operador, 'username', turno.operador)}] "
+            f"{motivo_cierre.strip()}"
+        )
+        turno.observaciones = f"{turno.observaciones}\n{nota}".strip()
     if observaciones:
         turno.observaciones = f"{turno.observaciones}\n{observaciones}".strip()
     turno.save()
 
     # El faltante o sobrante se registra en nivel WARNING: debe destacar en la
     # bitácora sin que nadie tenga que buscarlo.
-    nivel = logger.info if resumen.cuadra else logger.warning
+    # El cierre de un turno ajeno también va en WARNING aunque cuadre: es
+    # excepcional por definición y la bitácora debe permitir contarlo.
+    nivel = logger.info if resumen.cuadra and not cierre_ajeno else logger.warning
     nivel(
-        "Turno cerrado | turno=%s operador=%s esperado=%s declarado=%s diferencia=%s",
+        "Turno cerrado | turno=%s operador=%s cerrado_por=%s esperado=%s "
+        "declarado=%s diferencia=%s",
         turno.pk,
         getattr(turno.operador, "username", turno.operador),
+        getattr(turno.quien_cerro, "username", turno.quien_cerro),
         resumen.efectivo_esperado,
         resumen.efectivo_declarado,
         resumen.diferencia,

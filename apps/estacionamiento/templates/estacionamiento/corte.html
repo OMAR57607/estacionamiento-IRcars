@@ -38,8 +38,15 @@
   {% comment %} Quién y cuándo van en un renglón de texto y no dentro de la tabla:
      la tabla es la cuenta del efectivo, y mezclar en ella fechas y nombres
      obligaba a buscar dónde empezaban los importes. {% endcomment %}
+  {% comment %} Si lo cerró alguien distinto del operador, el comprobante lo dice: el
+     conteo es de quien cerró, y el motivo va en las observaciones. {% endcomment %}
   <p class="detalle-cobro">
-    Lo cerró <strong>{{ turno_corte.operador }}</strong> ·
+    {% if turno_corte.cerrado_por_otro %}
+      Turno de <strong>{{ turno_corte.operador }}</strong> ·
+      lo cerró <strong>{{ turno_corte.cerrado_por }}</strong> ·
+    {% else %}
+      Lo cerró <strong>{{ turno_corte.operador }}</strong> ·
+    {% endif %}
     abrió el <strong>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</strong> ·
     cerró el <strong>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</strong>
   </p>
