@@ -582,7 +582,7 @@ def _procesar_cancelacion(request):
         motivo=form.cleaned_data["motivo"],
         operador=request.user,
     )
-    messages.warning(request, f"Folio de {folio.placa} cancelado.")
+    messages.warning(request, f"Boleto de {folio.placa} cancelado.")
     return redirect("web:caja")
 
 
@@ -1723,7 +1723,7 @@ def tarifa_cambiar(request):
                     f"El precio de {nueva.get_tipo_vehiculo_display().lower()} "
                     f"quedó en ${nueva.cuota_hora:,.2f} por hora y ya está en "
                     "vigencia. El anterior se conserva en el histórico: los "
-                    "folios ya cobrados mantienen el precio con que se "
+                    "boletos ya cobrados mantienen el precio con que se "
                     "calcularon.",
                 )
                 return redirect("web:tarifa")

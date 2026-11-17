@@ -75,8 +75,10 @@ class TestRegistrarEntrada:
 
     def test_la_misma_placa_no_puede_entrar_dos_veces(self, tarifa, cajones):
         services.registrar_entrada(placa="ABC123")
-        with pytest.raises(VehiculoYaDentro):
+        with pytest.raises(VehiculoYaDentro) as error:
             services.registrar_entrada(placa="abc123")
+        # El mensaje llega a la caja: habla de boleto, como la pantalla.
+        assert "ya tiene un boleto abierto" in str(error.value)
 
     def test_se_agotan_los_cajones_del_tipo_solicitado(self, tarifa, cajones):
         for n in range(len(cajones)):
@@ -217,6 +219,28 @@ class TestRegistrarSalida:
         services.registrar_salida(uuid_folio=folio.uuid)
         with pytest.raises(FolioYaCerrado):
             services.registrar_salida(uuid_folio=folio.uuid)
+
+    def test_el_aviso_de_doble_cobro_dice_de_qué_vehículo_se_trata(
+        self, tarifa, cajones
+    ):
+        """
+        El mensaje llega tal cual a la caja. Antes decía «El folio
+        3fa8…-… no está abierto»: una palabra que en la caseta no se usa y un
+        identificador que el cajero no puede relacionar con ningún coche. La
+        placa sí la tiene delante.
+        """
+        folio = services.registrar_entrada(
+            placa="ABC123", momento=timezone.now() - timedelta(hours=1)
+        )
+        services.registrar_salida(uuid_folio=folio.uuid)
+        with pytest.raises(FolioYaCerrado) as error:
+            services.registrar_salida(uuid_folio=folio.uuid)
+
+        mensaje = str(error.value)
+        assert "ABC123" in mensaje
+        assert "boleto" in mensaje
+        assert str(folio.uuid) not in mensaje
+        assert "folio" not in mensaje.lower()
 
     def test_un_reloj_desincronizado_no_produce_un_cobro_invalido(
         self, tarifa, cajones

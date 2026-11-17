@@ -238,7 +238,7 @@ def cerrar_turno(
         pendientes = Folio.objects.filter(estado=EstadoFolio.ABIERTO).count()
         if pendientes:
             raise TurnoConFoliosAbiertos(
-                f"Quedan {pendientes} folios abiertos en el patio. Su cobro "
+                f"Quedan {pendientes} boletos abiertos en el patio. Su cobro "
                 "caería en el turno siguiente y distorsionaría ambos cortes."
             )
 

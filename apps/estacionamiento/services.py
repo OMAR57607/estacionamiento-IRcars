@@ -178,7 +178,7 @@ def registrar_entrada(
 
     if Folio.objects.filter(placa=placa, estado=EstadoFolio.ABIERTO).exists():
         raise VehiculoYaDentro(
-            f"La placa {placa} ya tiene un folio abierto. Registre primero su "
+            f"La placa {placa} ya tiene un boleto abierto. Registre primero su "
             "salida o verifique si se trata de una placa duplicada."
         )
 
@@ -258,7 +258,7 @@ def obtener_folio(uuid_folio) -> Folio:
     """Recupera un folio por su identificador público."""
     folio = Folio.objects.select_related("cajon", "tarifa").filter(uuid=uuid_folio).first()
     if folio is None:
-        raise FolioNoEncontrado(f"No existe el folio {uuid_folio}.")
+        raise FolioNoEncontrado(f"No existe el boleto {uuid_folio}.")
     return folio
 
 
@@ -331,7 +331,7 @@ def cotizar_folio(folio: Folio, momento: datetime | None = None) -> Cotizacion:
     momento = momento or timezone.now()
     if folio.estado == EstadoFolio.CERRADO:
         raise FolioYaCerrado(
-            f"El folio {folio.uuid} ya fue liquidado el {folio.salida_en:%Y-%m-%d %H:%M}."
+            f"El boleto de {folio.placa} ya se cobró el {timezone.localtime(folio.salida_en):%d/%m/%Y %H:%M}."
         )
     if folio.pension_id:
         # De un pensionado solo se cobra lo que exceda su vigencia.
@@ -416,10 +416,10 @@ def registrar_salida(
         .first()
     )
     if folio is None:
-        raise FolioNoEncontrado(f"No existe el folio {uuid_folio}.")
+        raise FolioNoEncontrado(f"No existe el boleto {uuid_folio}.")
     if folio.estado != EstadoFolio.ABIERTO:
         raise FolioYaCerrado(
-            f"El folio {folio.uuid} no está abierto (estado actual: {folio.estado})."
+            f"El boleto de {folio.placa} ya no está abierto (estado actual: {folio.get_estado_display().lower()})."
         )
 
     minutos = _minutos_transcurridos(folio.entrada_en, momento)
@@ -526,10 +526,10 @@ def cancelar_folio(*, uuid_folio, motivo: str, operador=None) -> Folio:
 
     folio = Folio.objects.select_for_update().filter(uuid=uuid_folio).first()
     if folio is None:
-        raise FolioNoEncontrado(f"No existe el folio {uuid_folio}.")
+        raise FolioNoEncontrado(f"No existe el boleto {uuid_folio}.")
     if folio.estado != EstadoFolio.ABIERTO:
         raise FolioYaCerrado(
-            f"Solo se cancelan folios abiertos (estado actual: {folio.estado})."
+            f"Solo se cancelan boletos abiertos (estado actual: {folio.get_estado_display().lower()})."
         )
 
     folio.estado = EstadoFolio.CANCELADO
