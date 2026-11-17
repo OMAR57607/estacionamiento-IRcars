@@ -189,59 +189,64 @@
   <h2>Turnos cortados</h2>
 
   {% if turnos_cerrados %}
-    <div class="tabla-envoltura">
-      <table>
-        {% comment %} El resultado va junto al cierre y no al final: en un teléfono la
-           tabla se desplaza de lado y lo único que se quiere saber de un
-           vistazo —si cuadró— quedaba fuera de la pantalla.
+    {% comment %} El resultado va junto al cierre y no al final: en un teléfono la
+       tabla se desplazaba de lado y lo único que se quiere saber de un
+       vistazo —si cuadró— quedaba fuera de la pantalla. Ahora es una lista
+       que en el teléfono pone fecha y resultado en el primer renglón y el
+       resto debajo (ver «Listas con un valor destacado» en la hoja).
 
-           Las columnas siguen el orden de la cuenta: cambio más boletos más
-           pensiones da lo que debería haber. Faltaba la de pensiones, y sin
-           ella la fila no sumaba. {% endcomment %}
-        <thead>
-          <tr>
-            <th>Cierre</th>
-            <th>Resultado</th>
-            <th>Operador</th>
-            <th class="numero">Cambio</th>
-            <th class="numero">Boletos</th>
-            <th class="numero">Pensiones</th>
-            <th class="numero">Debería haber</th>
-            <th class="numero">Contado</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for t in turnos_cerrados %}
-          {% comment %} Se lee la diferencia vigente, no la del cierre. Un corte corregido
-             que ya cuadra seguía apareciendo aquí como faltante, en rojo,
-             contradiciendo a su propio comprobante. {% endcomment %}
-          {% with diferencia=t.diferencia_vigente %}
-          <tr class="{% if diferencia < 0 %}faltante{% elif diferencia > 0 %}sobrante{% endif %}">
-            <td>{{ t.cerrado_en|date:"d/m/Y H:i" }}</td>
-            <td>
-              {% if diferencia < 0 %}
-                <span class="etiqueta faltante">Faltante</span> {{ diferencia|pesos_absoluto }}
-              {% elif diferencia > 0 %}
-                <span class="etiqueta sobrante">Sobrante</span> {{ diferencia|pesos_absoluto }}
-              {% else %}
-                <span class="etiqueta cuadra">Cuadra</span>
-              {% endif %}
-              {% if t.tiene_ajuste %}<br><span class="ayuda">Corregido después del cierre</span>{% endif %}
-            </td>
-            <td>{{ t.operador }}</td>
-            <td class="numero">{{ t.fondo_inicial|pesos }}</td>
-            <td class="numero">{{ t.total_cobrado|pesos }}</td>
-            <td class="numero">{{ t.total_pensiones|pesos }}</td>
-            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
-            <td class="numero">{{ t.efectivo_vigente|pesos }}</td>
-            <td><a href="{% url 'web:corte' t.pk %}">Ver corte</a></td>
-          </tr>
-          {% endwith %}
-        {% endfor %}
-        </tbody>
-      </table>
+       Las columnas siguen el orden de la cuenta: cambio más boletos más
+       pensiones da lo que debería haber. Faltaba la de pensiones, y sin
+       ella la fila no sumaba. {% endcomment %}
+    {% with columnas="--columnas:8.5rem 9rem 1fr 5.5rem 5.5rem 5.5rem 6.5rem 6rem 5rem" %}
+    <div class="tabla-envoltura">
+      <div class="lista-encabezado con-valor lista-larga" style="{{ columnas }}">
+        <span>Cierre</span>
+        <span>Resultado</span>
+        <span>Operador</span>
+        <span class="numero">Cambio</span>
+        <span class="numero">Boletos</span>
+        <span class="numero">Pensiones</span>
+        <span class="numero">Debería haber</span>
+        <span class="numero">Contado</span>
+        <span></span>
+      </div>
+      <ul class="lista con-valor lista-larga" style="{{ columnas }}">
+      {% for t in turnos_cerrados %}
+        {% comment %} Se lee la diferencia vigente, no la del cierre. Un corte corregido
+           que ya cuadra seguía apareciendo aquí como faltante, en rojo,
+           contradiciendo a su propio comprobante. {% endcomment %}
+        {% with diferencia=t.diferencia_vigente %}
+        <li class="lista-fila {% if diferencia < 0 %}faltante{% elif diferencia > 0 %}sobrante{% endif %}">
+          <span class="celda-principal texto">{{ t.cerrado_en|date:"d/m/Y H:i" }}</span>
+          {% comment %} En el teléfono el resultado sube junto a la fecha; en pantalla
+             ancha es la segunda columna. Va antes de los datos en el marcado
+             porque la rejilla ancha coloca las celdas en ese orden. {% endcomment %}
+          <span class="celda-valor izquierda">
+            {% if diferencia < 0 %}
+              <span class="etiqueta faltante">Faltante</span> {{ diferencia|pesos_absoluto }}
+            {% elif diferencia > 0 %}
+              <span class="etiqueta sobrante">Sobrante</span> {{ diferencia|pesos_absoluto }}
+            {% else %}
+              <span class="etiqueta cuadra">Cuadra</span>
+            {% endif %}
+            {% if t.tiene_ajuste %}<br><span class="ayuda">Corregido después del cierre</span>{% endif %}
+          </span>
+          <span class="celda-datos">
+            <span class="celda-dato">{{ t.operador }}</span>
+            <span class="celda-dato numero" data-rotulo="Cambio">{{ t.fondo_inicial|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Boletos">{{ t.total_cobrado|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Pensiones">{{ t.total_pensiones|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Debería haber">{{ t.efectivo_esperado|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Contado">{{ t.efectivo_vigente|pesos }}</span>
+          </span>
+          <span class="celda-acciones"><a href="{% url 'web:corte' t.pk %}">Ver corte</a></span>
+        </li>
+        {% endwith %}
+      {% endfor %}
+      </ul>
     </div>
+    {% endwith %}
   {% else %}
     <p class="vacio">Todavía no hay turnos cortados.</p>
   {% endif %}

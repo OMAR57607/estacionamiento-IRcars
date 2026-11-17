@@ -106,34 +106,33 @@
         Exportar a CSV
       </a>
     </p>
-    <div class="tabla-envoltura">
-      <table>
-        <thead>
-          <tr>
-            <th>Placa</th>
-            <th>Entrada</th>
-            <th>Salida</th>
-            <th class="numero">Minutos</th>
-            <th class="numero">Importe</th>
-            <th>Cobró</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for f in folios %}
-          <tr>
-            <td class="placa">{{ f.placa }}</td>
-            <td>{{ f.entrada_en|date:"d/m/Y H:i" }}</td>
-            <td>{{ f.salida_en|date:"d/m/Y H:i" }}</td>
-            <td class="numero">{{ f.minutos|duracion }}</td>
-            {% comment %} Como en el corte: una salida de $0 dice qué fue, para que
-               no parezca un cobro capturado en cero. {% endcomment %}
-            <td class="numero">{% if f.importe %}{{ f.importe|pesos }}{% elif f.pension_id %}Pensión{% else %}Sin costo{% endif %}</td>
-            <td>{{ f.operador_salida|default:"—" }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+    {% comment %} Lista y no tabla: en el teléfono el importe era la quinta columna y
+       quedaba fuera de la pantalla. Ahora sube junto a la placa y el resto
+       se lee debajo. {% endcomment %}
+    <div class="lista-encabezado con-valor" style="--columnas:7rem 1fr 1fr 6rem 7rem 6.5rem">
+      <span>Placa</span>
+      <span>Entrada</span>
+      <span>Salida</span>
+      <span class="numero">Tiempo</span>
+      <span>Cobró</span>
+      <span class="numero">Importe</span>
     </div>
+    <ul class="lista con-valor" style="--columnas:7rem 1fr 1fr 6rem 7rem 6.5rem">
+    {% for f in folios %}
+      <li class="lista-fila">
+        <span class="celda-principal">{{ f.placa }}</span>
+        <span class="celda-datos">
+          <span class="celda-dato" data-rotulo="Entrada">{{ f.entrada_en|date:"d/m/Y H:i" }}</span>
+          <span class="celda-dato" data-rotulo="Salida">{{ f.salida_en|date:"d/m/Y H:i" }}</span>
+          <span class="celda-dato numero">{{ f.minutos|duracion }}</span>
+          <span class="celda-dato" data-rotulo="Cobró">{{ f.operador_salida|default:"—" }}</span>
+        </span>
+        {% comment %} Como en el corte: una salida de $0 dice qué fue, para que
+           no parezca un cobro capturado en cero. {% endcomment %}
+        <span class="celda-valor">{% if f.importe %}{{ f.importe|pesos }}{% elif f.pension_id %}Pensión{% else %}Sin costo{% endif %}</span>
+      </li>
+    {% endfor %}
+    </ul>
   {% else %}
     <p class="vacio">El periodo seleccionado no tiene salidas registradas.</p>
   {% endif %}

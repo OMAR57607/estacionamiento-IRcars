@@ -185,66 +185,63 @@
    quién lo corrigió y por qué. {% endcomment %}
 <div class="tarjeta">
   <h2>Correcciones aplicadas a este corte</h2>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Cuándo</th>
-          <th>Autorizó</th>
-          <th>Motivo</th>
-          <th class="numero">Ajuste</th>
-          <th class="numero">Diferencia</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for a in ajustes %}
-        <tr>
-          <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
-          <td>{{ a.autorizo }}</td>
-          <td>
-            {{ a.get_motivo_display }}
-            <br><span class="ayuda">{{ a.justificacion }}</span>
-          </td>
-          <td class="numero">{{ a.monto|pesos_con_signo }}</td>
-          <td class="numero">
-            {{ a.diferencia_anterior|pesos_con_signo }} →
-            <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  {% comment %} Lista y no tabla: en el teléfono el motivo se partía a una palabra
+     por renglón y el ajuste quedaba fuera de la pantalla. La diferencia va
+     antes del ajuste porque la rejilla coloca las celdas en el orden del
+     marcado y el ajuste es el valor que en el teléfono sube junto a la
+     fecha. {% endcomment %}
+  <div class="lista-encabezado con-valor" style="--columnas:8.5rem 7rem 1fr 10rem 6rem">
+    <span>Cuándo</span>
+    <span>Autorizó</span>
+    <span>Motivo</span>
+    <span class="numero">Diferencia</span>
+    <span class="numero">Ajuste</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:8.5rem 7rem 1fr 10rem 6rem">
+  {% for a in ajustes %}
+    <li class="lista-fila">
+      <span class="celda-principal texto">{{ a.creado_en|date:"d/m/Y H:i" }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Autorizó">{{ a.autorizo }}</span>
+        <span class="celda-dato ancha">
+          {{ a.get_motivo_display }}
+          <br><span class="ayuda">{{ a.justificacion }}</span>
+        </span>
+        <span class="celda-dato numero" data-rotulo="Diferencia">
+          {{ a.diferencia_anterior|pesos_con_signo }} →
+          <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
+        </span>
+      </span>
+      <span class="celda-valor">{{ a.monto|pesos_con_signo }}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 
 {% if pagos_pension %}
 <div class="tarjeta">
   <h2>Pensiones cobradas en el turno ({{ pagos_pension|length }})</h2>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Placa</th>
-          <th>Cubre desde</th>
-          <th>Hasta</th>
-          <th class="numero">Días</th>
-          <th class="numero">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for p in pagos_pension %}
-        <tr>
-          <td class="placa">{{ p.pension.placa }}</td>
-          <td>{{ p.periodo_desde|date:"d/m H:i" }}</td>
-          <td>{{ p.periodo_hasta|date:"d/m H:i" }}</td>
-          <td class="numero">{{ p.dias }}</td>
-          <td class="numero">{{ p.monto|pesos }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="lista-encabezado con-valor" style="--columnas:7rem 1fr 1fr 4rem 6.5rem">
+    <span>Placa</span>
+    <span>Cubre desde</span>
+    <span>Hasta</span>
+    <span class="numero">Días</span>
+    <span class="numero">Importe</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:7rem 1fr 1fr 4rem 6.5rem">
+  {% for p in pagos_pension %}
+    <li class="lista-fila">
+      <span class="celda-principal">{{ p.pension.placa }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Desde">{{ p.periodo_desde|date:"d/m H:i" }}</span>
+        <span class="celda-dato" data-rotulo="Hasta">{{ p.periodo_hasta|date:"d/m H:i" }}</span>
+        <span class="celda-dato numero" data-rotulo="Días">{{ p.dias }}</span>
+      </span>
+      <span class="celda-valor">{{ p.monto|pesos }}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 
@@ -257,30 +254,26 @@
   <p class="ayuda mt-0">
     {{ resumen.folios_cobrados }} con cobro y {{ resumen.folios_cortesia }} sin costo.
   </p>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Placa</th>
-          <th>Entrada</th>
-          <th>Salida</th>
-          <th class="numero">Minutos</th>
-          <th class="numero">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for f in folios %}
-        <tr>
-          <td class="placa">{{ f.placa }}</td>
-          <td>{{ f.entrada_en|date:"d/m H:i" }}</td>
-          <td>{{ f.salida_en|date:"d/m H:i" }}</td>
-          <td class="numero">{{ f.minutos|duracion }}</td>
-          <td class="numero">{% if f.importe %}{{ f.importe|pesos }}{% else %}Sin costo{% endif %}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="lista-encabezado con-valor" style="--columnas:7rem 1fr 1fr 6rem 6.5rem">
+    <span>Placa</span>
+    <span>Entrada</span>
+    <span>Salida</span>
+    <span class="numero">Tiempo</span>
+    <span class="numero">Importe</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:7rem 1fr 1fr 6rem 6.5rem">
+  {% for f in folios %}
+    <li class="lista-fila">
+      <span class="celda-principal">{{ f.placa }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Entrada">{{ f.entrada_en|date:"d/m H:i" }}</span>
+        <span class="celda-dato" data-rotulo="Salida">{{ f.salida_en|date:"d/m H:i" }}</span>
+        <span class="celda-dato numero">{{ f.minutos|duracion }}</span>
+      </span>
+      <span class="celda-valor">{% if f.importe %}{{ f.importe|pesos }}{% else %}Sin costo{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 

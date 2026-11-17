@@ -687,6 +687,87 @@ tr.sobrante td { background: var(--alerta-fondo); }
   .celda-acciones { grid-area: acciones; flex-direction: column; }
 }
 
+/* --------------------------------------- Listas con un valor destacado
+
+ * Variante para los listados de dinero —salidas, pensiones, cortes,
+ * correcciones—, que eran tablas de cinco a nueve columnas. En el teléfono
+ * la columna que importa (el importe, el resultado del corte) era la última
+ * y quedaba fuera de la pantalla: había que desplazar de lado para saber si
+ * un corte cuadró.
+ *
+ * Aquí el valor tiene su propia celda (`.celda-valor`). En pantalla ancha es
+ * una columna más de la rejilla; en el teléfono sube junto al dato
+ * principal, y el resto se lee debajo en una línea, cada dato con el rótulo
+ * que en pantalla ancha da el encabezado (`data-rotulo`).
+ *
+ * Las reglas del teléfono van con `screen`: el comprobante del corte se
+ * imprime, y en papel debe seguir viéndose como una tabla alineada.
+ */
+
+.lista-fila > .celda-valor {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lista-encabezado .numero, .celda-dato.numero { text-align: right; }
+
+/* Un dato principal que no es placa ni usuario —una fecha— no lleva la letra
+   monoespaciada: está pensada para distinguir 0 de O, no para leer horas. */
+.celda-principal.texto { font-family: inherit; letter-spacing: 0; font-size: 0.95rem; font-weight: 600; }
+
+/* El resultado del corte tiñe la fila entera, como lo hacía la tabla. El
+   relleno lateral va en todas las filas y en su encabezado, no solo en las
+   teñidas: si no, las columnas de una fila con faltante quedaban corridas
+   respecto del encabezado. */
+.lista-fila.faltante { background: var(--error-fondo); }
+.lista-fila.sobrante { background: var(--alerta-fondo); }
+.lista-encabezado.con-valor, .lista.con-valor .lista-fila { padding-inline: 0.5rem; }
+
+/* Cuando el valor destacado es un resultado y no un importe —el histórico de
+   turnos—, en pantalla ancha se alinea a la izquierda, bajo su encabezado. */
+.lista-fila > .celda-valor.izquierda { text-align: left; }
+.celda-valor .ayuda { font-weight: 400; }
+
+/* El histórico de turnos tiene nueve columnas: en una pantalla mediana, sin
+   espacio para todas, se desplaza dentro de su tarjeta en lugar de aplastar
+   las cifras. En el teléfono ya no hace falta porque se apila. */
+@media screen and (min-width: 681px) {
+  .lista-larga { min-width: 56rem; }
+}
+
+@media screen and (max-width: 680px) {
+  .lista.con-valor .lista-fila {
+    grid-template-areas:
+      "principal valor"
+      "datos     acciones";
+  }
+
+  .lista.con-valor .celda-valor { grid-area: valor; font-size: 1.1rem; text-align: right; }
+  .lista.con-valor .celda-principal.texto { font-size: 1rem; }
+  .lista.con-valor .celda-acciones { flex-direction: row; justify-content: flex-end; }
+
+  .celda-dato[data-rotulo]::before {
+    content: attr(data-rotulo) " ";
+    font-size: 0.78rem;
+    color: var(--tinta-suave);
+    opacity: 0.85;
+  }
+  .celda-dato.numero { text-align: left; }
+
+  /* Un texto largo —el motivo de una corrección— ocupa su propia línea en
+     lugar de partirse a una palabra por renglón. */
+  .celda-dato.ancha { flex-basis: 100%; color: var(--tinta); }
+}
+
+/* En papel, un título no se queda solo al pie de la hoja con su lista en la
+   siguiente: en el comprobante del corte, «Pensiones cobradas» acababa en la
+   última línea de la primera página. */
+@media print {
+  .tarjeta h2, .subtitulo, .lista-encabezado { break-after: avoid; }
+  .lista-fila { break-inside: avoid; }
+}
+
 /* ------------------------------------------------------------ Indicadores */
 
 .indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; }
