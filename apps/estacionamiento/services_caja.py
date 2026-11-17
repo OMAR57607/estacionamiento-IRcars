@@ -125,8 +125,16 @@ def resumen_operativo(turno: Turno) -> dict:
     de efectivo esperado: revelarlo anularía el cierre ciego, porque el conteo
     físico se ajustaría a esa cifra en lugar de ser independiente.
     """
+    # «Cobrados» son los boletos que movieron efectivo, igual que en el corte
+    # (`calcular_corte` separa los de importe cero). Antes aquí se contaban
+    # todos los cerrados, cortesías incluidas, de modo que el turno abierto
+    # decía «3 cobrados, 1 cortesía» y su corte «2 cobrados, 1 cortesía»: la
+    # misma palabra con dos significados en dos pantallas consecutivas.
     agregados = Folio.objects.filter(turno=turno).aggregate(
-        cobrados=Count("id", filter=Q(estado=EstadoFolio.CERRADO)),
+        cobrados=Count(
+            "id",
+            filter=Q(estado=EstadoFolio.CERRADO, importe__gt=Decimal("0.00")),
+        ),
         cortesias=Count(
             "id",
             filter=Q(

@@ -145,6 +145,28 @@ class TestResumenOperativo:
         assert "total_cobrado" not in resumen
         assert "efectivo_esperado" not in resumen
 
+    def test_cuenta_los_boletos_igual_que_el_corte(self, tarifa, operador):
+        """
+        «Boletos cobrados» significa lo mismo con el turno abierto que en su
+        corte: los que movieron efectivo. Antes el avance contaba también las
+        cortesías, y la pantalla del turno decía «2 cobrados, 1 cortesía»
+        donde el comprobante, un minuto después, decía «1 cobrado, 1
+        cortesía».
+        """
+        turno = services_caja.abrir_turno(operador=operador)
+        _cobrar("ABC123", 1, operador)  # $30
+        folio = services.registrar_entrada(placa="GRATIS1", operador=operador)
+        services.registrar_salida(uuid_folio=folio.uuid, operador=operador)  # cortesía
+
+        avance = services_caja.resumen_operativo(turno)
+        _, corte = services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("30.00")
+        )
+
+        assert (avance["folios_cobrados"], avance["folios_cortesia"]) == (1, 1)
+        assert avance["folios_cobrados"] == corte.folios_cobrados
+        assert avance["folios_cortesia"] == corte.folios_cortesia
+
     def test_informa_los_vehiculos_que_siguen_dentro(self, tarifa, operador):
         turno = services_caja.abrir_turno(operador=operador)
         services.registrar_entrada(placa="DENTRO1", operador=operador)

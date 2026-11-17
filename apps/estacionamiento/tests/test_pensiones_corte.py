@@ -123,6 +123,23 @@ class TestCorteDelTurno:
         assert avance["pagos_pension"] == 1
         assert "180" not in str(avance)
 
+    def test_la_cuenta_del_turno_abierto_incluye_la_pension(self, client, cajero, turno):
+        """
+        Lo que ve el perfil administrativo con el turno abierto es una suma, y
+        tiene que dar: cambio más boletos más pensiones. Sin el renglón de
+        pensiones, $100 de cambio y $0 de boletos «daban» $280.
+        """
+        _pensionado(cajero)
+        cajero.is_staff = True
+        cajero.save()
+        client.force_login(cajero)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert "Pensiones cobradas (1)" in contenido
+        assert "$180.00" in contenido
+        assert "$280.00" in contenido
+
     def test_el_comprobante_separa_la_pension(self, client, cajero, turno):
         _pensionado(cajero)
         services_caja.cerrar_turno(turno_id=turno.pk, efectivo_declarado=Decimal("280.00"))

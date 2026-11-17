@@ -741,6 +741,56 @@ th.th-llano { text-transform: none; font-size: 0.92rem; letter-spacing: 0; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
+/* ------------------------------------------------- Cuenta del efectivo
+
+ * El corte es una suma y una resta, y se presenta como tal: cada renglón
+ * lleva delante el signo con que entra a la cuenta («+», «=»), de modo que
+ * quien lo lee puede rehacerla con el dedo. Antes era una lista plana donde
+ * convivían fechas, importes y conteos, y había que saber de antemano cuáles
+ * renglones se sumaban.
+ *
+ * Los rótulos van en texto normal y pueden partirse en dos líneas: con el
+ * `nowrap` de las tablas de listado, en un teléfono el rótulo empujaba la
+ * cifra fuera de la pantalla, que es justo lo que no puede quedar oculto.
+ */
+.cuenta { width: 100%; }
+.cuenta th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--tinta);
+  background: none;
+  white-space: normal;
+}
+.cuenta td.numero { white-space: nowrap; font-size: 1rem; }
+.cuenta .signo {
+  width: 1.4rem;
+  padding-right: 0;
+  color: var(--tinta-suave);
+  font-weight: 700;
+  text-align: center;
+}
+.cuenta .detalle { display: block; font-size: 0.8rem; font-weight: 400; color: var(--tinta-suave); }
+/* El resultado de cada tramo de la cuenta: una raya encima, como en papel. */
+.cuenta .fila-total th, .cuenta .fila-total td { border-top: 2px solid var(--tinta); font-size: 1.05rem; }
+.cuenta .fila-total.faltante td.numero { color: var(--error); }
+.cuenta .fila-total.sobrante td.numero { color: var(--alerta); }
+.cuenta .fila-total.cuadra td.numero { color: var(--exito); }
+/* En la cuenta el resultado se marca con el color de la cifra, no con el
+   fondo de la fila: el fondo de `tr.faltante` solo alcanza a las celdas `td`
+   y aquí el rótulo es un `th`, de modo que la fila salía a parches. */
+.cuenta tr.faltante td, .cuenta tr.sobrante td { background: none; }
+.cuenta tr.superado th, .cuenta tr.superado td { color: var(--tinta-suave); }
+
+.subtitulo {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tinta-suave);
+  margin: var(--e-5) 0 var(--e-2);
+}
+
 /* Firmas del comprobante impreso. */
 .firmas { display: flex; gap: 3rem; margin-top: 3rem; font-size: 0.85rem; }
 .firma { flex: 1; border-top: 1px solid var(--tinta); padding-top: 0.4rem; text-align: center; }

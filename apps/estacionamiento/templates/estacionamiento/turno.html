@@ -21,8 +21,16 @@
         <div class="valor">{{ avance.folios_cobrados }}</div>
       </div>
       <div class="indicador">
-        <div class="rotulo">Cortesías</div>
+        <div class="rotulo">Sin costo (cortesía)</div>
         <div class="valor">{{ avance.folios_cortesia }}</div>
+      </div>
+      {% comment %} Cuántas pensiones, nunca cuánto: es efectivo que el cajero metió a
+         la caja y debe recordar al contar, pero el importe lo delataría
+         igual que el de los boletos. Faltaba aquí aunque sí entra al corte,
+         de modo que el corte mostraba un renglón que el turno nunca anunció. {% endcomment %}
+      <div class="indicador">
+        <div class="rotulo">Pensiones cobradas</div>
+        <div class="valor">{{ avance.pagos_pension }}</div>
       </div>
       <div class="indicador">
         <div class="rotulo">Vehículos dentro</div>
@@ -36,17 +44,30 @@
          llegar, o el conteo se ajusta a ella y un faltante nunca se registra.
          Al dueño ocultársela no controla a nadie —puede verla en Reportes— y
          le impide detectar un desvío mientras todavía hay tiempo. {% endcomment %}
-      <table>
+      {% comment %} La misma cuenta, en el mismo orden y con los mismos rótulos que
+         el comprobante del corte. Antes omitía las pensiones: «cobrado» más
+         «cambio» no daba «debería haber» en cuanto se cobraba una. {% endcomment %}
+      <table class="cuenta">
         <tbody>
           <tr>
-            <th>Cobrado en este turno</th>
-            <td class="numero">{{ esperado.total_cobrado|pesos }}</td>
-          </tr>
-          <tr>
+            <td class="signo"></td>
             <th>Cambio con que abrió</th>
             <td class="numero">{{ esperado.fondo_inicial|pesos }}</td>
           </tr>
+          <tr>
+            <td class="signo">+</td>
+            <th>Boletos cobrados ({{ esperado.folios_cobrados }})</th>
+            <td class="numero">{{ esperado.total_cobrado|pesos }}</td>
+          </tr>
+          {% if esperado.pagos_pension %}
+            <tr>
+              <td class="signo">+</td>
+              <th>Pensiones cobradas ({{ esperado.pagos_pension }})</th>
+              <td class="numero">{{ esperado.total_pensiones|pesos }}</td>
+            </tr>
+          {% endif %}
           <tr class="fila-total">
+            <td class="signo">=</td>
             <th>Debería haber en caja</th>
             <td class="numero">{{ esperado.efectivo_esperado|pesos }}</td>
           </tr>
@@ -154,38 +175,53 @@
   {% if turnos_cerrados %}
     <div class="tabla-envoltura">
       <table>
+        {% comment %} El resultado va junto al cierre y no al final: en un teléfono la
+           tabla se desplaza de lado y lo único que se quiere saber de un
+           vistazo —si cuadró— quedaba fuera de la pantalla.
+
+           Las columnas siguen el orden de la cuenta: cambio más boletos más
+           pensiones da lo que debería haber. Faltaba la de pensiones, y sin
+           ella la fila no sumaba. {% endcomment %}
         <thead>
           <tr>
             <th>Cierre</th>
+            <th>Resultado</th>
             <th>Operador</th>
             <th class="numero">Cambio</th>
-            <th class="numero">Cobrado</th>
+            <th class="numero">Boletos</th>
+            <th class="numero">Pensiones</th>
             <th class="numero">Debería haber</th>
             <th class="numero">Contado</th>
-            <th class="numero">Diferencia</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
         {% for t in turnos_cerrados %}
-          <tr class="{% if t.diferencia < 0 %}faltante{% elif t.diferencia > 0 %}sobrante{% endif %}">
+          {% comment %} Se lee la diferencia vigente, no la del cierre. Un corte corregido
+             que ya cuadra seguía apareciendo aquí como faltante, en rojo,
+             contradiciendo a su propio comprobante. {% endcomment %}
+          {% with diferencia=t.diferencia_vigente %}
+          <tr class="{% if diferencia < 0 %}faltante{% elif diferencia > 0 %}sobrante{% endif %}">
             <td>{{ t.cerrado_en|date:"d/m/Y H:i" }}</td>
-            <td>{{ t.operador }}</td>
-            <td class="numero">{{ t.fondo_inicial|pesos }}</td>
-            <td class="numero">{{ t.total_cobrado|pesos }}</td>
-            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
-            <td class="numero">{{ t.efectivo_declarado|pesos }}</td>
-            <td class="numero">
-              {% if t.diferencia < 0 %}
-                <span class="etiqueta faltante">Faltante</span> {{ t.diferencia|pesos_absoluto }}
-              {% elif t.diferencia > 0 %}
-                <span class="etiqueta sobrante">Sobrante</span> {{ t.diferencia|pesos_absoluto }}
+            <td>
+              {% if diferencia < 0 %}
+                <span class="etiqueta faltante">Faltante</span> {{ diferencia|pesos_absoluto }}
+              {% elif diferencia > 0 %}
+                <span class="etiqueta sobrante">Sobrante</span> {{ diferencia|pesos_absoluto }}
               {% else %}
                 <span class="etiqueta cuadra">Cuadra</span>
               {% endif %}
+              {% if t.tiene_ajuste %}<br><span class="ayuda">Corregido después del cierre</span>{% endif %}
             </td>
+            <td>{{ t.operador }}</td>
+            <td class="numero">{{ t.fondo_inicial|pesos }}</td>
+            <td class="numero">{{ t.total_cobrado|pesos }}</td>
+            <td class="numero">{{ t.total_pensiones|pesos }}</td>
+            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
+            <td class="numero">{{ t.efectivo_vigente|pesos }}</td>
             <td><a href="{% url 'web:corte' t.pk %}">Ver corte</a></td>
           </tr>
+          {% endwith %}
         {% endfor %}
         </tbody>
       </table>

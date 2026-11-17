@@ -495,6 +495,31 @@ class TestPantalla:
         assert JUSTIFICACION in contenido
         assert "duena" in contenido
 
+    def test_el_historico_lee_la_diferencia_vigente(self, client, duena, cajero):
+        """
+        Un corte corregido que ya cuadra no puede seguir figurando como
+        faltante en la lista de turnos: contradecía a su propio comprobante,
+        que es a donde lleva el enlace de esa misma fila.
+        """
+        turno = _turno_cerrado_con_faltante(cajero)
+        client.force_login(duena)
+
+        antes = client.get(reverse("web:turno")).content.decode()
+        assert '<span class="etiqueta faltante">' in antes
+
+        services_caja.ajustar_corte(
+            turno_id=turno.pk,
+            efectivo_corregido=turno.efectivo_esperado,
+            motivo=MotivoAjuste.NO_REGISTRADO,
+            justificacion=JUSTIFICACION,
+            autorizo=duena,
+        )
+        despues = client.get(reverse("web:turno")).content.decode()
+
+        assert '<span class="etiqueta faltante">' not in despues
+        assert '<span class="etiqueta cuadra">' in despues
+        assert "Corregido después del cierre" in despues
+
     def test_no_se_puede_ajustar_un_turno_abierto_desde_la_pantalla(
         self, client, duena, cajero
     ):

@@ -21,21 +21,52 @@
     comprobante pasa a mostrar las dos.
   </p>
 
-  <table>
+  {% comment %} La misma cuenta que el comprobante, con los mismos rótulos y en el
+     mismo orden: quien corrige viene de leer aquél y no debe volver a
+     descifrar cuál cifra es cuál. Incluye las pensiones, que faltaban y
+     hacían que la suma no diera lo esperado. {% endcomment %}
+  <table class="cuenta">
     <tbody>
-      <tr><th>Cobrado en el turno</th><td class="numero">{{ turno_corte.total_cobrado|pesos }}</td></tr>
-      <tr><th>Cambio con que abrió</th><td class="numero">{{ turno_corte.fondo_inicial|pesos }}</td></tr>
+      <tr>
+        <td class="signo"></td>
+        <th>Cambio con que abrió</th>
+        <td class="numero">{{ turno_corte.fondo_inicial|pesos }}</td>
+      </tr>
+      <tr>
+        <td class="signo">+</td>
+        <th>Boletos cobrados ({{ turno_corte.folios_cobrados }})</th>
+        <td class="numero">{{ turno_corte.total_cobrado|pesos }}</td>
+      </tr>
+      {% if turno_corte.pagos_pension %}
+        <tr>
+          <td class="signo">+</td>
+          <th>Pensiones cobradas ({{ turno_corte.pagos_pension }})</th>
+          <td class="numero">{{ turno_corte.total_pensiones|pesos }}</td>
+        </tr>
+      {% endif %}
       <tr class="fila-total">
+        <td class="signo">=</td>
         <th>Debería haber en caja</th>
         <td class="numero">{{ turno_corte.efectivo_esperado|pesos }}</td>
       </tr>
-      <tr><th>Se declaró al cerrar</th><td class="numero">{{ turno_corte.efectivo_declarado|pesos }}</td></tr>
+      <tr{% if veredicto.ajustado %} class="superado"{% endif %}>
+        <td class="signo"></td>
+        <th>Contado al cerrar</th>
+        <td class="numero">{{ turno_corte.efectivo_declarado|pesos }}</td>
+      </tr>
       {% if veredicto.ajustado %}
-        <tr><th>Efectivo vigente tras correcciones previas</th>
-            <td class="numero">{{ veredicto.efectivo_vigente|pesos }}</td></tr>
+        <tr>
+          <td class="signo"></td>
+          <th>Efectivo real, tras correcciones previas</th>
+          <td class="numero">{{ veredicto.efectivo_vigente|pesos }}</td>
+        </tr>
       {% endif %}
-      <tr class="fila-total">
-        <th>Diferencia actual</th>
+      <tr class="fila-total {% if veredicto.hay_faltante %}faltante{% elif veredicto.hay_sobrante %}sobrante{% else %}cuadra{% endif %}">
+        <td class="signo"></td>
+        <th>
+          {% if veredicto.hay_faltante %}FALTANTE{% elif veredicto.hay_sobrante %}SOBRANTE{% else %}DIFERENCIA{% endif %} actual
+          <span class="detalle">Contado menos lo que debería haber</span>
+        </th>
         <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
       </tr>
     </tbody>
