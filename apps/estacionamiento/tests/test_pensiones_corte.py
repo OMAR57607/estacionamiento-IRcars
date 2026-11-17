@@ -164,6 +164,9 @@ class TestReportesYMetricas:
         reporte = services_caja.reporte_por_rango(desde, hasta)
         assert reporte["folios_cortesia"] == 0
         assert reporte["salidas_pension"] == 1
+        # Tampoco es un boleto cobrado —no movió efectivo—, pero sí una salida.
+        assert reporte["folios_cobrados"] == 0
+        assert reporte["salidas"] == 1
         assert reporte["pensiones_cobradas"] == Decimal("180.00")
 
         metricas = services_metricas.metricas_por_rango(desde, hasta)

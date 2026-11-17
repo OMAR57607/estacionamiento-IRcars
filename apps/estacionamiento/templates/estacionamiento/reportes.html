@@ -42,13 +42,21 @@
     <div class="rotulo">Total cobrado</div>
     <div class="valor">{{ datos.total_cobrado|pesos }}</div>
   </div>
+  {% comment %} Mismas palabras y mismas cifras que el corte: «boletos cobrados» son
+     los que pagaron y «sin costo» las cortesías. «Salidas» es el total del
+     periodo, el que corresponde al listado de abajo. Antes este indicador
+     decía «Folios cobrados» y contaba también las cortesías. {% endcomment %}
   <div class="indicador">
-    <div class="rotulo">Folios cobrados</div>
+    <div class="rotulo">Boletos cobrados</div>
     <div class="valor">{{ datos.folios_cobrados }}</div>
   </div>
   <div class="indicador">
-    <div class="rotulo">Cortesías</div>
+    <div class="rotulo">Sin costo (cortesía)</div>
     <div class="valor">{{ datos.folios_cortesia }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Salidas</div>
+    <div class="valor">{{ datos.salidas }}</div>
   </div>
   <div class="indicador">
     <div class="rotulo">Importe promedio</div>
@@ -82,7 +90,7 @@
 </div>
 
 <div class="tarjeta">
-  <h2>Folios cobrados</h2>
+  <h2>Salidas del periodo</h2>
 
   {% if truncado %}
     <div class="aviso info">
@@ -117,7 +125,9 @@
             <td>{{ f.entrada_en|date:"d/m/Y H:i" }}</td>
             <td>{{ f.salida_en|date:"d/m/Y H:i" }}</td>
             <td class="numero">{{ f.minutos|duracion }}</td>
-            <td class="numero">{{ f.importe|pesos }}</td>
+            {% comment %} Como en el corte: una salida de $0 dice qué fue, para que
+               no parezca un cobro capturado en cero. {% endcomment %}
+            <td class="numero">{% if f.importe %}{{ f.importe|pesos }}{% elif f.pension_id %}Pensión{% else %}Sin costo{% endif %}</td>
             <td>{{ f.operador_salida|default:"—" }}</td>
           </tr>
         {% endfor %}
@@ -125,7 +135,7 @@
       </table>
     </div>
   {% else %}
-    <p class="vacio">El periodo seleccionado no tiene folios cobrados.</p>
+    <p class="vacio">El periodo seleccionado no tiene salidas registradas.</p>
   {% endif %}
 </div>
 {% endif %}

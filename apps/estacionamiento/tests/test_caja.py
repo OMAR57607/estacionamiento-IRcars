@@ -11,6 +11,7 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.estacionamiento import services, services_caja
@@ -278,6 +279,50 @@ class TestReportePorRango:
         assert datos["importe_promedio"] == Decimal("60.00")
         assert datos["minutos_totales"] == 240
 
+    def test_cuenta_los_boletos_igual_que_el_corte(self, tarifa, operador):
+        """
+        «Boletos cobrados» son los que pagaron, como en el corte; la cortesía
+        cuenta como salida pero no como cobro. Antes el reporte contaba las
+        dos cosas juntas y el importe promedio se dividía también entre las
+        cortesías: con un cobro de $30 y una cortesía decía «2 cobrados, $15
+        de promedio».
+        """
+        services_caja.abrir_turno(operador=operador)
+        _cobrar("AAA111", 1, operador)  # $30.00, 60 min
+        _cobrar("GRATIS1", 0, operador)  # cortesía, 0 min
+
+        datos = services_caja.reporte_por_rango(
+            timezone.now() - timedelta(days=1), timezone.now() + timedelta(minutes=1)
+        )
+        assert datos["folios_cobrados"] == 1
+        assert datos["folios_cortesia"] == 1
+        assert datos["salidas"] == 2
+        assert datos["importe_promedio"] == Decimal("30.00")
+        # La permanencia sí se promedia sobre todas las salidas.
+        assert datos["minutos_promedio"] == 30.0
+
+    def test_el_periodo_de_un_turno_da_los_mismos_conteos_que_su_corte(
+        self, tarifa, operador
+    ):
+        """
+        El dueño compara el reporte del día con el corte del turno. Si los
+        dos cubren lo mismo, tienen que decir lo mismo.
+        """
+        turno = services_caja.abrir_turno(operador=operador)
+        _cobrar("AAA111", 1, operador)
+        _cobrar("BBB222", 2, operador)
+        _cobrar("GRATIS1", 0, operador)
+        _, corte = services_caja.cerrar_turno(
+            turno_id=turno.pk, efectivo_declarado=Decimal("90.00")
+        )
+
+        datos = services_caja.reporte_por_rango(
+            timezone.now() - timedelta(days=1), timezone.now() + timedelta(minutes=1)
+        )
+        assert datos["folios_cobrados"] == corte.folios_cobrados == 2
+        assert datos["folios_cortesia"] == corte.folios_cortesia == 1
+        assert datos["total_cobrado"] == corte.total_cobrado
+
     def test_un_rango_invertido_se_rechaza(self):
         with pytest.raises(ErrorConfiguracion):
             services_caja.reporte_por_rango(
@@ -307,3 +352,31 @@ class TestModoSinInventarioDeCajones:
         folio, cot = _cobrar("ABC123", 2, operador)
         assert folio.cajon is None
         assert cot.importe == Decimal("60.00")
+
+
+class TestPantallaDeReportes:
+    def test_habla_como_el_corte(self, client, tarifa, operador):
+        """
+        Mismas palabras que el corte: «boletos cobrados» para los que
+        pagaron, «sin costo» para las cortesías y «salidas» para el total que
+        lista la tabla. «Folios» es palabra de contador y no se usa en la
+        caseta.
+        """
+        operador.is_staff = True
+        operador.save()
+        services_caja.abrir_turno(operador=operador)
+        _cobrar("AAA111", 1, operador)
+        _cobrar("GRATIS1", 0, operador)
+        client.force_login(operador)
+
+        hoy = timezone.localtime().date().isoformat()
+        contenido = client.get(
+            reverse("web:reportes"), {"desde": hoy, "hasta": hoy}
+        ).content.decode()
+
+        assert "Boletos cobrados" in contenido
+        assert "Sin costo (cortesía)" in contenido
+        assert "Salidas del periodo" in contenido
+        assert "Folios cobrados" not in contenido
+        # La cortesía del listado dice qué fue, no «$0.00».
+        assert ">Sin costo<" in contenido

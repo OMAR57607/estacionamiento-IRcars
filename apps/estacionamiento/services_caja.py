@@ -473,7 +473,14 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
     agregados = cobrados.aggregate(
         total=Sum("importe"),
         minutos=Sum("minutos"),
-        folios=Count("id"),
+        salidas=Count("id"),
+        # «Boletos cobrados» con la misma definición que el corte
+        # (`calcular_corte`): los que movieron efectivo. Antes aquí se contaban
+        # todas las salidas, cortesías incluidas, y el reporte de un día decía
+        # «5 cobrados» donde el corte del único turno de ese día decía 4.
+        # Incluye el excedente que paga un pensionado vencido: es efectivo y
+        # el corte también lo cuenta.
+        folios=Count("id", filter=Q(importe__gt=Decimal("0.00"))),
         # Las salidas de pensionado cubiertas también valen $0 y no son
         # cortesías: contarlas así ocultaría las cortesías reales.
         cortesias=Count(
@@ -482,6 +489,7 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         pensionados=Count("id", filter=Q(pension__isnull=False)),
     )
     folios = agregados["folios"] or 0
+    salidas = agregados["salidas"] or 0
     pagos = PagoPension.objects.filter(
         estado=EstadoPagoPension.VIGENTE, creado_en__gte=desde, creado_en__lte=hasta
     ).aggregate(total=Sum("monto"), pagos=Count("id"), dias=Sum("dias"))
@@ -493,11 +501,18 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         "hasta": hasta,
         "folios_cobrados": folios,
         "folios_cortesia": agregados["cortesias"] or 0,
+        # Todas las salidas del periodo: cobradas, cortesías y salidas de
+        # pensionado cubiertas. Es el total que corresponde al listado.
+        "salidas": salidas,
         "total_cobrado": total,
         "minutos_totales": minutos,
         # Promedios útiles para detectar anomalías de tarificación o de captura.
+        # El importe se promedia sobre los boletos que pagaron: dividir entre
+        # todas las salidas hacía que cada cortesía bajara el promedio, y el
+        # indicador dejaba de decir cuánto paga quien paga. La permanencia sí
+        # se promedia sobre todas: el tiempo en el patio no depende de cobrar.
         "importe_promedio": (total / folios).quantize(Decimal("0.01")) if folios else Decimal("0.00"),
-        "minutos_promedio": round(minutos / folios, 1) if folios else 0.0,
+        "minutos_promedio": round(minutos / salidas, 1) if salidas else 0.0,
         "turnos_cerrados": Turno.objects.filter(
             estado=EstadoTurno.CERRADO, cerrado_en__gte=desde, cerrado_en__lte=hasta
         ).count(),
