@@ -101,6 +101,43 @@ azul reservado a la acción— y estos cambios de uso, detallados en
 
 ---
 
+## Cómo se lee el corte
+
+El corte es una suma y una resta, y todas las pantallas —turno abierto,
+comprobante, corrección, histórico, Reportes, Métricas y el PDF— la presentan
+con los mismos rótulos y en el mismo orden:
+
+```
+  Cambio con que abrió
++ Boletos cobrados
++ Pensiones cobradas
+= Debería haber en caja
+  Contado al cerrar            (o el efectivo corregido, si hubo ajuste)
+  Diferencia = contado − debería haber   → negativa: faltante · positiva: sobrante
+```
+
+Cada término significa una sola cosa en toda la aplicación:
+
+| En pantalla | Qué cuenta | Dónde se calcula |
+|---|---|---|
+| **Boletos cobrados** | Salidas con importe mayor que cero, incluido el excedente que paga un pensionado vencido | `domain/corte.py::calcular_corte`, `services_caja.resumen_operativo`, `services_caja.reporte_por_rango` |
+| **Sin costo (cortesía)** | Salidas de $0 que no son de pensionado | ídem |
+| **Salidas** | Todas las salidas: cobradas, sin costo y de pensionado cubierto | `services_caja.reporte_por_rango` |
+| **Pensiones cobradas** | Pagos de pensión vigentes (no cancelados) | `services_caja._importes_pension_del_turno` |
+| **Debería haber en caja** | Cambio + boletos cobrados + pensiones cobradas | `calcular_corte` |
+| **Diferencia** | Contado − debería haber; la **vigente** (corregida) si hubo ajuste | `Turno.diferencia_vigente` |
+
+Dos reglas de presentación que no se negocian:
+
+- **Cierre ciego.** El cajero no ve ningún importe del turno abierto —ni del
+  suyo ni del de un compañero— hasta capturar su conteo. El perfil
+  administrativo sí: ve la cuenta de su turno y la de cada turno abierto de
+  otros operadores en «Turno y corte».
+- **En la caseta se dice boleto y cambio**, no «folio» ni «fondo inicial».
+  `folio` sigue siendo el término del código, de la API y del CSV.
+
+---
+
 ## Corte de caja: corrección de un cierre equivocado
 
 Un turno se cerró declarando $140 menos de los que había en caja. El corte

@@ -35,50 +35,114 @@
 <div class="tarjeta">
   <h2>Corte de caja · turno {{ turno_corte.pk }}</h2>
 
-  <table>
+  {% comment %} Quién y cuándo van en un renglón de texto y no dentro de la tabla:
+     la tabla es la cuenta del efectivo, y mezclar en ella fechas y nombres
+     obligaba a buscar dónde empezaban los importes. {% endcomment %}
+  <p class="detalle-cobro">
+    Lo cerró <strong>{{ turno_corte.operador }}</strong> ·
+    abrió el <strong>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</strong> ·
+    cerró el <strong>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</strong>
+  </p>
+
+  {% comment %} La cuenta se lee de arriba abajo como se haría en papel: con qué se
+     abrió, más lo que entró, igual a lo que debería haber; contra eso, lo
+     que se contó. Cada renglón lleva su signo para que la suma se pueda
+     rehacer sin saber de antemano qué renglones participan. {% endcomment %}
+  <h3 class="subtitulo">La cuenta del efectivo</h3>
+  <table class="cuenta">
     <tbody>
-      <tr><th>Lo cerró</th><td>{{ turno_corte.operador }}</td></tr>
-      <tr><th>Apertura</th><td>{{ turno_corte.abierto_en|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Cierre</th><td>{{ turno_corte.cerrado_en|date:"d/m/Y H:i" }}</td></tr>
-      <tr><th>Cambio con que abrió</th><td class="numero">{{ resumen.fondo_inicial|pesos }}</td></tr>
-      <tr><th>Cobrado en boletos</th><td class="numero">{{ resumen.total_cobrado|pesos }}</td></tr>
+      <tr>
+        <td class="signo"></td>
+        <th>Cambio con que abrió</th>
+        <td class="numero">{{ resumen.fondo_inicial|pesos }}</td>
+      </tr>
+      <tr>
+        <td class="signo">+</td>
+        <th>Boletos cobrados ({{ resumen.folios_cobrados }})</th>
+        <td class="numero">{{ resumen.total_cobrado|pesos }}</td>
+      </tr>
       {% comment %} La pensión va en su propio renglón y no sumada a los boletos: el
          comprobante debe decir de dónde salió cada peso, y «cobrado en el
          turno» conserva el significado que tenía en los cortes anteriores.
          {% endcomment %}
       {% if resumen.pagos_pension %}
-        <tr><th>Pensiones cobradas ({{ resumen.pagos_pension }})</th><td class="numero">{{ resumen.total_pensiones|pesos }}</td></tr>
+        <tr>
+          <td class="signo">+</td>
+          <th>Pensiones cobradas ({{ resumen.pagos_pension }})</th>
+          <td class="numero">{{ resumen.total_pensiones|pesos }}</td>
+        </tr>
       {% endif %}
-      <tr><th>Debería haber en caja</th><td class="numero">{{ resumen.efectivo_esperado|pesos }}</td></tr>
-      <tr><th>Contado al cerrar</th><td class="numero">{{ resumen.efectivo_declarado|pesos }}</td></tr>
+      <tr class="fila-total">
+        <td class="signo">=</td>
+        <th>Debería haber en caja</th>
+        <td class="numero">{{ resumen.efectivo_esperado|pesos }}</td>
+      </tr>
 
       {% if veredicto.ajustado %}
         {% comment %} Las dos cifras conviven a propósito. Mostrar solo la corregida
            convertiría el ajuste en un borrado, y un faltante que puede
-           desaparecer sin dejar rastro no disuade a nadie de provocarlo. {% endcomment %}
-        <tr>
+           desaparecer sin dejar rastro no disuade a nadie de provocarlo.
+
+           Lo declarado al cerrar se atenúa: sigue siendo un hecho y se
+           imprime, pero la cifra contra la que hoy se compara es la
+           corregida, y es la que debe verse primero. {% endcomment %}
+        <tr class="superado">
+          <td class="signo"></td>
+          <th>Contado al cerrar
+            <span class="detalle">Lo que declaró el operador; se conserva como se firmó</span></th>
+          <td class="numero">{{ resumen.efectivo_declarado|pesos }}</td>
+        </tr>
+        <tr class="superado">
+          <td class="signo"></td>
           <th>Diferencia declarada al cerrar</th>
           <td class="numero">{{ turno_corte.diferencia|pesos_con_signo }}</td>
         </tr>
         <tr>
+          <td class="signo"></td>
           <th>Efectivo real, tras la corrección</th>
           <td class="numero">{{ turno_corte.efectivo_ajustado|pesos }}</td>
         </tr>
-        <tr class="fila-total">
-          <th>DIFERENCIA VIGENTE</th>
-          <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
-        </tr>
       {% else %}
-        <tr class="fila-total">
-          <th>DIFERENCIA</th>
-          <td class="numero">{{ resumen.diferencia|pesos_con_signo }}</td>
+        <tr>
+          <td class="signo"></td>
+          <th>Contado al cerrar</th>
+          <td class="numero">{{ resumen.efectivo_declarado|pesos }}</td>
         </tr>
       {% endif %}
 
-      <tr><th>Boletos cobrados</th><td class="numero">{{ resumen.folios_cobrados }}</td></tr>
-      <tr><th>Boletos sin costo (cortesía)</th><td class="numero">{{ resumen.folios_cortesia }}</td></tr>
+      {% comment %} El renglón final dice con palabras qué significa el signo. «−$140.00»
+         a secas obligaba a recordar si negativo era que faltaba o que
+         sobraba; el color acompaña, pero no es lo que lo comunica. {% endcomment %}
+      <tr class="fila-total {% if veredicto.hay_faltante %}faltante{% elif veredicto.hay_sobrante %}sobrante{% else %}cuadra{% endif %}">
+        <td class="signo"></td>
+        <th>
+          {% if veredicto.hay_faltante %}FALTANTE{% elif veredicto.hay_sobrante %}SOBRANTE{% else %}DIFERENCIA{% endif %}
+          <span class="detalle">Contado menos lo que debería haber{% if veredicto.ajustado %}, ya con la corrección{% endif %}</span>
+        </th>
+        <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
+      </tr>
     </tbody>
   </table>
+
+  {% comment %} Los conteos van aparte de la cuenta: no son dinero y no se suman a
+     nada. «Salidas» es el total de vehículos que este turno despachó, y se
+     parte en las que pagaron y las que no, para que las tres cifras cuadren
+     entre sí y con el listado de abajo. {% endcomment %}
+  <h3 class="subtitulo">Los movimientos</h3>
+  <div class="indicadores compactos">
+    <div class="indicador">
+      <div class="rotulo">Boletos cobrados</div>
+      <div class="valor">{{ resumen.folios_cobrados }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Sin costo (cortesía)</div>
+      <div class="valor">{{ resumen.folios_cortesia }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Pensiones cobradas</div>
+      <div class="valor">{{ resumen.pagos_pension }}</div>
+    </div>
+  </div>
 
   {% if turno_corte.observaciones %}
     <p class="detalle-cobro mt">
@@ -121,96 +185,95 @@
    quién lo corrigió y por qué. {% endcomment %}
 <div class="tarjeta">
   <h2>Correcciones aplicadas a este corte</h2>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Cuándo</th>
-          <th>Autorizó</th>
-          <th>Motivo</th>
-          <th class="numero">Ajuste</th>
-          <th class="numero">Diferencia</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for a in ajustes %}
-        <tr>
-          <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
-          <td>{{ a.autorizo }}</td>
-          <td>
-            {{ a.get_motivo_display }}
-            <br><span class="ayuda">{{ a.justificacion }}</span>
-          </td>
-          <td class="numero">{{ a.monto|pesos_con_signo }}</td>
-          <td class="numero">
-            {{ a.diferencia_anterior|pesos_con_signo }} →
-            <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  {% comment %} Lista y no tabla: en el teléfono el motivo se partía a una palabra
+     por renglón y el ajuste quedaba fuera de la pantalla. La diferencia va
+     antes del ajuste porque la rejilla coloca las celdas en el orden del
+     marcado y el ajuste es el valor que en el teléfono sube junto a la
+     fecha. {% endcomment %}
+  <div class="lista-encabezado con-valor" style="--columnas:8.5rem 7rem 1fr 10rem 6rem">
+    <span>Cuándo</span>
+    <span>Autorizó</span>
+    <span>Motivo</span>
+    <span class="numero">Diferencia</span>
+    <span class="numero">Ajuste</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:8.5rem 7rem 1fr 10rem 6rem">
+  {% for a in ajustes %}
+    <li class="lista-fila">
+      <span class="celda-principal texto">{{ a.creado_en|date:"d/m/Y H:i" }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Autorizó">{{ a.autorizo }}</span>
+        <span class="celda-dato ancha">
+          {{ a.get_motivo_display }}
+          <br><span class="ayuda">{{ a.justificacion }}</span>
+        </span>
+        <span class="celda-dato numero" data-rotulo="Diferencia">
+          {{ a.diferencia_anterior|pesos_con_signo }} →
+          <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
+        </span>
+      </span>
+      <span class="celda-valor">{{ a.monto|pesos_con_signo }}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 
 {% if pagos_pension %}
 <div class="tarjeta">
   <h2>Pensiones cobradas en el turno ({{ pagos_pension|length }})</h2>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Placa</th>
-          <th>Cubre desde</th>
-          <th>Hasta</th>
-          <th class="numero">Días</th>
-          <th class="numero">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for p in pagos_pension %}
-        <tr>
-          <td class="placa">{{ p.pension.placa }}</td>
-          <td>{{ p.periodo_desde|date:"d/m H:i" }}</td>
-          <td>{{ p.periodo_hasta|date:"d/m H:i" }}</td>
-          <td class="numero">{{ p.dias }}</td>
-          <td class="numero">{{ p.monto|pesos }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="lista-encabezado con-valor" style="--columnas:7rem 1fr 1fr 4rem 6.5rem">
+    <span>Placa</span>
+    <span>Cubre desde</span>
+    <span>Hasta</span>
+    <span class="numero">Días</span>
+    <span class="numero">Importe</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:7rem 1fr 1fr 4rem 6.5rem">
+  {% for p in pagos_pension %}
+    <li class="lista-fila">
+      <span class="celda-principal">{{ p.pension.placa }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Desde">{{ p.periodo_desde|date:"d/m H:i" }}</span>
+        <span class="celda-dato" data-rotulo="Hasta">{{ p.periodo_hasta|date:"d/m H:i" }}</span>
+        <span class="celda-dato numero" data-rotulo="Días">{{ p.dias }}</span>
+      </span>
+      <span class="celda-valor">{{ p.monto|pesos }}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 
 {% if folios %}
 <div class="tarjeta">
-  <h2>Boletos cobrados en el turno ({{ folios|length }})</h2>
-  <div class="tabla-envoltura">
-    <table>
-      <thead>
-        <tr>
-          <th>Placa</th>
-          <th>Entrada</th>
-          <th>Salida</th>
-          <th class="numero">Minutos</th>
-          <th class="numero">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for f in folios %}
-        <tr>
-          <td class="placa">{{ f.placa }}</td>
-          <td>{{ f.entrada_en|date:"d/m H:i" }}</td>
-          <td>{{ f.salida_en|date:"d/m H:i" }}</td>
-          <td class="numero">{{ f.minutos|duracion }}</td>
-          <td class="numero">{{ f.importe|pesos }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  {% comment %} «Salidas» y no «boletos cobrados»: el listado incluye las cortesías,
+     y titularlo «cobrados (5)» junto a un «Boletos cobrados: 3» en la cuenta
+     hacía pensar que faltaban dos cobros. {% endcomment %}
+  <h2>Salidas del turno ({{ folios|length }})</h2>
+  <p class="ayuda mt-0">
+    {{ resumen.folios_cobrados }} con cobro y {{ resumen.folios_cortesia }} sin costo.
+  </p>
+  <div class="lista-encabezado con-valor" style="--columnas:7rem 1fr 1fr 6rem 6.5rem">
+    <span>Placa</span>
+    <span>Entrada</span>
+    <span>Salida</span>
+    <span class="numero">Tiempo</span>
+    <span class="numero">Importe</span>
   </div>
+  <ul class="lista con-valor" style="--columnas:7rem 1fr 1fr 6rem 6.5rem">
+  {% for f in folios %}
+    <li class="lista-fila">
+      <span class="celda-principal">{{ f.placa }}</span>
+      <span class="celda-datos">
+        <span class="celda-dato" data-rotulo="Entrada">{{ f.entrada_en|date:"d/m H:i" }}</span>
+        <span class="celda-dato" data-rotulo="Salida">{{ f.salida_en|date:"d/m H:i" }}</span>
+        <span class="celda-dato numero">{{ f.minutos|duracion }}</span>
+      </span>
+      <span class="celda-valor">{% if f.importe %}{{ f.importe|pesos }}{% else %}Sin costo{% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
 </div>
 {% endif %}
 

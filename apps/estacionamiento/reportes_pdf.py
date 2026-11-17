@@ -444,7 +444,7 @@ def construir_reporte(metricas: dict, *, resumen: dict, solicitado_por: str = ""
             ("Boletos cobrados", f"{resumen['folios_cobrados']:,}"),
             ("Importe promedio", pesos(resumen["importe_promedio"])),
             ("Permanencia promedio", duracion(round(resumen["minutos_promedio"]))),
-            ("Cortesías", f"{resumen['folios_cortesia']:,}"),
+            ("Sin costo (cortesía)", f"{resumen['folios_cortesia']:,}"),
             ("Placas atendidas", f"{clientes['placas_atendidas']:,}"),
             ("Clientes frecuentes", f"{clientes['placas_frecuentes']:,}"),
             ("Diferencia de caja", pesos_con_signo(caja["diferencia"])),
@@ -558,7 +558,7 @@ def construir_reporte(metricas: dict, *, resumen: dict, solicitado_por: str = ""
 
     if composicion["por_tipo"]:
         partes.append(_tabla(
-            [["Tipo de vehículo", "Boletos", "Ingreso", "% del ingreso"]]
+            [["Tipo de vehículo", "Salidas", "Ingreso", "% del ingreso"]]
             + [
                 [f["etiqueta"], f"{f['folios']:,}", pesos(f["ingreso"]), f"{f['porcentaje']} %"]
                 for f in composicion["por_tipo"]

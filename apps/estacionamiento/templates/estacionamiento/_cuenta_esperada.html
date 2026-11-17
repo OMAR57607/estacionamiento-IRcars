@@ -1,0 +1,37 @@
+{% load moneda %}
+{% comment %} Cuánto debería haber en una caja con el turno abierto.
+
+   Fragmento compartido por el turno propio y los turnos de otros operadores
+   en la pantalla de turno. Mismo orden y mismos rótulos que el comprobante
+   del corte (`corte.html`), que no lo usa porque añade lo contado y la
+   diferencia: quien lee las dos cosas debe reconocer la misma cuenta.
+
+   Recibe `esperado`, un `ResumenCorte`. Solo se incluye para el perfil
+   administrativo: al cajero no se le muestra ninguna cifra de esta cuenta
+   antes de contar. {% endcomment %}
+<table class="cuenta">
+  <tbody>
+    <tr>
+      <td class="signo"></td>
+      <th>Cambio con que abrió</th>
+      <td class="numero">{{ esperado.fondo_inicial|pesos }}</td>
+    </tr>
+    <tr>
+      <td class="signo">+</td>
+      <th>Boletos cobrados ({{ esperado.folios_cobrados }})</th>
+      <td class="numero">{{ esperado.total_cobrado|pesos }}</td>
+    </tr>
+    {% if esperado.pagos_pension %}
+      <tr>
+        <td class="signo">+</td>
+        <th>Pensiones cobradas ({{ esperado.pagos_pension }})</th>
+        <td class="numero">{{ esperado.total_pensiones|pesos }}</td>
+      </tr>
+    {% endif %}
+    <tr class="fila-total">
+      <td class="signo">=</td>
+      <th>Debería haber en caja</th>
+      <td class="numero">{{ esperado.efectivo_esperado|pesos }}</td>
+    </tr>
+  </tbody>
+</table>

@@ -146,13 +146,13 @@
     {{ form_cobro.pago_recibido }}
     <p class="estimado" id="cambio-estimado" aria-live="polite"></p>
     <p class="ayuda">{{ form_cobro.pago_recibido.help_text }}</p>
-    <button type="submit" class="boton alto">Cobrar y cerrar folio</button>
+    <button type="submit" class="boton alto">Cobrar y cerrar boleto</button>
   </form>
   <a class="boton fantasma" href="{% url 'web:caja' %}">Volver sin cobrar</a>
 
   <p class="ayuda mt">
     <a href="{% url 'web:cancelar' folio_cotizado.uuid %}">
-      Cancelar este folio por error de captura
+      Cancelar este boleto por error de captura
     </a>
   </p>
 </div>
@@ -215,7 +215,7 @@
     </div>
   </form>
   <p class="ayuda mt">
-    «Cobrar salida» solo informa el importe: el folio se cierra después de
+    «Cobrar salida» solo informa el importe: el boleto se cierra después de
     recibir el efectivo.
   </p>
 </div>

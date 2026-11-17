@@ -6,6 +6,7 @@ debería haber en caja **antes** de contarla. Si esa cifra se le escapa al
 cajero, el conteo se ajusta a ella y un faltante no vuelve a registrarse
 jamás, sin que nada parezca roto.
 """
+import re
 from datetime import timedelta
 from decimal import Decimal
 
@@ -58,6 +59,17 @@ def _turno_con_un_cobro(operador):
     services.registrar_salida(
         uuid_folio=folio.uuid, pago_recibido=Decimal("100.00"), operador=operador
     )
+
+
+def _texto_visible(html: str) -> str:
+    """
+    El texto que el cajero lee, sin marcado, atributos, estilos ni scripts.
+
+    Lo bastante fiel para buscar una palabra; no es un intérprete de HTML.
+    """
+    html = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)
+    html = re.sub(r"<!--.*?-->", " ", html, flags=re.S)
+    return re.sub(r"<[^>]+>", " ", html)
 
 
 class TestCierreCiego:
@@ -114,6 +126,67 @@ class TestCierreCiego:
         assert "¿Por qué no se muestra cuánto debería haber?" not in de_la_duena
 
 
+class TestTurnosDeOtros:
+    """
+    El dueño entraba a «Turno y corte» y veía «Abrir turno de caja» mientras
+    su cajero llevaba horas cobrando: la pantalla solo resolvía el turno del
+    propio usuario.
+    """
+
+    def test_el_perfil_administrativo_ve_la_caja_de_otro_operador(
+        self, client, cajero, duena
+    ):
+        _turno_con_un_cobro(cajero)
+        client.force_login(duena)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert "Turnos abiertos de otros operadores (1)" in contenido
+        assert "cajero" in contenido
+        assert "Debería haber en caja" in contenido
+        assert "$560.00" in contenido  # 500 de cambio + 60 cobrados
+
+    def test_el_cajero_no_ve_la_caja_de_un_compañero(self, client, cajero, duena):
+        """
+        El esperado de un compañero es una referencia para ajustar el propio
+        conteo: el cierre ciego no admite ninguna cifra del turno abierto,
+        sea de quien sea.
+        """
+        _turno_con_un_cobro(duena)
+        otro = get_user_model().objects.create_user(username="otro", password=CLAVE)
+        services_caja.abrir_turno(operador=otro, fondo_inicial=Decimal("200.00"))
+        client.force_login(otro)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert "Turnos abiertos de otros operadores" not in contenido
+        assert "Debería haber en caja" not in contenido
+        assert "$560.00" not in contenido
+        assert "$60.00" not in contenido
+
+    def test_el_turno_propio_no_se_repite_en_la_lista(self, client, cajero, duena):
+        _turno_con_un_cobro(duena)
+        client.force_login(duena)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert "Turnos abiertos de otros operadores" not in contenido
+        # Su propia cuenta sigue arriba, una sola vez.
+        assert contenido.count("Debería haber en caja") == 1
+
+    def test_avisa_del_turno_de_otro_que_viene_de_otra_jornada(
+        self, client, cajero, duena
+    ):
+        services_caja.abrir_turno(
+            operador=cajero, momento=timezone.now() - timedelta(days=1, hours=1)
+        )
+        client.force_login(duena)
+
+        contenido = client.get(reverse("web:turno")).content.decode()
+
+        assert "Viene de otra jornada" in contenido
+
+
 class TestVocabulario:
     def test_la_pantalla_habla_como_la_caseta(self, client, cajero):
         """
@@ -130,6 +203,46 @@ class TestVocabulario:
         assert "Boletos cobrados" in contenido
         assert "Folios cobrados" not in contenido
         assert "Fondo inicial" not in contenido
+
+    @pytest.mark.parametrize(
+        "pantalla",
+        ["caja", "cobro", "cancelar", "operadores", "operador", "mantenimiento"],
+    )
+    def test_ninguna_pantalla_dice_folio(self, client, duena, pantalla):
+        """
+        La misma regla en todas las pantallas de la caseta, no solo en la del
+        turno: en la caja el botón decía «Cobrar y cerrar folio» junto a un
+        «Boleto» en la lista del patio, y la pantalla de cancelación hablaba
+        de cancelar un folio que el cajero acababa de imprimir como boleto.
+
+        Se revisa el texto que se lee, no el HTML: «folio» sigue siendo el
+        nombre del campo oculto y de las rutas, y cambiarlo rompería la API y
+        los formularios sin que el cajero ganara nada.
+        """
+        services_caja.abrir_turno(operador=duena)
+        folio = services.registrar_entrada(placa="ABC1234", operador=duena)
+        client.force_login(duena)
+
+        if pantalla == "cobro":
+            respuesta = client.post(
+                reverse("web:caja"), {"accion": "cotizar", "placa": "ABC1234"}
+            )
+        else:
+            rutas = {
+                "caja": reverse("web:caja"),
+                "cancelar": reverse("web:cancelar", args=[folio.uuid]),
+                "operadores": reverse("web:operadores"),
+                "operador": reverse("web:operador", args=[duena.pk]),
+                "mantenimiento": reverse("web:mantenimiento"),
+            }
+            respuesta = client.get(rutas[pantalla])
+
+        assert respuesta.status_code == 200
+        texto = _texto_visible(respuesta.content.decode())
+        assert "folio" not in texto.lower(), (
+            f"«folio» en el texto visible de {pantalla}: "
+            f"…{texto[max(0, texto.lower().find('folio') - 60):][:120]}…"
+        )
 
     def test_la_pantalla_explica_el_flujo_del_turno(self, client, cajero):
         _turno_con_un_cobro(cajero)

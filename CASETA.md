@@ -22,28 +22,48 @@ que abrió → captúrelo → *Cerrar turno y generar corte*.
 > cobrar** hasta cerrarlo: el efectivo de dos días en un mismo corte hace que la
 > diferencia no signifique nada. Las entradas siempre puede registrarlas.
 
+## Cómo leer su corte
+
+Al cerrar, la pantalla muestra la cuenta del efectivo. Se lee de arriba abajo:
+
+| | |
+|---|---|
+| Cambio con que abrió | |
+| **+** Boletos cobrados | solo los que pagaron |
+| **+** Pensiones cobradas | si cobró alguna |
+| **=** Debería haber en caja | |
+| Contado al cerrar | lo que usted capturó |
+| **Faltante / Sobrante / Diferencia** | contado menos lo que debería haber |
+
+- **Boletos cobrados** son los que pagaron. Los que salieron gratis (dentro de
+  los minutos de cortesía) se cuentan aparte como **sin costo**: no meten dinero.
+- **Faltante** es que hay menos dinero del que debería. Recuente el efectivo
+  antes de entregarlo. Si aparece el error, avise al dueño: **él puede
+  corregir el corte**. Su cifra no se borra; el comprobante muestra las dos y
+  quién corrigió.
+
 ---
 
 ## El ciclo de un vehículo
 
 | | Qué hace | Dónde |
 |---|---|---|
-| **Entra** | Teclea la placa, **elige el tipo de vehículo** y `Enter`. Se muestra el código QR: pídale al cliente que lo escanee, o compártalo por WhatsApp. | Caja → *Registrar entrada* |
+| **Entra** | Teclea la placa, **elige el tipo de vehículo** y `Enter`. Se muestra el código QR: pídale al cliente que lo escanee, o compártalo por WhatsApp. | Caja → *Entrada* |
 | **Pregunta cuánto lleva** | El cliente lo ve solo en su teléfono, con el QR que ya tiene. | — |
-| **Sale** | Teclea la placa en *Salida y cobro* y `Enter`. Aparece el importe. **Todavía no cobró nada.** | Caja → *Cotizar* |
-| **Paga** | Capture el pago recibido: **el cambio se calcula solo**. Confirme. | Caja → *Cobrar* |
+| **Sale** | Teclea la placa y toca *Cobrar salida*. Aparece el importe. **Todavía no cobró nada.** | Caja → *Cobrar salida* |
+| **Paga** | Capture el pago recibido: **el cambio se calcula solo**. Confirme. | Caja → *Cobrar y cerrar boleto* |
 
 **Si perdió el boleto:** busque la placa en el tablero de vehículos dentro. Con
 teclear tres o cuatro caracteres basta.
 
-**Si se equivocó al capturar la placa:** cancele el folio con el motivo escrito.
+**Si se equivocó al capturar la placa:** cancele el boleto con el motivo escrito.
 No se borra: queda registrado quién lo canceló y por qué.
 
 ---
 
 > **El tipo de vehículo decide el precio.** La motocicleta tiene su propia
 > tarifa, más barata. Elegirlo mal cobra de más o de menos, y se corrige
-> cancelando el folio con el motivo escrito y registrando la entrada de nuevo.
+> cancelando el boleto con el motivo escrito y registrando la entrada de nuevo.
 
 ---
 
@@ -116,7 +136,7 @@ desaparecer.
 | «No tiene un turno de caja abierto» | Pestaña Turno → abrir turno. |
 | No le deja cobrar y habla de un turno anterior | Cierre ese turno: cuente el efectivo y haga el corte. Luego abra uno nuevo. |
 | El cliente dice que su boleto no abre | Un boleto ya cobrado deja de consultarse pasadas 24 horas. Es normal. |
-| La placa ya está adentro | La caja le ofrece cobrarlo. Si no es él, se capturó mal una placa: cancele el folio equivocado con el motivo. |
+| La placa ya está adentro | La caja le ofrece cobrarlo. Si no es él, se capturó mal una placa: cancele el boleto equivocado con el motivo. |
 | «Ya tiene una pensión activa» | Esa placa ya es pensionada. Búsquela en Pensiones y cobre días ahí. |
 | No deja cobrar la pensión | Hace falta turno abierto, del día. El pago entra al corte. |
 | Un pensionado sale y le cobra | Se pasó de su vigencia. Ofrezca renovar: la renovación cubre ese tiempo. |

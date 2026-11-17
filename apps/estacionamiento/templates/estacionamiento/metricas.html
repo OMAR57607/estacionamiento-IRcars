@@ -228,11 +228,15 @@
   <h2>Composición de la operación</h2>
   {{ dibujos.boletos }}
 
+  {% comment %} «Salidas» y no «Boletos»: estas tablas cuentan todas las salidas,
+     cortesías incluidas, y con el rótulo anterior sumaban 5 bajo un
+     indicador «Boletos cobrados» que decía 4. «Boletos cobrados» queda
+     reservado para los que pagaron, como en el corte. {% endcomment %}
   {% if metricas.composicion.por_tipo %}
     <div class="tabla-envoltura mt">
       <table>
         <thead>
-          <tr><th>Tipo de vehículo</th><th class="numero">Boletos</th>
+          <tr><th>Tipo de vehículo</th><th class="numero">Salidas</th>
               <th class="numero">Ingreso</th><th class="numero">% del ingreso</th></tr>
         </thead>
         <tbody>
@@ -253,8 +257,8 @@
     <div class="tabla-envoltura mt">
       <table>
         <thead>
-          <tr><th>Cobró</th><th class="numero">Boletos</th>
-              <th class="numero">Ingreso</th><th class="numero">Cortesías</th></tr>
+          <tr><th>Cobró</th><th class="numero">Salidas</th>
+              <th class="numero">Ingreso</th><th class="numero">Sin costo</th></tr>
         </thead>
         <tbody>
         {% for o in metricas.composicion.por_operador %}

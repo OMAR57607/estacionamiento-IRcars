@@ -1,15 +1,15 @@
 {% extends "estacionamiento/base.html" %}
 
-{% block titulo %}Cancelar folio{% endblock %}
+{% block titulo %}Cancelar boleto{% endblock %}
 
 {% block contenido %}
 <div class="tarjeta angosta centrada">
-  <h2>Cancelar folio</h2>
+  <h2>Cancelar boleto</h2>
 
   <div class="aviso warning">
     La cancelación es definitiva y queda registrada con su nombre y el motivo
     que capture. Está prevista para errores de captura, no para corregir cobros:
-    un folio ya cobrado no se cancela.
+    un boleto ya cobrado no se cancela.
   </div>
 
   <p class="detalle-cobro">
@@ -25,7 +25,7 @@
     {{ form.folio }}
     <label for="{{ form.motivo.id_for_label }}">Motivo de la cancelación</label>
     {{ form.motivo }}
-    <button type="submit" class="boton peligro">Cancelar el folio</button>
+    <button type="submit" class="boton peligro">Cancelar el boleto</button>
   </form>
 
   <p class="ayuda mt">

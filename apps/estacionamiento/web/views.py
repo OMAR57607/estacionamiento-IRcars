@@ -582,7 +582,7 @@ def _procesar_cancelacion(request):
         motivo=form.cleaned_data["motivo"],
         operador=request.user,
     )
-    messages.warning(request, f"Folio de {folio.placa} cancelado.")
+    messages.warning(request, f"Boleto de {folio.placa} cancelado.")
     return redirect("web:caja")
 
 
@@ -664,6 +664,24 @@ def turno(request):
             contexto["esperado"] = services_caja.calcular_resumen(turno_actual)
     else:
         contexto["form_abrir"] = AbrirTurnoForm()
+
+    # Las cajas que otros tienen abiertas, solo para el perfil administrativo.
+    # Al cajero no se le muestran: le darían el esperado de un compañero y,
+    # con él, una referencia para ajustar el suyo. El turno propio queda
+    # fuera de la lista porque ya ocupa la parte superior de la pantalla.
+    if contexto["es_administrativo"]:
+        ajenos = services_caja.turnos_abiertos()
+        if turno_actual is not None:
+            ajenos = ajenos.exclude(pk=turno_actual.pk)
+        contexto["turnos_de_otros"] = [
+            {
+                "turno": abierto,
+                "avance": services_caja.resumen_operativo(abierto),
+                "esperado": services_caja.calcular_resumen(abierto),
+                "estado": services_caja.estado_del_turno(abierto),
+            }
+            for abierto in ajenos
+        ]
 
     contexto["turnos_cerrados"] = (
         Turno.objects.select_related("operador")
@@ -1723,7 +1741,7 @@ def tarifa_cambiar(request):
                     f"El precio de {nueva.get_tipo_vehiculo_display().lower()} "
                     f"quedó en ${nueva.cuota_hora:,.2f} por hora y ya está en "
                     "vigencia. El anterior se conserva en el histórico: los "
-                    "folios ya cobrados mantienen el precio con que se "
+                    "boletos ya cobrados mantienen el precio con que se "
                     "calcularon.",
                 )
                 return redirect("web:tarifa")

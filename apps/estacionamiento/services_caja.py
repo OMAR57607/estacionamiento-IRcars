@@ -125,8 +125,16 @@ def resumen_operativo(turno: Turno) -> dict:
     de efectivo esperado: revelarlo anularía el cierre ciego, porque el conteo
     físico se ajustaría a esa cifra en lugar de ser independiente.
     """
+    # «Cobrados» son los boletos que movieron efectivo, igual que en el corte
+    # (`calcular_corte` separa los de importe cero). Antes aquí se contaban
+    # todos los cerrados, cortesías incluidas, de modo que el turno abierto
+    # decía «3 cobrados, 1 cortesía» y su corte «2 cobrados, 1 cortesía»: la
+    # misma palabra con dos significados en dos pantallas consecutivas.
     agregados = Folio.objects.filter(turno=turno).aggregate(
-        cobrados=Count("id", filter=Q(estado=EstadoFolio.CERRADO)),
+        cobrados=Count(
+            "id",
+            filter=Q(estado=EstadoFolio.CERRADO, importe__gt=Decimal("0.00")),
+        ),
         cortesias=Count(
             "id",
             filter=Q(
@@ -152,6 +160,27 @@ def resumen_operativo(turno: Turno) -> dict:
             estado=EstadoFolio.ABIERTO
         ).count(),
     }
+
+
+def turnos_abiertos():
+    """
+    Turnos abiertos ahora mismo, del más antiguo al más reciente.
+
+    Es lo que el perfil administrativo necesita ver al entrar a «Turno y
+    corte»: qué cajas están operando, desde cuándo y con quién. Hasta ahora
+    esa pantalla solo resolvía el turno del propio usuario, de modo que el
+    dueño veía «Abrir turno de caja» mientras su cajero llevaba horas
+    cobrando, y la cifra esperada —que la vista dice no ocultarle— no
+    aparecía en ninguna parte.
+
+    No revela nada por sí misma: quien la invoque decide a quién mostrar los
+    importes. La regla del cierre ciego vive en la vista.
+    """
+    return (
+        Turno.objects.select_related("operador")
+        .filter(estado=EstadoTurno.ABIERTO)
+        .order_by("abierto_en")
+    )
 
 
 def calcular_resumen(turno: Turno, efectivo_declarado: Decimal | None = None) -> ResumenCorte:
@@ -230,7 +259,7 @@ def cerrar_turno(
         pendientes = Folio.objects.filter(estado=EstadoFolio.ABIERTO).count()
         if pendientes:
             raise TurnoConFoliosAbiertos(
-                f"Quedan {pendientes} folios abiertos en el patio. Su cobro "
+                f"Quedan {pendientes} boletos abiertos en el patio. Su cobro "
                 "caería en el turno siguiente y distorsionaría ambos cortes."
             )
 
@@ -465,7 +494,14 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
     agregados = cobrados.aggregate(
         total=Sum("importe"),
         minutos=Sum("minutos"),
-        folios=Count("id"),
+        salidas=Count("id"),
+        # «Boletos cobrados» con la misma definición que el corte
+        # (`calcular_corte`): los que movieron efectivo. Antes aquí se contaban
+        # todas las salidas, cortesías incluidas, y el reporte de un día decía
+        # «5 cobrados» donde el corte del único turno de ese día decía 4.
+        # Incluye el excedente que paga un pensionado vencido: es efectivo y
+        # el corte también lo cuenta.
+        folios=Count("id", filter=Q(importe__gt=Decimal("0.00"))),
         # Las salidas de pensionado cubiertas también valen $0 y no son
         # cortesías: contarlas así ocultaría las cortesías reales.
         cortesias=Count(
@@ -474,6 +510,7 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         pensionados=Count("id", filter=Q(pension__isnull=False)),
     )
     folios = agregados["folios"] or 0
+    salidas = agregados["salidas"] or 0
     pagos = PagoPension.objects.filter(
         estado=EstadoPagoPension.VIGENTE, creado_en__gte=desde, creado_en__lte=hasta
     ).aggregate(total=Sum("monto"), pagos=Count("id"), dias=Sum("dias"))
@@ -485,11 +522,18 @@ def reporte_por_rango(desde: datetime, hasta: datetime) -> dict:
         "hasta": hasta,
         "folios_cobrados": folios,
         "folios_cortesia": agregados["cortesias"] or 0,
+        # Todas las salidas del periodo: cobradas, cortesías y salidas de
+        # pensionado cubiertas. Es el total que corresponde al listado.
+        "salidas": salidas,
         "total_cobrado": total,
         "minutos_totales": minutos,
         # Promedios útiles para detectar anomalías de tarificación o de captura.
+        # El importe se promedia sobre los boletos que pagaron: dividir entre
+        # todas las salidas hacía que cada cortesía bajara el promedio, y el
+        # indicador dejaba de decir cuánto paga quien paga. La permanencia sí
+        # se promedia sobre todas: el tiempo en el patio no depende de cobrar.
         "importe_promedio": (total / folios).quantize(Decimal("0.01")) if folios else Decimal("0.00"),
-        "minutos_promedio": round(minutos / folios, 1) if folios else 0.0,
+        "minutos_promedio": round(minutos / salidas, 1) if salidas else 0.0,
         "turnos_cerrados": Turno.objects.filter(
             estado=EstadoTurno.CERRADO, cerrado_en__gte=desde, cerrado_en__lte=hasta
         ).count(),
