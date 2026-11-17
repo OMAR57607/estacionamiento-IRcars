@@ -170,10 +170,13 @@ contra-asienta— y por el mismo motivo.
 - **El comprobante muestra las dos cifras.** Esa coexistencia es lo que hace
   del ajuste un acto auditable en lugar de un borrado: un faltante que puede
   desaparecer sin rastro no disuade a nadie de provocarlo.
-- **Quien cerró mal no se corrige a sí mismo.** La pantalla está restringida al
+- **El cajero no se corrige a sí mismo.** La pantalla está restringida al
   perfil administrativo y exige confirmar la contraseña, igual que el cambio de
-  precio. El cierre ciego descansa en que la diferencia la constate alguien
-  distinto de quien contó.
+  precio. El cierre ciego descansa en que la diferencia del cajero la constate
+  alguien distinto de quien contó. Un administrador sí puede corregir un corte
+  que cerró él mismo —el suyo o el de un operador que lo olvidó—: con una sola
+  cuenta administrativa, prohibirlo dejaría el error sin corrección. El turno
+  registra quién cerró y el ajuste quién corrigió.
 - **Varias correcciones se acumulan.** La segunda parte de la cifra vigente, no
   de la original, para que no se pisen.
 

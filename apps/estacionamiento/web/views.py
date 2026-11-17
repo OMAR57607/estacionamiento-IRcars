@@ -910,11 +910,17 @@ def ajustar_corte(request, turno_id: int):
     """
     Corrige el efectivo declarado de un corte ya cerrado.
 
-    Restringida al perfil administrativo y en su propia dirección. Quien
-    cerró mal no se corrige a sí mismo: el control de caja descansa en que la
+    Restringida al perfil administrativo y en su propia dirección. El cajero
+    no se corrige a sí mismo: el control de caja descansa en que la
     diferencia la constata alguien distinto de quien contó, y una pantalla que
     permitiera al cajero reescribir su propio faltante lo desarmaría por
     completo.
+
+    Un administrador sí puede corregir un corte que cerró él mismo —el suyo o
+    el de un operador que se fue sin cortar— (decisión del dueño,
+    17/11/2026). Con una sola cuenta administrativa, prohibirlo dejaría ese
+    error sin corrección posible; el rastro queda igual, porque el turno
+    registra quién cerró (`cerrado_por`) y el ajuste quién corrigió.
 
     Pide la contraseña del propio administrador antes de aplicar, igual que el
     cambio de precio y el borrado de movimientos. No es ceremonia: convierte
