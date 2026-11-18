@@ -334,7 +334,7 @@
             <td>{{ t.operador }}</td>
             <td>{{ t.cerrado_en|date:"d/m/Y H:i" }}</td>
             <td class="numero">{{ t.total_cobrado|pesos }}</td>
-            <td class="numero">{{ t.efectivo_esperado|pesos }}</td>
+            <td class="numero">{{ t.esperado_vigente|pesos }}</td>
             <td class="numero">{{ t.diferencia|pesos_con_signo }}</td>
             <td class="numero">
               {{ t.diferencia_vigente|pesos_con_signo }}{% if t.tiene_ajuste %} *{% endif %}

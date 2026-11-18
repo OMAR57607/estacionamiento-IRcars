@@ -637,19 +637,76 @@ class AjusteCorteForm(forms.Form):
         # el servicio rechaza, y el operador vería un error sin explicación.
         from ..models import MotivoAjuste
 
-        self.fields["motivo"].choices = MotivoAjuste.choices
+        # Solo los motivos de lo contado: el del cambio de apertura lo pone
+        # el sistema en su propia corrección y aquí el servicio lo rechaza.
+        self.fields["motivo"].choices = MotivoAjuste.de_efectivo()
 
     def clean_justificacion(self) -> str:
-        texto = self.cleaned_data["justificacion"].strip()
         # La regla vive en el dominio y se aplica igual venga de donde venga.
         # Aquí se repite la comprobación solo para que el error salga junto al
         # campo en lugar de como un aviso suelto arriba de la pantalla.
-        if not justificacion_suficiente(texto):
-            raise forms.ValidationError(
-                f"Explique qué pasó, con al menos {MINIMO_JUSTIFICACION} "
-                "caracteres. Una palabra no permite auditar la corrección."
-            )
-        return texto
+        return _justificacion_validada(self.cleaned_data["justificacion"])
+
+
+def _justificacion_validada(texto: str) -> str:
+    """La regla del dominio, con el error junto al campo."""
+    texto = (texto or "").strip()
+    if not justificacion_suficiente(texto):
+        raise forms.ValidationError(
+            f"Explique qué pasó, con al menos {MINIMO_JUSTIFICACION} "
+            "caracteres. Una palabra no permite auditar la corrección."
+        )
+    return texto
+
+
+class CorregirCambioForm(forms.Form):
+    """
+    Corrección del cambio con que se abrió un turno ya cerrado.
+
+    Como `AjusteCorteForm`, pide la cifra **real** y no la diferencia: la
+    resta la hace el sistema. No pide motivo porque solo hay uno —el cambio
+    se declaró mal al abrir— y lo registra el servicio; lo que sí se exige es
+    la explicación escrita del caso.
+    """
+
+    cambio_real = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        label="Cambio con que realmente abrió la caja",
+        help_text=(
+            "Solo el cambio de apertura, sin lo cobrado en el turno. Si la "
+            "caja abrió sin cambio, capture 0."
+        ),
+        widget=forms.NumberInput(
+            attrs={
+                "step": "0.01",
+                "autofocus": True,
+                "class": "campo campo-grande",
+                "inputmode": "decimal",
+            }
+        ),
+    )
+    justificacion = forms.CharField(
+        label="Qué pasó",
+        help_text=(
+            "Con detalle suficiente para que se entienda dentro de seis meses "
+            "sin preguntarle a nadie."
+        ),
+        widget=forms.Textarea(
+            attrs={
+                "class": "campo",
+                "rows": 3,
+                "placeholder": (
+                    "Al abrir se tecleó $9,000 de cambio; la caja abrió con "
+                    "$900."
+                ),
+            }
+        ),
+    )
+
+    def clean_justificacion(self) -> str:
+        return _justificacion_validada(self.cleaned_data["justificacion"])
 
 
 class MetricasForm(RangoFechasForm):

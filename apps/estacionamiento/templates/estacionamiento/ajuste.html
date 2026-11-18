@@ -29,8 +29,8 @@
     <tbody>
       <tr>
         <td class="signo"></td>
-        <th>Cambio con que abrió</th>
-        <td class="numero">{{ turno_corte.fondo_inicial|pesos }}</td>
+        <th>Cambio con que abrió{% if veredicto.fondo_corregido %}, tras la corrección{% endif %}</th>
+        <td class="numero">{{ veredicto.fondo_vigente|pesos }}</td>
       </tr>
       <tr>
         <td class="signo">+</td>
@@ -47,7 +47,7 @@
       <tr class="fila-total">
         <td class="signo">=</td>
         <th>Debería haber en caja</th>
-        <td class="numero">{{ turno_corte.efectivo_esperado|pesos }}</td>
+        <td class="numero">{{ veredicto.esperado_vigente|pesos }}</td>
       </tr>
       <tr{% if veredicto.ajustado %} class="superado"{% endif %}>
         <td class="signo"></td>
@@ -77,6 +77,15 @@
     conteo a ciegas ya ocurrió y su resultado está grabado arriba; ocultar
     ahora la cifra solo obligaría a adivinar con cuál se quiere cuadrar.
   </p>
+</div>
+
+{% comment %} El aviso va antes del formulario: quien llega aquí con el cambio de
+   apertura mal declarado solo puede «cuadrar» inventando efectivo contado, y
+   esa cifra se suma después en el reporte del periodo. {% endcomment %}
+<div class="aviso info">
+  Aquí se corrige <strong>lo contado</strong>. Si lo que estaba mal fue el
+  <strong>cambio con que se abrió la caja</strong>, no lo cuadre desde aquí:
+  <a href="{% url 'web:corregir_cambio' turno_id=turno_corte.pk %}">corrija el cambio de apertura</a>.
 </div>
 
 <form method="post" novalidate>
@@ -138,8 +147,8 @@
         <tr>
           <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
           <td>{{ a.autorizo }}</td>
-          <td>{{ a.get_motivo_display }}<br><span class="ayuda">{{ a.justificacion }}</span></td>
-          <td class="numero">{{ a.monto|pesos_con_signo }}</td>
+          <td>{{ a.get_motivo_display }}{% if a.corrige_fondo %}<br>Cambio: {{ a.fondo_anterior|pesos }} → {{ a.fondo_nuevo|pesos }}{% endif %}<br><span class="ayuda">{{ a.justificacion }}</span></td>
+          <td class="numero">{{ a.monto_mostrado|pesos_con_signo }}</td>
         </tr>
       {% endfor %}
       </tbody>

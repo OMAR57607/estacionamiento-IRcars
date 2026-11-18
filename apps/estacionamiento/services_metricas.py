@@ -471,12 +471,21 @@ def cortes_del_periodo(desde: datetime, hasta: datetime) -> dict:
     agregados = turnos.annotate(dif_vigente=dif_vigente).aggregate(
         turnos=Count("id"),
         cobrado=Coalesce(Sum("total_cobrado"), CERO, output_field=DINERO),
-        esperado=Coalesce(Sum("efectivo_esperado"), CERO, output_field=DINERO),
+        # El esperado vigente: si se corrigió el cambio de apertura, sumar el
+        # del cierre contaría un efectivo que nunca estuvo en la caja.
+        esperado=Coalesce(
+            Sum(Coalesce(F("esperado_ajustado"), F("efectivo_esperado"), output_field=DINERO)),
+            CERO,
+            output_field=DINERO,
+        ),
         suma_vigente=Coalesce(Sum("dif_vigente"), CERO, output_field=DINERO),
         suma_cierre=Coalesce(Sum("diferencia"), CERO, output_field=DINERO),
         faltantes=Count("id", filter=Q(dif_vigente__lt=0)),
         sobrantes=Count("id", filter=Q(dif_vigente__gt=0)),
-        ajustados=Count("id", filter=Q(efectivo_ajustado__isnull=False)),
+        ajustados=Count(
+            "id",
+            filter=Q(efectivo_ajustado__isnull=False) | Q(fondo_ajustado__isnull=False),
+        ),
     )
 
     vigente = agregados["suma_vigente"] or CERO

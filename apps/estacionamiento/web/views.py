@@ -55,6 +55,7 @@ from .forms import (
     ClaveOperadorForm,
     CobroForm,
     ConfirmarClaveForm,
+    CorregirCambioForm,
     MetricasForm,
     OperadorEditarForm,
     OperadorNuevoForm,
@@ -958,7 +959,7 @@ def ajustar_corte(request, turno_id: int):
         # más frecuente y teclear a mano una cifra que el sistema ya conoce
         # solo añade ocasiones de equivocarse. Sigue siendo editable, porque
         # el efectivo real puede no coincidir con el esperado.
-        initial={"efectivo_real": turno_objetivo.efectivo_esperado}
+        initial={"efectivo_real": turno_objetivo.esperado_vigente}
     )
 
     if request.method == "POST":
@@ -1005,6 +1006,93 @@ def ajustar_corte(request, turno_id: int):
         return redirect("web:corte", turno_id=turno_objetivo.pk)
 
     return render(request, "estacionamiento/ajuste.html", contexto)
+
+
+@login_required
+@solo_administrativo
+@require_http_methods(["GET", "POST"])
+def corregir_cambio(request, turno_id: int):
+    """
+    Corrige el cambio con que se abrió un turno ya cerrado.
+
+    Es la otra mitad de `ajustar_corte`. Aquélla corrige lo contado; ésta, el
+    cambio de apertura, que es de donde sale «Debería haber en caja». Sin
+    ella, un cambio mal declarado solo podía «cuadrarse» declarando como
+    contado un efectivo que no existió, y esa cifra inflaba después el
+    reporte del periodo.
+
+    Mismas reglas que el ajuste: solo el perfil administrativo, solo sobre un
+    turno cerrado y confirmando la contraseña.
+    """
+    contexto = _contexto_base(request)
+    contexto["seccion"] = "turno"
+
+    turno_objetivo = (
+        Turno.objects.select_related("operador", "cerrado_por").filter(pk=turno_id).first()
+    )
+    if turno_objetivo is None:
+        messages.error(request, f"No existe el turno {turno_id}.")
+        return redirect("web:turno")
+    if turno_objetivo.estado != EstadoTurno.CERRADO:
+        messages.error(
+            request,
+            f"El turno {turno_objetivo.pk} sigue abierto: no hay corte que corregir.",
+        )
+        return redirect("web:turno")
+
+    contexto["turno_corte"] = turno_objetivo
+    contexto["veredicto"] = services_caja.veredicto_del_corte(turno_objetivo)
+    contexto["ajustes"] = services_caja.ajustes_del_turno(turno_objetivo)
+    contexto["form_clave"] = ConfirmarClaveForm()
+    # Sin precarga, al contrario que el ajuste de lo contado: ahí la cifra
+    # más probable es la esperada; aquí la única que el sistema conoce es
+    # justo la que está mal.
+    contexto["form"] = CorregirCambioForm()
+
+    if request.method == "POST":
+        form = CorregirCambioForm(request.POST)
+        form_clave = ConfirmarClaveForm(request.POST)
+        contexto["form"] = form
+        contexto["form_clave"] = form_clave
+
+        if not form.is_valid():
+            messages.error(request, "Revise los datos de la corrección.")
+            return render(request, "estacionamiento/ajuste_cambio.html", contexto)
+
+        if not form_clave.is_valid() or not authenticate(
+            username=request.user.get_username(),
+            password=form_clave.cleaned_data["clave"],
+        ):
+            messages.error(request, "Contraseña incorrecta. No se corrigió nada.")
+            return render(request, "estacionamiento/ajuste_cambio.html", contexto)
+
+        try:
+            _, _, resultado = services_caja.corregir_fondo(
+                turno_id=turno_objetivo.pk,
+                fondo_corregido=form.cleaned_data["cambio_real"],
+                justificacion=form.cleaned_data["justificacion"],
+                autorizo=request.user,
+            )
+        except ErrorDominio as exc:
+            messages.error(request, str(exc))
+            return render(request, "estacionamiento/ajuste_cambio.html", contexto)
+
+        aviso = (
+            f"Corte {turno_objetivo.pk}: el cambio de apertura pasa de "
+            f"${resultado.fondo_anterior:,.2f} a ${resultado.fondo_nuevo:,.2f} y "
+            f"lo que debería haber en caja, a ${resultado.esperado_nuevo:,.2f}. "
+        )
+        if resultado.cuadra:
+            aviso += "La caja queda cuadrada."
+        else:
+            aviso += (
+                f"La diferencia pasa de {resultado.diferencia_anterior:+,.2f} a "
+                f"{resultado.diferencia_nueva:+,.2f}."
+            )
+        messages.success(request, aviso)
+        return redirect("web:corte", turno_id=turno_objetivo.pk)
+
+    return render(request, "estacionamiento/ajuste_cambio.html", contexto)
 
 
 # ------------------------------------------------------------------ Reportes

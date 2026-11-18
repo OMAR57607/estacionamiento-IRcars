@@ -263,6 +263,103 @@ def calcular_ajuste(
     )
 
 
+# --- Corrección del cambio de apertura ---------------------------------------
+#
+# El ajuste de arriba corrige lo **contado**. No sirve cuando lo que estaba
+# mal era el otro lado de la resta: el cambio con que se abrió la caja. El
+# caso que lo motivó: un turno se abrió declarando $9,000 de cambio que nunca
+# existieron. «Debería haber en caja» quedó inflado en esa cifra y la única
+# corrección disponible era declarar como contado un efectivo que tampoco
+# existió —cuadra la diferencia, pero deja en el reporte del mes $9,000 de
+# efectivo esperado y contado que nadie tuvo en la mano—.
+#
+# Se aplica el mismo criterio de asiento: el cambio declarado al abrir se
+# conserva, la cifra corregida se guarda aparte y el esperado se recalcula a
+# partir de ella. Lo contado no se toca: no era lo que estaba mal.
+
+
+@dataclass(frozen=True)
+class ResultadoAjusteFondo:
+    """
+    Efecto de corregir el cambio de apertura de un corte cerrado.
+
+    `monto` es lo que la corrección mueve en el cambio —y, por lo mismo, en el
+    efectivo esperado—: negativo si se había declarado cambio que no estaba,
+    positivo si había más del declarado.
+    """
+
+    fondo_anterior: Decimal
+    fondo_nuevo: Decimal
+    monto: Decimal
+    esperado_anterior: Decimal
+    esperado_nuevo: Decimal
+    efectivo_contado: Decimal
+    diferencia_anterior: Decimal
+    diferencia_nueva: Decimal
+
+    @property
+    def sin_efecto(self) -> bool:
+        """Verdadero si la corrección no cambia ninguna cifra."""
+        return self.monto == Decimal("0.00")
+
+    @property
+    def cuadra(self) -> bool:
+        """Si tras la corrección el corte queda sin diferencia."""
+        return self.diferencia_nueva == Decimal("0.00")
+
+    def a_dict(self) -> dict:
+        """Representación serializable, para anexar al resumen del turno."""
+        return {
+            "fondo_anterior": str(self.fondo_anterior),
+            "fondo_nuevo": str(self.fondo_nuevo),
+            "monto_fondo": str(self.monto),
+            "efectivo_esperado_anterior": str(self.esperado_anterior),
+            "efectivo_esperado": str(self.esperado_nuevo),
+            "diferencia_anterior": str(self.diferencia_anterior),
+            "diferencia_nueva": str(self.diferencia_nueva),
+            "cuadra": self.cuadra,
+        }
+
+
+def calcular_ajuste_fondo(
+    *,
+    fondo_vigente: Decimal,
+    fondo_corregido: Decimal,
+    efectivo_esperado_vigente: Decimal,
+    efectivo_contado_vigente: Decimal,
+) -> ResultadoAjusteFondo:
+    """
+    Calcula el efecto de corregir el cambio con que se abrió un turno.
+
+    El esperado nuevo se obtiene moviendo el vigente en lo mismo que se mueve
+    el cambio, y no volviendo a sumar los cobros: la fotografía del cierre es
+    la base contra la que se contó y recalcularla con datos posteriores la
+    haría incomparable. Todas las cifras de partida son las **vigentes**, para
+    que una corrección del cambio y otra del efectivo se acumulen sin pisarse,
+    en cualquier orden.
+
+    Lógica pura: no valida ni lanza. Que un cambio negativo o una corrección
+    sin efecto se acepten lo decide la capa de aplicación.
+    """
+    anterior = _redondear(Decimal(fondo_vigente))
+    nuevo = _redondear(Decimal(fondo_corregido))
+    monto = _redondear(nuevo - anterior)
+    esperado_anterior = _redondear(Decimal(efectivo_esperado_vigente))
+    esperado_nuevo = _redondear(esperado_anterior + monto)
+    contado = _redondear(Decimal(efectivo_contado_vigente))
+
+    return ResultadoAjusteFondo(
+        fondo_anterior=anterior,
+        fondo_nuevo=nuevo,
+        monto=monto,
+        esperado_anterior=esperado_anterior,
+        esperado_nuevo=esperado_nuevo,
+        efectivo_contado=contado,
+        diferencia_anterior=_redondear(contado - esperado_anterior),
+        diferencia_nueva=_redondear(contado - esperado_nuevo),
+    )
+
+
 def justificacion_suficiente(texto: str) -> bool:
     """
     Si el texto explica el ajuste o solo rellena el campo.

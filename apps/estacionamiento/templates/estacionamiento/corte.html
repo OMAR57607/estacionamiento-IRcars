@@ -58,11 +58,28 @@
   <h3 class="subtitulo">La cuenta del efectivo</h3>
   <table class="cuenta">
     <tbody>
-      <tr>
-        <td class="signo"></td>
-        <th>Cambio con que abrió</th>
-        <td class="numero">{{ resumen.fondo_inicial|pesos }}</td>
-      </tr>
+      {% if veredicto.fondo_corregido %}
+        {% comment %} Igual que con lo contado: el cambio declarado al abrir se conserva
+           y se imprime, atenuado, junto al corregido. La suma de abajo usa
+           el corregido. {% endcomment %}
+        <tr class="superado">
+          <td class="signo"></td>
+          <th>Cambio declarado al abrir
+            <span class="detalle">Se conserva como se capturó</span></th>
+          <td class="numero">{{ resumen.fondo_inicial|pesos }}</td>
+        </tr>
+        <tr>
+          <td class="signo"></td>
+          <th>Cambio con que abrió, tras la corrección</th>
+          <td class="numero">{{ veredicto.fondo_vigente|pesos }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td class="signo"></td>
+          <th>Cambio con que abrió</th>
+          <td class="numero">{{ resumen.fondo_inicial|pesos }}</td>
+        </tr>
+      {% endif %}
       <tr>
         <td class="signo">+</td>
         <th>Boletos cobrados ({{ resumen.folios_cobrados }})</th>
@@ -81,8 +98,9 @@
       {% endif %}
       <tr class="fila-total">
         <td class="signo">=</td>
-        <th>Debería haber en caja</th>
-        <td class="numero">{{ resumen.efectivo_esperado|pesos }}</td>
+        <th>Debería haber en caja
+          {% if veredicto.fondo_corregido %}<span class="detalle">Con el cambio corregido; al cerrar se calculó {{ resumen.efectivo_esperado|pesos }}</span>{% endif %}</th>
+        <td class="numero">{{ veredicto.esperado_vigente|pesos }}</td>
       </tr>
 
       {% if veredicto.ajustado %}
@@ -93,22 +111,33 @@
            Lo declarado al cerrar se atenúa: sigue siendo un hecho y se
            imprime, pero la cifra contra la que hoy se compara es la
            corregida, y es la que debe verse primero. {% endcomment %}
-        <tr class="superado">
-          <td class="signo"></td>
-          <th>Contado al cerrar
-            <span class="detalle">Lo que declaró el operador; se conserva como se firmó</span></th>
-          <td class="numero">{{ resumen.efectivo_declarado|pesos }}</td>
-        </tr>
+        {% if veredicto.efectivo_corregido %}
+          <tr class="superado">
+            <td class="signo"></td>
+            <th>Contado al cerrar
+              <span class="detalle">Lo que declaró el operador; se conserva como se firmó</span></th>
+            <td class="numero">{{ resumen.efectivo_declarado|pesos }}</td>
+          </tr>
+        {% else %}
+          {# Solo se corrigió el cambio de apertura: lo contado sigue vigente. #}
+          <tr>
+            <td class="signo"></td>
+            <th>Contado al cerrar</th>
+            <td class="numero">{{ resumen.efectivo_declarado|pesos }}</td>
+          </tr>
+        {% endif %}
         <tr class="superado">
           <td class="signo"></td>
           <th>Diferencia declarada al cerrar</th>
           <td class="numero">{{ turno_corte.diferencia|pesos_con_signo }}</td>
         </tr>
-        <tr>
-          <td class="signo"></td>
-          <th>Efectivo real, tras la corrección</th>
-          <td class="numero">{{ turno_corte.efectivo_ajustado|pesos }}</td>
-        </tr>
+        {% if veredicto.efectivo_corregido %}
+          <tr>
+            <td class="signo"></td>
+            <th>Efectivo real, tras la corrección</th>
+            <td class="numero">{{ turno_corte.efectivo_ajustado|pesos }}</td>
+          </tr>
+        {% endif %}
       {% else %}
         <tr>
           <td class="signo"></td>
@@ -186,6 +215,12 @@
       <a class="boton secundario angosto" href="{% url 'web:ajustar_corte' turno_id=turno_corte.pk %}">
         {% if veredicto.cuadra %}Corregir el corte…{% else %}Cuadrar el corte…{% endif %}
       </a>
+      {% comment %} Aparte y con su nombre: si lo que estaba mal fue el cambio de
+         apertura, «cuadrar» obligaría a declarar un efectivo que no existió
+         y esa cifra acabaría sumada en el reporte del periodo. {% endcomment %}
+      <a class="boton secundario angosto" href="{% url 'web:corregir_cambio' turno_id=turno_corte.pk %}">
+        Corregir el cambio de apertura…
+      </a>
     {% endif %}
   </div>
 </div>
@@ -216,6 +251,7 @@
         <span class="celda-dato" data-rotulo="Autorizó">{{ a.autorizo }}</span>
         <span class="celda-dato ancha">
           {{ a.get_motivo_display }}
+          {% if a.corrige_fondo %}<br>Cambio: {{ a.fondo_anterior|pesos }} → <strong>{{ a.fondo_nuevo|pesos }}</strong>{% endif %}
           <br><span class="ayuda">{{ a.justificacion }}</span>
         </span>
         <span class="celda-dato numero" data-rotulo="Diferencia">
@@ -223,7 +259,7 @@
           <strong>{{ a.diferencia_nueva|pesos_con_signo }}</strong>
         </span>
       </span>
-      <span class="celda-valor">{{ a.monto|pesos_con_signo }}</span>
+      <span class="celda-valor">{{ a.monto_mostrado|pesos_con_signo }}</span>
     </li>
   {% endfor %}
   </ul>

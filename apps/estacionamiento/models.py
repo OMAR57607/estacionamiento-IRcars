@@ -212,6 +212,31 @@ class Turno(models.Model):
         blank=True,
         help_text="Diferencia resultante del último ajuste aplicado.",
     )
+    # Corrección del cambio de apertura. El ajuste de arriba corrige lo
+    # contado; estos dos campos corrigen el otro lado de la resta, para el
+    # caso en que lo mal declarado fue el cambio con que se abrió —un turno
+    # abierto con $9,000 de cambio que nunca existieron—. `fondo_inicial` y
+    # `efectivo_esperado` conservan lo que se declaró y lo que de ahí resultó;
+    # aquí va la cifra que hoy se da por buena. `NULL` = nunca se corrigió.
+    fondo_ajustado = models.DecimalField(
+        "cambio de apertura corregido",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Cambio con que realmente abrió la caja. Vacío si el declarado "
+            "al abrir nunca se corrigió."
+        ),
+    )
+    esperado_ajustado = models.DecimalField(
+        "efectivo esperado corregido",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Efectivo esperado tras corregir el cambio de apertura.",
+    )
 
     class Meta:
         verbose_name = "turno"
@@ -256,8 +281,13 @@ class Turno(models.Model):
 
     @property
     def tiene_ajuste(self) -> bool:
-        """Si el corte fue corregido después de cerrarse."""
-        return self.efectivo_ajustado is not None
+        """Si el corte fue corregido después de cerrarse, en cualquier cifra."""
+        return self.efectivo_ajustado is not None or self.fondo_ajustado is not None
+
+    @property
+    def tiene_ajuste_fondo(self) -> bool:
+        """Si se corrigió el cambio con que se abrió."""
+        return self.fondo_ajustado is not None
 
     @property
     def efectivo_vigente(self) -> Decimal | None:
@@ -265,6 +295,26 @@ class Turno(models.Model):
         if self.efectivo_ajustado is not None:
             return self.efectivo_ajustado
         return self.efectivo_declarado
+
+    @property
+    def fondo_vigente(self) -> Decimal:
+        """Cambio de apertura que el corte da por bueno hoy."""
+        if self.fondo_ajustado is not None:
+            return self.fondo_ajustado
+        return self.fondo_inicial
+
+    @property
+    def esperado_vigente(self) -> Decimal | None:
+        """
+        Lo que debería haber en caja, ya con el cambio de apertura corregido.
+
+        Es la cifra contra la que se compara lo contado y la que suman los
+        reportes: sumar la del cierre contaría como esperado un cambio que
+        nunca estuvo en la caja.
+        """
+        if self.esperado_ajustado is not None:
+            return self.esperado_ajustado
+        return self.efectivo_esperado
 
     @property
     def diferencia_vigente(self) -> Decimal | None:
@@ -275,7 +325,10 @@ class Turno(models.Model):
         sigue disponible en `diferencia` y el comprobante muestra las dos:
         una sin la otra cuenta media historia.
         """
-        if self.efectivo_ajustado is not None:
+        # Se pregunta por la propia cifra y no por `efectivo_ajustado`: una
+        # corrección del cambio de apertura también mueve la diferencia sin
+        # tocar lo contado.
+        if self.diferencia_ajustada is not None:
             return self.diferencia_ajustada
         return self.diferencia
 
@@ -589,6 +642,15 @@ class MotivoAjuste(models.TextChoices):
     CAPTURA = "CAPTURA", "Error al teclear el efectivo declarado"
     RETIRO = "RETIRO", "Retiro de efectivo no descontado"
     OTRO = "OTRO", "Otro (se detalla en la justificación)"
+    # No es un motivo que se elija: lo pone el sistema en la corrección del
+    # cambio de apertura, que es otro asiento y otra pantalla. Va en la misma
+    # lista para que la bitácora de un turno se lea en una sola columna.
+    FONDO = "FONDO", "Cambio de apertura mal declarado"
+
+    @classmethod
+    def de_efectivo(cls) -> list[tuple[str, str]]:
+        """Los motivos que explican una corrección de lo contado."""
+        return [(valor, rotulo) for valor, rotulo in cls.choices if valor != cls.FONDO]
 
 
 class AjusteCorte(models.Model):
@@ -651,6 +713,23 @@ class AjusteCorte(models.Model):
         "diferencia después del ajuste", max_digits=12, decimal_places=2
     )
 
+    # --- Corrección del cambio de apertura ----------------------------------
+    #
+    # Vacíos en un ajuste de lo contado. Cuando llevan valor, el asiento
+    # corrige el cambio con que se abrió: `efectivo_esperado` guarda entonces
+    # el esperado ya corregido, lo contado no se mueve (`monto` vale cero) y
+    # el esperado anterior se deduce de estas dos cifras.
+    fondo_anterior = models.DecimalField(
+        "cambio de apertura antes de la corrección",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    fondo_nuevo = models.DecimalField(
+        "cambio de apertura real", max_digits=12, decimal_places=2, null=True, blank=True
+    )
+
     # --- Responsabilidad ----------------------------------------------------
     motivo = models.CharField(
         "motivo", max_length=20, choices=MotivoAjuste.choices
@@ -678,10 +757,15 @@ class AjusteCorte(models.Model):
         constraints = [
             # Un ajuste de cero no corrige nada y solo ensucia la bitácora.
             # Se impide en la base y no solo en el servicio: la restricción
-            # sobrevive a cualquier vía de entrada futura.
+            # sobrevive a cualquier vía de entrada futura. Un asiento mueve
+            # algo si cambia lo contado o si cambia el cambio de apertura.
             models.CheckConstraint(
-                condition=~models.Q(monto=Decimal("0.00")),
-                name="ck_ajuste_monto_no_cero",
+                condition=~models.Q(monto=Decimal("0.00"))
+                | (
+                    models.Q(fondo_anterior__isnull=False, fondo_nuevo__isnull=False)
+                    & ~models.Q(fondo_anterior=models.F("fondo_nuevo"))
+                ),
+                name="ck_ajuste_mueve_algo",
             ),
             # Un ajuste sin justificación escrita es indistinguible de un
             # faltante encubierto.
@@ -695,7 +779,34 @@ class AjusteCorte(models.Model):
         ]
 
     def __str__(self) -> str:
+        if self.corrige_fondo:
+            return (
+                f"Corrección del cambio de apertura de {self.monto_fondo:+.2f} "
+                f"al turno {self.turno_id}"
+            )
         return f"Ajuste de {self.monto:+.2f} al turno {self.turno_id}"
+
+    @property
+    def corrige_fondo(self) -> bool:
+        """Si el asiento corrige el cambio de apertura y no lo contado."""
+        return self.fondo_nuevo is not None
+
+    @property
+    def monto_fondo(self) -> Decimal | None:
+        """Lo que la corrección movió en el cambio de apertura."""
+        if self.fondo_nuevo is None or self.fondo_anterior is None:
+            return None
+        return self.fondo_nuevo - self.fondo_anterior
+
+    @property
+    def monto_mostrado(self) -> Decimal:
+        """
+        La cifra que el asiento movió, sea lo contado o el cambio.
+
+        La bitácora tiene una sola columna de importe; sin esto, una
+        corrección del cambio aparecería en ella como un ajuste de $0.00.
+        """
+        return self.monto_fondo if self.corrige_fondo else self.monto
 
 
 # --- Pensión diaria ----------------------------------------------------------

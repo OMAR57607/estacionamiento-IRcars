@@ -246,10 +246,10 @@
           </span>
           <span class="celda-datos">
             <span class="celda-dato">{{ t.operador }}{% if t.cerrado_por_otro %} · lo cerró {{ t.cerrado_por }}{% endif %}</span>
-            <span class="celda-dato numero" data-rotulo="Cambio">{{ t.fondo_inicial|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Cambio">{{ t.fondo_vigente|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Boletos">{{ t.total_cobrado|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Pensiones">{{ t.total_pensiones|pesos }}</span>
-            <span class="celda-dato numero" data-rotulo="Debería haber">{{ t.efectivo_esperado|pesos }}</span>
+            <span class="celda-dato numero" data-rotulo="Debería haber">{{ t.esperado_vigente|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Contado">{{ t.efectivo_vigente|pesos }}</span>
           </span>
           <span class="celda-acciones"><a href="{% url 'web:corte' t.pk %}">Ver corte</a></span>
