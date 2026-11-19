@@ -20,8 +20,10 @@ from django.utils import timezone
 
 from .domain.corte import (
     ResultadoAjuste,
+    ResultadoAjusteFondo,
     ResumenCorte,
     calcular_ajuste,
+    calcular_ajuste_fondo,
     calcular_corte,
     justificacion_suficiente,
 )
@@ -350,6 +352,13 @@ def veredicto_del_corte(turno: Turno) -> dict:
         "diferencia_original": turno.diferencia,
         "efectivo_vigente": turno.efectivo_vigente,
         "ajustado": turno.tiene_ajuste,
+        # Cuál de las dos cifras se corrigió. El comprobante las presenta
+        # distinto: una corrección del cambio mueve «Debería haber en caja»
+        # y deja intacto lo contado; una de lo contado, al revés.
+        "efectivo_corregido": turno.efectivo_ajustado is not None,
+        "fondo_corregido": turno.tiene_ajuste_fondo,
+        "fondo_vigente": turno.fondo_vigente,
+        "esperado_vigente": turno.esperado_vigente,
         "cuadra": vigente is not None and vigente == Decimal("0.00"),
         "hay_faltante": vigente is not None and vigente < 0,
         "hay_sobrante": vigente is not None and vigente > 0,
@@ -403,7 +412,10 @@ def ajustar_corte(
         raise ErrorConfiguracion("Capture el efectivo real que había en caja.")
     if efectivo_corregido < 0:
         raise ErrorConfiguracion("El efectivo real no puede ser negativo.")
-    if motivo not in MotivoAjuste.values:
+    # `FONDO` no se acepta aquí: es el motivo de la corrección del cambio de
+    # apertura (`corregir_fondo`). Un ajuste de lo contado rotulado así diría
+    # en la bitácora que se corrigió una cifra que nadie tocó.
+    if motivo not in MotivoAjuste.values or motivo == MotivoAjuste.FONDO:
         raise ErrorConfiguracion(f"Motivo de ajuste desconocido: {motivo!r}.")
     if not justificacion_suficiente(justificacion):
         raise AjusteNoAplicable(
@@ -424,7 +436,10 @@ def ajustar_corte(
     # fotografía y no se recalcula: recalcularlo ahora, con folios que pueden
     # haberse cobrado después, cambiaría la base contra la que el operador
     # contó y el ajuste dejaría de ser comparable con el cierre.
-    esperado = turno.efectivo_esperado
+    #
+    # Se lee el esperado **vigente**: si antes se corrigió el cambio de
+    # apertura, la base contra la que se compara lo contado es la corregida.
+    esperado = turno.esperado_vigente
     if esperado is None:
         raise AjusteNoAplicable(
             f"El turno {turno.pk} no tiene corte grabado y no puede ajustarse."
@@ -493,6 +508,143 @@ def ajustar_corte(
         resultado.diferencia_anterior,
         resultado.diferencia_nueva,
         motivo,
+    )
+    return turno, ajuste, resultado
+
+
+@transaction.atomic
+def corregir_fondo(
+    *,
+    turno_id: int,
+    fondo_corregido: Decimal,
+    justificacion: str,
+    autorizo,
+    momento: datetime | None = None,
+) -> tuple[Turno, AjusteCorte, ResultadoAjusteFondo]:
+    """
+    Caso de uso: corregir el cambio de apertura de un corte ya cerrado.
+
+    Nace de otro cierre equivocado en producción: un turno se abrió declarando
+    $9,000 de cambio que no existían. `ajustar_corte` no lo resolvía —solo
+    corrige lo contado— y usarlo para cuadrar obligaba a declarar $9,000 de
+    efectivo que nunca estuvieron, que después inflaban el efectivo esperado
+    y contado del periodo.
+
+    Mismo criterio que `ajustar_corte`:
+
+    * No reescribe `fondo_inicial` ni `efectivo_esperado`: lo declarado al
+      abrir y lo que el sistema calculó con ello quedan como se firmaron.
+    * Registra un asiento con el cambio anterior, el real, la justificación y
+      quién respondió, y deja en el turno las cifras vigentes
+      (`fondo_ajustado`, `esperado_ajustado`, `diferencia_ajustada`) para que
+      comprobante y reportes lean la realidad sin recorrer la bitácora.
+    * No toca lo contado. Si además el conteo estaba mal, eso se corrige
+      aparte con `ajustar_corte`; los dos asientos se acumulan.
+
+    Solo aplica a turnos cerrados: es la corrección de un corte. Quién puede
+    hacerlo lo decide la vista.
+    """
+    momento = momento or timezone.now()
+
+    if autorizo is None or not getattr(autorizo, "pk", None):
+        raise ErrorConfiguracion(
+            "La corrección del cambio de apertura requiere un administrador "
+            "identificado: una corrección de caja sin responsable no es "
+            "auditable."
+        )
+    if fondo_corregido is None:
+        raise ErrorConfiguracion("Capture el cambio con que realmente abrió la caja.")
+    if fondo_corregido < 0:
+        raise ErrorConfiguracion("El cambio de apertura no puede ser negativo.")
+    if not justificacion_suficiente(justificacion):
+        raise AjusteNoAplicable(
+            "Explique qué pasó. Una justificación de una palabra no permite "
+            "auditar la corrección meses después."
+        )
+
+    turno = Turno.objects.select_for_update().filter(pk=turno_id).first()
+    if turno is None:
+        raise ErrorConfiguracion(f"No existe el turno {turno_id}.")
+    if turno.estado != EstadoTurno.CERRADO:
+        raise AjusteNoAplicable(
+            f"El turno {turno.pk} todavía está abierto: no hay corte que "
+            "corregir."
+        )
+    if turno.esperado_vigente is None or turno.efectivo_vigente is None:
+        raise AjusteNoAplicable(
+            f"El turno {turno.pk} no tiene corte grabado y no puede corregirse."
+        )
+
+    resultado = calcular_ajuste_fondo(
+        fondo_vigente=turno.fondo_vigente,
+        fondo_corregido=fondo_corregido,
+        efectivo_esperado_vigente=turno.esperado_vigente,
+        efectivo_contado_vigente=turno.efectivo_vigente,
+    )
+    if resultado.sin_efecto:
+        raise AjusteNoAplicable(
+            "El cambio capturado es idéntico al que ya tiene el corte: no hay "
+            "nada que corregir."
+        )
+
+    ajuste = AjusteCorte.objects.create(
+        turno=turno,
+        # El esperado ya corregido: el asiento explica por sí solo la
+        # diferencia que deja. El anterior se deduce de las dos cifras del
+        # cambio.
+        efectivo_esperado=resultado.esperado_nuevo,
+        efectivo_anterior=resultado.efectivo_contado,
+        efectivo_nuevo=resultado.efectivo_contado,
+        monto=Decimal("0.00"),
+        diferencia_anterior=resultado.diferencia_anterior,
+        diferencia_nueva=resultado.diferencia_nueva,
+        fondo_anterior=resultado.fondo_anterior,
+        fondo_nuevo=resultado.fondo_nuevo,
+        motivo=MotivoAjuste.FONDO,
+        justificacion=justificacion.strip(),
+        autorizo=autorizo,
+        creado_en=momento,
+    )
+
+    turno.fondo_ajustado = resultado.fondo_nuevo
+    turno.esperado_ajustado = resultado.esperado_nuevo
+    turno.diferencia_ajustada = resultado.diferencia_nueva
+    resumen = dict(turno.resumen or {})
+    resumen.setdefault("ajustes", []).append(
+        {
+            **resultado.a_dict(),
+            "motivo": MotivoAjuste.FONDO.value,
+            "justificacion": justificacion.strip(),
+            "autorizo": getattr(autorizo, "username", str(autorizo)),
+            "registrado_en": momento.isoformat(),
+        }
+    )
+    resumen["diferencia_vigente"] = str(resultado.diferencia_nueva)
+    resumen["fondo_vigente"] = str(resultado.fondo_nuevo)
+    resumen["efectivo_esperado_vigente"] = str(resultado.esperado_nuevo)
+    turno.resumen = resumen
+    turno.save(
+        update_fields=[
+            "fondo_ajustado",
+            "esperado_ajustado",
+            "diferencia_ajustada",
+            "resumen",
+        ]
+    )
+
+    # WARNING siempre, por el mismo motivo que en `ajustar_corte`.
+    logger.warning(
+        "Cambio de apertura corregido | turno=%s autorizo=%s cambio=%s->%s "
+        "esperado=%s->%s contado=%s diferencia=%s->%s",
+        turno.pk,
+        getattr(autorizo, "username", autorizo),
+        resultado.fondo_anterior,
+        resultado.fondo_nuevo,
+        resultado.esperado_anterior,
+        resultado.esperado_nuevo,
+        resultado.efectivo_contado,
+        resultado.diferencia_anterior,
+        resultado.diferencia_nueva,
     )
     return turno, ajuste, resultado
 

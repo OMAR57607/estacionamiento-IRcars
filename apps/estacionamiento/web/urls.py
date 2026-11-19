@@ -27,6 +27,10 @@ urlpatterns = [
     # perfil administrativo, y la vista exige confirmar la contraseña antes
     # de aplicar nada.
     path("turno/<int:turno_id>/corte/ajustar/", views.ajustar_corte, name="ajustar_corte"),
+    # Corrección del cambio de apertura de un corte cerrado. Aparte de la
+    # anterior porque corrige otra cifra: aquélla, lo contado; ésta, el
+    # cambio con que se abrió y, con él, lo que debería haber en caja.
+    path("turno/<int:turno_id>/corte/cambio/", views.corregir_cambio, name="corregir_cambio"),
     path("reportes/", views.reportes, name="reportes"),
     # Métricas de operación: horas pico, clientes frecuentes y composición.
     # Separadas del reporte de folios porque responden a otra pregunta y

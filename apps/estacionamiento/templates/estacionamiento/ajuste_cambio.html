@@ -1,0 +1,127 @@
+{% extends "estacionamiento/base.html" %}
+{% load moneda %}
+
+{% block titulo %}Corregir el cambio de apertura del turno {{ turno_corte.pk }}{% endblock %}
+
+{% block contenido %}
+
+<div class="tarjeta">
+  <h2>Corregir el cambio de apertura del turno {{ turno_corte.pk }}</h2>
+
+  <p class="ayuda">
+    Use esta pantalla cuando el <strong>cambio con que se abrió la caja</strong>
+    se declaró mal. El cambio que capturó <strong>{{ turno_corte.operador }}</strong>
+    al abrir el {{ turno_corte.abierto_en|date:"d/m/Y" }} a las
+    {{ turno_corte.abierto_en|date:"H:i" }} <strong>no se reescribe</strong>:
+    queda registrado, y la corrección se guarda aparte con su explicación y su
+    firma. Lo que cambia es «Debería haber en caja», que se recalcula con el
+    cambio real. Lo contado al cerrar no se toca.
+  </p>
+
+  {% comment %} La misma cuenta que el comprobante y que la corrección de lo contado,
+     con los mismos rótulos y en el mismo orden. {% endcomment %}
+  <table class="cuenta">
+    <tbody>
+      <tr>
+        <td class="signo"></td>
+        <th>Cambio con que abrió{% if veredicto.fondo_corregido %}, tras correcciones previas{% endif %}
+          <span class="detalle">La cifra que se va a corregir</span></th>
+        <td class="numero">{{ veredicto.fondo_vigente|pesos }}</td>
+      </tr>
+      <tr>
+        <td class="signo">+</td>
+        <th>Boletos cobrados ({{ turno_corte.folios_cobrados }})</th>
+        <td class="numero">{{ turno_corte.total_cobrado|pesos }}</td>
+      </tr>
+      {% if turno_corte.pagos_pension %}
+        <tr>
+          <td class="signo">+</td>
+          <th>Pensiones cobradas ({{ turno_corte.pagos_pension }})</th>
+          <td class="numero">{{ turno_corte.total_pensiones|pesos }}</td>
+        </tr>
+      {% endif %}
+      <tr class="fila-total">
+        <td class="signo">=</td>
+        <th>Debería haber en caja</th>
+        <td class="numero">{{ veredicto.esperado_vigente|pesos }}</td>
+      </tr>
+      <tr>
+        <td class="signo"></td>
+        <th>Contado{% if veredicto.efectivo_corregido %}, tras correcciones previas{% else %} al cerrar{% endif %}</th>
+        <td class="numero">{{ veredicto.efectivo_vigente|pesos }}</td>
+      </tr>
+      <tr class="fila-total {% if veredicto.hay_faltante %}faltante{% elif veredicto.hay_sobrante %}sobrante{% else %}cuadra{% endif %}">
+        <td class="signo"></td>
+        <th>
+          {% if veredicto.hay_faltante %}FALTANTE{% elif veredicto.hay_sobrante %}SOBRANTE{% else %}DIFERENCIA{% endif %} actual
+          <span class="detalle">Contado menos lo que debería haber</span>
+        </th>
+        <td class="numero">{{ veredicto.diferencia|pesos_con_signo }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <div class="tarjeta">
+    <h2>La corrección</h2>
+
+    <div>
+      <label for="{{ form.cambio_real.id_for_label }}">{{ form.cambio_real.label }}</label>
+      {{ form.cambio_real }}
+      <p class="ayuda">{{ form.cambio_real.help_text }}</p>
+      {% for e in form.cambio_real.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="mt">
+      <label for="{{ form.justificacion.id_for_label }}">{{ form.justificacion.label }}</label>
+      {{ form.justificacion }}
+      <p class="ayuda">{{ form.justificacion.help_text }}</p>
+      {% for e in form.justificacion.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Confirme su contraseña</h2>
+    <p class="ayuda">
+      La misma con la que entró. La corrección se registra a nombre de
+      <strong>{{ request.user }}</strong>.
+    </p>
+    <label for="{{ form_clave.clave.id_for_label }}">{{ form_clave.clave.label }}</label>
+    {{ form_clave.clave }}
+    {% for e in form_clave.clave.errors %}<div class="aviso error">{{ e }}</div>{% endfor %}
+
+    <div class="acciones-fila mt">
+      <button type="submit" class="boton">Aplicar la corrección</button>
+      {# Angosto a propósito: salir no debe pesar en la pantalla lo mismo que aplicar. #}
+      <a class="boton secundario angosto" href="{% url 'web:corte' turno_id=turno_corte.pk %}">Cancelar</a>
+    </div>
+  </div>
+</form>
+
+{% if ajustes %}
+<div class="tarjeta">
+  <h2>Correcciones previas</h2>
+  <div class="tabla-envoltura">
+    <table>
+      <thead>
+        <tr><th>Cuándo</th><th>Autorizó</th><th>Motivo</th><th class="numero">Ajuste</th></tr>
+      </thead>
+      <tbody>
+      {% for a in ajustes %}
+        <tr>
+          <td>{{ a.creado_en|date:"d/m/Y H:i" }}</td>
+          <td>{{ a.autorizo }}</td>
+          <td>{{ a.get_motivo_display }}{% if a.corrige_fondo %}<br>Cambio: {{ a.fondo_anterior|pesos }} → {{ a.fondo_nuevo|pesos }}{% endif %}<br><span class="ayuda">{{ a.justificacion }}</span></td>
+          <td class="numero">{{ a.monto_mostrado|pesos_con_signo }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

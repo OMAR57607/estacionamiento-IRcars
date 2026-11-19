@@ -124,7 +124,7 @@ Cada término significa una sola cosa en toda la aplicación:
 | **Sin costo (cortesía)** | Salidas de $0 que no son de pensionado | ídem |
 | **Salidas** | Todas las salidas: cobradas, sin costo y de pensionado cubierto | `services_caja.reporte_por_rango` |
 | **Pensiones cobradas** | Pagos de pensión vigentes (no cancelados) | `services_caja._importes_pension_del_turno` |
-| **Debería haber en caja** | Cambio + boletos cobrados + pensiones cobradas | `calcular_corte` |
+| **Debería haber en caja** | Cambio + boletos cobrados + pensiones cobradas; el **vigente** si se corrigió el cambio de apertura | `calcular_corte`, `Turno.esperado_vigente` |
 | **Diferencia** | Contado − debería haber; la **vigente** (corregida) si hubo ajuste | `Turno.diferencia_vigente` |
 
 Dos reglas de presentación que no se negocian:
@@ -183,6 +183,28 @@ contra-asienta— y por el mismo motivo.
 Cada ajuste se registra en la bitácora en nivel `WARNING`, incluso cuando deja
 la caja cuadrada: un patrón de correcciones que siempre cuadran es exactamente
 lo que se vería si alguien usara esta función para tapar faltantes.
+
+### Corrección del cambio de apertura
+
+El ajuste anterior corrige **lo contado**. No sirve cuando lo mal declarado fue
+el **cambio con que se abrió**: un turno se abrió con $9,000 de cambio que no
+existían, «Debería haber en caja» quedó inflado en esa cifra y la única forma
+de cuadrar era declarar como contado un efectivo que tampoco existió —que
+después se sumaba en el efectivo esperado del periodo—.
+
+Desde el comprobante, *Corregir el cambio de apertura…*
+(`/turno/<id>/corte/cambio/`, `services_caja.corregir_fondo`):
+
+- **Lo declarado al abrir no se toca.** `Turno.fondo_inicial` y
+  `Turno.efectivo_esperado` conservan lo que se capturó y lo que de ahí resultó.
+- **La cifra vigente va aparte**, en `Turno.fondo_ajustado` y
+  `Turno.esperado_ajustado`, y el asiento en la misma bitácora (`AjusteCorte`,
+  motivo `FONDO`, con `fondo_anterior` y `fondo_nuevo`).
+- **Lo contado no se mueve.** Si además el conteo estaba mal, se corrige con el
+  ajuste de siempre; los dos asientos se acumulan en cualquier orden.
+- **Todo lector usa la cifra vigente**: comprobante, histórico de turnos,
+  métricas y PDF leen `Turno.fondo_vigente` y `Turno.esperado_vigente`.
+- Mismas reglas de acceso: perfil administrativo, turno cerrado, contraseña.
 
 ---
 
@@ -333,10 +355,11 @@ pytest                                                    # suite completa
 pytest apps/estacionamiento/tests/test_tarifas.py         # solo el motor de cobro
 pytest apps/estacionamiento/tests/test_corte.py           # solo el corte de caja
 pytest apps/estacionamiento/tests/test_ajuste_corte.py    # solo la corrección del corte
+pytest apps/estacionamiento/tests/test_ajuste_fondo.py    # solo la corrección del cambio de apertura
 pytest apps/estacionamiento/tests/test_metricas.py        # solo las métricas
 ```
 
-La suite cubre **555 casos**, verificados contra **PostgreSQL 16 y SQLite**:
+La suite cubre **621 casos**, verificados contra **PostgreSQL 16 y SQLite**:
 
 - **Motor de tarifas**: fronteras de cortesía, proporcionalidad, cobro mínimo,
   tope por día natural, precisión monetaria, validación de parámetros.

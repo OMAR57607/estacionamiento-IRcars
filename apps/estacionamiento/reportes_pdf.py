@@ -699,7 +699,7 @@ def construir_reporte(metricas: dict, *, resumen: dict, solicitado_por: str = ""
                     Paragraph(str(t.operador), estilos["celda"]),
                     timezone.localtime(t.cerrado_en).strftime("%d/%m %H:%M") if t.cerrado_en else "—",
                     pesos(t.total_cobrado),
-                    pesos(t.efectivo_esperado),
+                    pesos(t.esperado_vigente),
                     pesos(t.efectivo_vigente),
                     pesos_con_signo(t.diferencia),
                     pesos_con_signo(t.diferencia_vigente) + (" *" if t.tiene_ajuste else ""),
