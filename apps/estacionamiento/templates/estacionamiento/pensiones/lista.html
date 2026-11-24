@@ -52,7 +52,10 @@
     {% if filtro %}<input type="hidden" name="estado" value="{{ filtro }}">{% endif %}
   </form>
 
-  <nav class="segmentado mt" aria-label="Filtrar por estado">
+  {% comment %} Fichas que se deslizan de lado: los cinco estados caben en un
+     renglón y ninguno queda solo y a lo ancho como si fuera el principal.
+     {% endcomment %}
+  <nav class="segmentado fichas mt" aria-label="Filtrar por estado">
     {% for clave, etiqueta in filtros %}
       <a href="?estado={{ clave }}{% if texto %}&amp;q={{ texto|urlencode }}{% endif %}"
          {% if clave == filtro %}class="elegido" aria-current="true"{% endif %}>{{ etiqueta }}</a>
@@ -63,11 +66,11 @@
 <div class="tarjeta">
   <h2>{{ total }} {% if total == 1 %}pensión{% else %}pensiones{% endif %}{% if texto %} para «{{ texto }}»{% endif %}</h2>
   {% if filas %}
-    <ul class="lista" style="--columnas:9rem 1fr 1fr auto">
+    <ul class="lista en-linea" style="--columnas:10rem 1fr 1fr auto">
     {% for fila in filas %}
       {% with p=fila.pension %}
       <li class="lista-fila">
-        <span class="celda-principal">{{ p.placa }}</span>
+        <span class="celda-principal"><span class="placa-chip">{{ p.placa }}</span></span>
         <span class="celda-datos">
           <span class="celda-dato">
             {% if p.estado == 'BAJA' %}

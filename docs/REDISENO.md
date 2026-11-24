@@ -693,3 +693,32 @@ Observabilidad: bitácora `INFO` en alta, cobro, entrada y salida de pensión;
 - La pantalla coincide con `docs/rediseno/maqueta.html` en estructura,
   jerarquía y componentes.
 - `README.md` y `CASETA.md` describen lo construido.
+
+---
+
+## 12. Segunda pasada visual (24/11/2026)
+
+Refresco de apariencia y ergonomía sobre lo construido. **No cambia ningún
+flujo, regla de negocio, URL ni texto que fijen las pruebas.** Todo vive en
+`estilos.css` salvo los cambios de marcado listados abajo; cada decisión
+lleva su porqué en un comentario junto a la regla.
+
+| Cambio | Dónde | Motivo |
+|---|---|---|
+| Sombras en dos capas, bordes más tenues, radios 16/10 px | tokens | Separar capas sin filetes que compitan con el dato |
+| Foco como halo (`--halo-foco`) | `.campo:focus`, `.tarjeta.destacada` | El campo ya no se desplaza al enfocarlo; se conserva un contorno transparente para alto contraste de Windows |
+| Títulos de tarjeta en redonda y con peso | `.tarjeta h2` | Antes eran del mismo gris que las notas |
+| Placa como matrícula (`.placa-chip`) y campo de placa centrado | patio, lista de pensiones, captura | Es el dato que se compara con el parabrisas |
+| Medidor de ocupación (`.ocupacion`, `.medidor`) | `caja.html` | Sustituye tres indicadores que había que restar de cabeza; ámbar desde 85 %, rojo lleno, siempre con palabra |
+| Acción secundaria de la fila en icono (`.boton.solo-icono`) | patio | Con rótulo, los dos botones se apilaban y cada vehículo ocupaba el doble de alto |
+| Acciones en línea en el teléfono (`.lista.en-linea`) | lista de pensiones | Mismo motivo |
+| Filtros como fichas deslizables (`nav.segmentado.fichas`) | lista de pensiones | Cinco estados partían en dos renglones; «Días a pagar» no cambia |
+| Cuatro indicadores en 2×2 en el teléfono | `.indicadores:has(...)` | Evitaba tres más uno huérfano |
+| Inicial del operador (`.avatar`), punto verde en «Turno N», cápsula en el destino activo | cabecera y barra inferior | Estado de un vistazo, sin depender solo del color |
+| Enlaces con el color de acción | `a`, `:where(a:hover)` | Salían con el azul/morado del navegador, ilegibles en tema oscuro |
+| Fondo con degradado en el acceso | `body.acceso` | Sin imágenes ni recursos remotos |
+
+Se mantiene: sin dependencias, sin fuentes remotas, sin JavaScript nuevo,
+colores solo en la hoja, QR sobre blanco, comprobante impreso con la misma
+forma. Las mejoras que dependen de `:has`, `color-mix` o `backdrop-filter`
+tienen un valor de reserva equivalente en navegadores que no las admiten.
