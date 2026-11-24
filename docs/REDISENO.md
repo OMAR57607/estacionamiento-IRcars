@@ -717,6 +717,7 @@ lleva su porqué en un comentario junto a la regla.
 | Inicial del operador (`.avatar`), punto verde en «Turno N», cápsula en el destino activo | cabecera y barra inferior | Estado de un vistazo, sin depender solo del color |
 | Enlaces con el color de acción | `a`, `:where(a:hover)` | Salían con el azul/morado del navegador, ilegibles en tema oscuro |
 | Fondo con degradado en el acceso | `body.acceso` | Sin imágenes ni recursos remotos |
+| Boleto del cliente con la identidad de la caja | `apps/boletos/templates/boletos/*.html` | Usaba una paleta pizarra genérica, ajena a la marca. Franja grafito, placa como matrícula, estado en píldora con punto, y placa, estado e importe unidos en un «ticket» con corte perforado. Los estilos siguen en línea —una sola petición en la rampa de salida— y copian los tokens de `estilos.css`: si cambia uno, cámbielo en los dos sitios |
 
 Se mantiene: sin dependencias, sin fuentes remotas, sin JavaScript nuevo,
 colores solo en la hoja, QR sobre blanco, comprobante impreso con la misma

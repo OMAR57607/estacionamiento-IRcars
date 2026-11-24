@@ -7,7 +7,10 @@
    esta etiqueta la respalda para los rastreadores que solo leen el documento. {% endcomment %}
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#0f172a">
+{% comment %} El grafito de la marca, el mismo de la caja: la barra del navegador
+   continúa la franja superior del boleto sin un corte de color. {% endcomment %}
+<meta name="theme-color" content="#1f2128" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
 {% comment %} El icono de la pestaña. Sin estas etiquetas el navegador pide
    `/favicon.ico` a la raíz del sitio y recibe un 404 —se vio en los registros
    del servidor con un teléfono real—. El de 192 px es el mismo archivo que ya
@@ -21,73 +24,164 @@
    de salida, con una barra de señal y prisa detrás. Una sola petición HTTP es
    la diferencia entre que cargue y que no. {% endcomment %}
 <style>
+  /* Mismos tokens que la caja (`estilos.css`): el cliente ve la marca del
+     negocio —grafito y plata— y no una página genérica. Se copian aquí y no
+     se enlaza la hoja por lo dicho arriba: una sola petición. Si cambia un
+     token de la caja, cámbielo también aquí. */
   :root {
-    --fondo: #f1f5f9; --tarjeta: #ffffff; --texto: #0f172a; --tenue: #64748b;
-    --borde: #e2e8f0; --acento: #1d4ed8; --exito: #15803d; --alerta: #b45309;
+    color-scheme: light dark;
+    --marca: #1f2128; --sobre-marca: #f2f3f5; --marca-plata: #c9ccd3;
+    --fondo: #f2f3f6; --tarjeta: #ffffff; --tarjeta-alt: #f6f7f9;
+    --texto: #16181d; --tenue: #5b616c; --borde: #e1e4e9; --borde-fuerte: #b9bec7;
+    --acento: #1b4f91; --acento-oscuro: #143a6b; --acento-tenue: #eaf1fa; --sobre-acento: #ffffff;
+    --exito: #1b6b2f; --exito-fondo: #e8f5ec;
+    --alerta: #8a5a00; --alerta-fondo: #fdf4e3;
+    --pension: #5b3fa8; --pension-fondo: #efeafb;
+    --placa-fondo: #ffffff; --placa-borde: #2b2f37;
+    --sombra: 0 1px 2px rgba(16, 20, 28, 0.05), 0 2px 8px rgba(16, 20, 28, 0.04);
+    --sombra-elevada: 0 2px 4px rgba(16, 20, 28, 0.06), 0 16px 40px rgba(16, 20, 28, 0.14);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --fondo: #0f172a; --tarjeta: #1e293b; --texto: #f8fafc; --tenue: #94a3b8;
-      --borde: #334155; --acento: #60a5fa; --exito: #4ade80; --alerta: #fbbf24;
+      --marca: #15171c; --sobre-marca: #e8eaee; --marca-plata: #a9adb6;
+      --fondo: #0e1014; --tarjeta: #171a20; --tarjeta-alt: #1f232a;
+      --texto: #e9ebef; --tenue: #9da3ae; --borde: #2a2f38; --borde-fuerte: #434a56;
+      --acento: #5b9bf0; --acento-oscuro: #7fb3f5; --acento-tenue: #16263d; --sobre-acento: #0b1420;
+      --exito: #5fd38a; --exito-fondo: #10291b;
+      --alerta: #e3ad4a; --alerta-fondo: #2c2110;
+      --pension: #b8a4f2; --pension-fondo: #231c3b;
+      --placa-fondo: #1f232a; --placa-borde: #a9adb6;
+      --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --sombra-elevada: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.5);
     }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 16px;
+    margin: 0; padding: 0 16px 24px;
     background: var(--fondo); color: var(--texto);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    position: relative;
+  }
+  /* Franja de marca detrás de la cabecera, con el brillo plata de la pantalla
+     de acceso de la caja. Es un degradado, no una imagen: nada que descargar
+     con una barra de señal. El boleto se monta encima, como un ticket. */
+  body::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 230px;
+    background: var(--marca);
+    background-image: radial-gradient(120% 90% at 50% -20%, rgba(201, 204, 211, 0.22), transparent 65%);
+    z-index: -1;
   }
   .boleto { max-width: 420px; margin: 0 auto; }
-  .marca { text-align: center; margin-bottom: 14px; }
+  .marca { text-align: center; padding: 22px 0 18px; }
   .marca-logo {
-    width: 72px; height: 72px; border-radius: 16px; display: block;
+    width: 64px; height: 64px; border-radius: 16px; display: block;
     margin: 0 auto 8px;
+    box-shadow: 0 0 0 1px rgba(201, 204, 211, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
   }
   .marca-nombre {
-    font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--tenue); margin: 0;
+    font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--sobre-marca); opacity: 0.9; margin: 0;
   }
   .tarjeta {
     background: var(--tarjeta); border: 1px solid var(--borde);
-    border-radius: 14px; padding: 20px; margin-bottom: 12px;
+    border-radius: 16px; padding: 20px; margin-bottom: 12px;
+    box-shadow: var(--sombra);
   }
+  /* El boleto propiamente dicho: placa, estado e importe en una sola pieza,
+     separados por un corte perforado como el de un ticket de papel. Es lo
+     que el cliente enseña o consulta; el resto de la página es referencia. */
+  .ticket { padding: 0; box-shadow: var(--sombra-elevada); border: 0; overflow: hidden; }
+  .ticket-cabeza { padding: 24px 20px 20px; text-align: center; }
+  .ticket-corte {
+    position: relative; height: 0; margin: 0 18px;
+    border-top: 2px dashed var(--borde);
+  }
+  .ticket-corte::before, .ticket-corte::after {
+    content: ""; position: absolute; top: -12px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--fondo);
+  }
+  .ticket-corte::before { left: -30px; }
+  .ticket-corte::after { right: -30px; }
+  /* La placa con aspecto de matrícula, como en la caja: el cliente la
+     reconoce como la suya aunque vaya enmascarada. */
   .placa {
-    font-size: 2rem; font-weight: 700; letter-spacing: 0.12em;
-    text-align: center; margin: 0; font-variant-numeric: tabular-nums;
+    display: inline-block; margin: 0;
+    font-family: var(--mono); font-size: 1.9rem; font-weight: 700;
+    letter-spacing: 0.12em; line-height: 1.2;
+    padding: 6px 16px;
+    background: var(--placa-fondo); color: var(--texto);
+    border: 2px solid var(--placa-borde); border-radius: 10px;
+    box-shadow: inset 0 0 0 3px var(--placa-fondo), inset 0 0 0 4px var(--borde);
   }
-  .nota-placa { text-align: center; color: var(--tenue); font-size: 0.75rem; margin: 6px 0 0; }
+  .nota-placa { color: var(--tenue); font-size: 0.75rem; margin: 10px 0 0; }
+  /* Estado en píldora con punto: la palabra informa, el color refuerza. El
+     punto late solo mientras el vehículo está dentro, porque es lo único
+     que sigue cambiando; quien pidió menos movimiento lo ve quieto. */
   .estado {
-    display: block; width: fit-content; margin: 14px auto 0;
-    padding: 4px 14px; border-radius: 999px;
-    font-size: 0.8rem; font-weight: 600;
-    border: 1px solid currentColor;
+    display: inline-flex; align-items: center; gap: 8px;
+    margin: 16px auto 0; padding: 6px 14px; border-radius: 999px;
+    font-size: 0.82rem; font-weight: 650;
   }
-  .estado.dentro { color: var(--acento); }
-  .estado.liquidado { color: var(--exito); }
-  .estado.cancelado { color: var(--alerta); }
-  .importe { text-align: center; }
-  .importe .rotulo { color: var(--tenue); font-size: 0.85rem; margin: 0; }
+  .estado::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor;
+  }
+  .estado.dentro { color: var(--acento); background: var(--acento-tenue); }
+  .estado.dentro::before { animation: latido 1.8s ease-in-out infinite; }
+  .estado.liquidado { color: var(--exito); background: var(--exito-fondo); }
+  .estado.cancelado { color: var(--alerta); background: var(--alerta-fondo); }
+  @keyframes latido {
+    0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+    50% { box-shadow: 0 0 0 5px transparent; opacity: 0.55; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .estado.dentro::before { animation: none; }
+  }
+  .importe { text-align: center; padding: 20px 20px 24px; }
+  .importe .rotulo { color: var(--tenue); font-size: 0.85rem; font-weight: 600; margin: 0; }
   .importe .cifra {
-    font-size: 2.6rem; font-weight: 700; margin: 4px 0;
-    font-variant-numeric: tabular-nums;
+    font-size: 3rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.1;
+    margin: 6px 0; font-variant-numeric: tabular-nums;
   }
-  .importe .pie { color: var(--tenue); font-size: 0.75rem; margin: 0; }
-  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+  .importe .pie { color: var(--tenue); font-size: 0.78rem; margin: 0; }
+  .importe.de-pension .rotulo { color: var(--pension); font-size: 1rem; }
+  /* Pares rótulo · valor en renglones con filete, como la cuenta del corte:
+     se leen de izquierda a derecha sin perder el renglón. */
+  dl { margin: 0; }
+  .par { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; }
+  .par + .par { border-top: 1px solid var(--borde); }
+  .par:first-child { padding-top: 0; }
+  .par:last-child { padding-bottom: 0; }
   dt { color: var(--tenue); font-size: 0.9rem; }
-  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
-       color: var(--tenue); margin: 0 0 12px; }
+  dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 1rem; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 12px; }
   .accion {
-    display: block; text-align: center; text-decoration: none;
-    background: var(--acento); color: #fff; font-weight: 600;
-    padding: 14px; border-radius: 12px; margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 52px; text-decoration: none;
+    background: var(--acento); color: var(--sobre-acento); font-weight: 600; font-size: 1.05rem;
+    padding: 12px 16px; border-radius: 12px; margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(16, 20, 28, 0.12);
+    transition: background 140ms ease, transform 140ms ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  @media (prefers-color-scheme: dark) { .accion { color: #0f172a; } }
+  .accion:hover { background: var(--acento-oscuro); }
+  .accion:active { transform: scale(0.98); }
+  .accion svg { width: 20px; height: 20px; }
+  .accion:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
   .legal { color: var(--tenue); font-size: 0.75rem; margin: 0; }
   .folio { text-align: center; color: var(--tenue); font-size: 0.7rem;
-           margin-top: 16px; font-family: ui-monospace, monospace; }
-  @media print { .accion { display: none; } body { background: #fff; } }
+           margin-top: 16px; font-family: var(--mono); letter-spacing: 0.05em; }
+  @media print {
+    .accion { display: none; }
+    body { background: #fff; color: #000; }
+    body::before { display: none; }
+    .marca-nombre { color: #000; }
+    .tarjeta, .ticket { box-shadow: none; border: 1px solid #ccc; }
+    .estado.dentro::before { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -103,27 +197,33 @@
        Si no cargara, el nombre de debajo sigue identificando al
        estacionamiento: la página no depende de ella. {% endcomment %}
     <img class="marca-logo" src="{% static 'estacionamiento/icono-192.png' %}"
-         alt="" width="72" height="72">
+         alt="" width="64" height="64">
     <p class="marca-nombre">{{ nombre_comercial }}</p>
   </header>
 
-  <section class="tarjeta">
-    <p class="placa">{{ boleto.placa_enmascarada }}</p>
-    {% comment %} Se explica el enmascarado para que el cliente no crea que es un error de
-       captura. Sin esta línea, la duda llega a la caseta como una queja. {% endcomment %}
-    <p class="nota-placa">Mostramos su placa parcialmente para proteger sus datos.</p>
+  {% comment %} Placa, estado e importe forman una sola pieza, el «ticket», con un
+     corte perforado entre la identidad del vehículo y lo que debe. Antes eran
+     dos tarjetas sueltas y el importe se leía como un dato más de la página.
+     {% endcomment %}
+  <section class="tarjeta ticket">
+    <div class="ticket-cabeza">
+      <p class="placa">{{ boleto.placa_enmascarada }}</p>
+      {% comment %} Se explica el enmascarado para que el cliente no crea que es un error de
+         captura. Sin esta línea, la duda llega a la caseta como una queja. {% endcomment %}
+      <p class="nota-placa">Mostramos su placa parcialmente para proteger sus datos.</p>
 
-    {% if boleto.estado == 'ABIERTO' %}
-      <span class="estado dentro">En el estacionamiento</span>
-    {% elif boleto.estado == 'CERRADO' %}
-      <span class="estado liquidado">Liquidado</span>
-    {% else %}
-      <span class="estado cancelado">Cancelado</span>
-    {% endif %}
-  </section>
+      {% if boleto.estado == 'ABIERTO' %}
+        <span class="estado dentro">En el estacionamiento</span>
+      {% elif boleto.estado == 'CERRADO' %}
+        <span class="estado liquidado">Liquidado</span>
+      {% else %}
+        <span class="estado cancelado">Cancelado</span>
+      {% endif %}
+    </div>
 
   {% if boleto.estado != 'CANCELADO' %}
-  <section class="tarjeta importe">
+  <div class="ticket-corte" aria-hidden="true"></div>
+  <div class="importe{% if boleto.es_pension and boleto.estado == 'ABIERTO' %} de-pension{% endif %}">
     {% if boleto.es_pension and boleto.estado == 'ABIERTO' %}
       <p class="rotulo">Vehículo en pensión</p>
       <p class="pie">
@@ -142,27 +242,36 @@
       <p class="cifra">{{ importe|pesos }}</p>
       <p class="pie">Salida registrada a las {{ boleto.salida_en|time:"H:i" }}.</p>
     {% endif %}
-  </section>
+  </div>
   {% endif %}
+  </section>
 
   <section class="tarjeta">
     <dl>
-      <dt>Entrada</dt>
-      <dd>{{ boleto.entrada_en|date:"d/m/Y H:i" }}</dd>
+      <div class="par">
+        <dt>Entrada</dt>
+        <dd>{{ boleto.entrada_en|date:"d/m/Y H:i" }}</dd>
+      </div>
 
       {% if boleto.salida_en %}
-        <dt>Salida</dt>
-        <dd>{{ boleto.salida_en|date:"d/m/Y H:i" }}</dd>
+        <div class="par">
+          <dt>Salida</dt>
+          <dd>{{ boleto.salida_en|date:"d/m/Y H:i" }}</dd>
+        </div>
       {% endif %}
 
       {% if minutos is not None %}
-        <dt>Permanencia</dt>
-        <dd>{{ minutos|duracion }}</dd>
+        <div class="par">
+          <dt>Permanencia</dt>
+          <dd>{{ minutos|duracion }}</dd>
+        </div>
       {% endif %}
 
       {% if boleto.ubicacion %}
-        <dt>Cajón</dt>
-        <dd>{{ boleto.ubicacion }}</dd>
+        <div class="par">
+          <dt>Cajón</dt>
+          <dd>{{ boleto.ubicacion }}</dd>
+        </div>
       {% endif %}
     </dl>
   </section>
@@ -171,45 +280,63 @@
     {% comment %} Enlace a la misma dirección en lugar de recarga automática: un
        `meta refresh` consumiría datos y batería del cliente sin pedírselo, y
        la cifra solo le interesa cuando está por salir. {% endcomment %}
-    <a class="accion" href="">Actualizar importe</a>
+    <a class="accion" href="">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>
+      </svg>
+      Actualizar importe
+    </a>
   {% endif %}
 
   <section class="tarjeta">
     <h2>Precio exhibido al ingresar</h2>
     <dl>
-      <dt>Cuota por hora</dt>
-      <dd>{{ boleto.cuota_hora|pesos }}</dd>
+      <div class="par">
+        <dt>Cuota por hora</dt>
+        <dd>{{ boleto.cuota_hora|pesos }}</dd>
+      </div>
 
       {% if boleto.minutos_cortesia %}
-        <dt>Cortesía</dt>
-        <dd>{{ boleto.minutos_cortesia }} min</dd>
+        <div class="par">
+          <dt>Cortesía</dt>
+          <dd>{{ boleto.minutos_cortesia }} min</dd>
+        </div>
       {% endif %}
 
-      <dt>Se cobra por</dt>
-      <dd>
-        {% if boleto.fraccion_minutos == 1 %}
-          minuto exacto
-        {% else %}
-          bloques de {{ boleto.fraccion_minutos }} min
-        {% endif %}
-      </dd>
+      <div class="par">
+        <dt>Se cobra por</dt>
+        <dd>
+          {% if boleto.fraccion_minutos == 1 %}
+            minuto exacto
+          {% else %}
+            bloques de {{ boleto.fraccion_minutos }} min
+          {% endif %}
+        </dd>
+      </div>
 
       {% comment %} La tolerancia cambia el importe de forma escalonada, así que se
          exhibe junto al resto del cuadro y no en letra pequeña: es la regla
          que explica por qué 1:16 cuesta el doble que 1:10. {% endcomment %}
       {% if boleto.minutos_tolerancia %}
-        <dt>Tolerancia</dt>
-        <dd>{{ boleto.minutos_tolerancia }} min por hora</dd>
+        <div class="par">
+          <dt>Tolerancia</dt>
+          <dd>{{ boleto.minutos_tolerancia }} min por hora</dd>
+        </div>
       {% endif %}
 
       {% if boleto.cobro_minimo %}
-        <dt>Cobro mínimo</dt>
-        <dd>{{ boleto.cobro_minimo|pesos }}</dd>
+        <div class="par">
+          <dt>Cobro mínimo</dt>
+          <dd>{{ boleto.cobro_minimo|pesos }}</dd>
+        </div>
       {% endif %}
 
       {% if boleto.tope_diario %}
-        <dt>Máximo por día</dt>
-        <dd>{{ boleto.tope_diario|pesos }}</dd>
+        <div class="par">
+          <dt>Máximo por día</dt>
+          <dd>{{ boleto.tope_diario|pesos }}</dd>
+        </div>
       {% endif %}
     </dl>
   </section>
