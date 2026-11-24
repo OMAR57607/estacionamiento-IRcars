@@ -71,3 +71,63 @@ class TestFormatos:
         marcado = qr.svg_qr("https://boletos.ejemplo.mx/t/abc/")
         assert marcado.lstrip().startswith("<svg")
         assert "<?xml" not in marcado
+
+
+class TestLogotipo:
+    """
+    El logotipo al centro del código.
+
+    Que el símbolo se siga leyendo con el logotipo encima se midió con lectores
+    reales (`scripts/verificar_qr_logo.py`, que necesita bibliotecas que no
+    son del proyecto). Aquí se fija lo que hace posible ese resultado: el
+    nivel de corrección, el tamaño y la posición del recuadro.
+    """
+
+    URL = "https://boletos.ejemplo.mx/t/60b86282-1bc8-4764-82c9-ac647d8d62d6/"
+
+    def test_sin_logotipo_el_codigo_no_cambia(self, servicio_configurado):
+        """Quien no pide logotipo recibe el mismo símbolo de nivel medio de antes."""
+        marcado = qr.svg_qr(self.URL)
+        assert "<image" not in marcado
+        assert marcado == qr._simbolo(self.URL).svg_inline(scale=5)
+
+    def test_con_logotipo_sube_a_correccion_alta(self, servicio_configurado):
+        """
+        El logotipo tapa módulos: sin la redundancia del nivel alto, una arruga
+        o un reflejo bastarían para que el código dejara de leerse.
+        """
+        assert qr.CORRECCION_CON_LOGO == "h"
+        alto = qr._simbolo(self.URL, correccion=qr.CORRECCION_CON_LOGO)
+        lado = (alto.symbol_size(border=0)[0] + 2 * qr.BORDE_SVG) * 6
+        marcado = qr.svg_qr(self.URL, escala=6, logo_url="/static/logo.png")
+        assert f'width="{lado}"' in marcado, "El símbolo no es el de nivel alto"
+
+    def test_el_logotipo_va_dentro_del_svg_y_escala_con_el(self, servicio_configurado):
+        """
+        Sin `viewBox`, la hoja de estilos que limita el ancho recortaba el
+        código en lugar de reducirlo: con el nivel alto ya no cabía entero.
+        """
+        marcado = qr.svg_qr(self.URL, escala=6, logo_url="/static/logo.png")
+        assert "viewBox=" in marcado
+        assert '<image href="/static/logo.png"' in marcado
+        assert marcado.rstrip().endswith("</svg>")
+
+    def test_la_direccion_del_logotipo_se_escapa(self, servicio_configurado):
+        """Va dentro de un atributo: unas comillas no deben poder cerrarlo."""
+        marcado = qr.svg_qr(self.URL, logo_url='/s/a"onload="x.png')
+        assert 'a"onload' not in marcado
+        assert "&quot;" in marcado
+
+    @pytest.mark.parametrize("version", range(1, 41))
+    def test_el_recuadro_queda_centrado_y_lejos_de_las_esquinas(self, version):
+        """
+        Centrado exacto —mismos módulos a cada lado— y sin tocar los patrones
+        de las esquinas ni su separador, que son lo que el lector busca
+        primero para encontrar el código.
+        """
+        modulos = 17 + 4 * version
+        lado = qr.modulos_del_logo(modulos)
+        margen = (modulos - lado) // 2
+        assert margen * 2 + lado == modulos
+        assert margen > 8
+        assert lado / modulos <= qr.PROPORCION_LOGO + 0.02

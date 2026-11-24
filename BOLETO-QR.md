@@ -28,6 +28,26 @@ El identificador es un **UUID versión 4**, aleatorio. No es el número de folio
 ni se deriva de él: una dirección enumerable permitiría recorrer los boletos
 del estacionamiento cambiando un dígito.
 
+### El logotipo al centro del código
+
+El QR que el operador enseña lleva el logotipo RJ CARS al centro, dibujado
+dentro del propio SVG (`apps/boletos/qr.py`). Para que se siga leyendo:
+
+- La corrección de errores sube de media (15 %) a **alta (30 %)**: el lector
+  da por dañados los módulos que tapa el logotipo y los reconstruye. El
+  símbolo pasa de la versión 5 a la 8 para una dirección típica.
+- El recuadro mide el **18 % del ancho** (≈3 % del área), alineado a módulos
+  enteros, centrado y lejos de los patrones de las esquinas.
+- Si el logotipo no carga, queda un recuadro blanco y el código se lee igual.
+
+El 18 % se midió, no se eligió a ojo: con `scripts/verificar_qr_logo.py`
+(ZXing y OpenCV, 19 condiciones de giro, desenfoque, tamaño y perspectiva,
+direcciones de 66 a 96 caracteres) el código con logotipo se lee en los
+mismos casos que el anterior sin él; al 22 % fallaban dos giros más. Repita la
+medición antes de cambiar el tamaño o el nivel de corrección.
+
+El boleto público (`/t/<uuid>/`) no lleva QR y no cambia.
+
 ---
 
 ## Qué protege la página

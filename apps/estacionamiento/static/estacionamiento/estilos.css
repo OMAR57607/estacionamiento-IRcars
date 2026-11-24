@@ -1464,7 +1464,10 @@ body.acceso .contenido { max-width: none; padding: 0; }
   line-height: 0;
 }
 
-.qr-marco svg { width: 100%; max-width: 280px; height: auto; display: block; }
+/* 300 px y no 280: con el logotipo el símbolo usa corrección alta y tiene más
+   módulos por lado (57 con la zona de silencio, antes 45). A 300 px cada
+   módulo mide más de 5 px, holgado para la cámara de cualquier teléfono. */
+.qr-marco svg { width: 100%; max-width: 300px; height: auto; display: block; }
 
 .qr-instruccion { color: var(--tinta-suave); font-size: 0.95rem; margin: 0 0 1rem; }
 
