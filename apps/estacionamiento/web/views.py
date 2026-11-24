@@ -455,10 +455,15 @@ def _qr_o_nada(url: str):
     está emitido y el enlace sigue sirviendo para dictarlo o compartirlo. La
     plantilla muestra un aviso en su lugar.
     """
+    from django.templatetags.static import static
+
     from apps.boletos.qr import QRNoDisponible, svg_qr
 
     try:
-        return svg_qr(url, escala=6)
+        # El logotipo al centro: el cliente reconoce de quién es el código
+        # antes de escanearlo. Es el mismo archivo que ya muestra esta
+        # pantalla arriba, de modo que el navegador no lo pide dos veces.
+        return svg_qr(url, escala=6, logo_url=static("estacionamiento/icono-192.png"))
     except QRNoDisponible:
         logger.warning("No se pudo generar el código QR del boleto.")
         return None

@@ -252,7 +252,7 @@
             <span class="celda-dato numero" data-rotulo="Debería haber">{{ t.esperado_vigente|pesos }}</span>
             <span class="celda-dato numero" data-rotulo="Contado">{{ t.efectivo_vigente|pesos }}</span>
           </span>
-          <span class="celda-acciones"><a href="{% url 'web:corte' t.pk %}">Ver corte</a></span>
+          <span class="celda-acciones"><a class="boton fantasma angosto" href="{% url 'web:corte' t.pk %}">Ver corte</a></span>
         </li>
         {% endwith %}
       {% endfor %}

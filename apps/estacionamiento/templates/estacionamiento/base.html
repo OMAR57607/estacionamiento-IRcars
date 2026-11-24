@@ -77,12 +77,17 @@
 
   <div class="barra-operador">
     <a class="operador" href="{% url 'web:clave' %}" title="Cambiar mi contraseña">
-      <span class="operador-nombre">{{ user.get_username }}</span>
-      {% if turno_actual %}
-        <span class="operador-turno turno-abierto">Turno {{ turno_actual.pk }}</span>
-      {% else %}
-        <span class="operador-turno">Sin turno</span>
-      {% endif %}
+      {% comment %} La inicial es decorativa: el nombre completo va a su lado y es lo
+         que lee el lector de pantalla. {% endcomment %}
+      <span class="avatar" aria-hidden="true">{{ user.get_username|first|upper }}</span>
+      <span class="operador-textos">
+        <span class="operador-nombre">{{ user.get_username }}</span>
+        {% if turno_actual %}
+          <span class="operador-turno turno-abierto">Turno {{ turno_actual.pk }}</span>
+        {% else %}
+          <span class="operador-turno">Sin turno</span>
+        {% endif %}
+      </span>
     </a>
     {% comment %} El cierre de sesión va por POST: un GET permitiría cerrar la sesión
        del operador desde un enlace o una imagen incrustada en otra

@@ -225,26 +225,21 @@
 <div>
 
 {# --------------------------------------------------------- Ocupación #}
+{% comment %} Una tarjeta con medidor en lugar de tres indicadores sueltos: si cabe
+   otro coche se ve sin restar. Las cifras siguen escritas; la barra es
+   decorativa para el lector de pantalla, que ya recibe el texto. «Casi lleno»
+   a partir del 85 %: es cuando conviene avisar en la entrada antes de que
+   el cliente busque cajón. {% endcomment %}
 {% if ocupacion.capacidad_total %}
-<div class="indicadores compactos">
-  <div class="indicador">
-    <div class="rotulo">Dentro</div>
-    <div class="valor">{{ ocupacion.ocupados_total }}</div>
+{% widthratio ocupacion.ocupados_total ocupacion.capacidad_total 100 as porcentaje %}
+<div class="tarjeta ocupacion{% if ocupacion.lleno %} lleno{% elif porcentaje|add:0 >= 85 %} casi-lleno{% endif %}">
+  <div class="ocupacion-cifras">
+    <span class="principal">{{ ocupacion.ocupados_total }} <small>dentro</small>
+      {% if ocupacion.lleno %}<span class="pildora lleno">Lleno</span>{% elif porcentaje|add:0 >= 85 %}<span class="pildora por-vencer">Casi lleno</span>{% endif %}
+    </span>
+    <span class="secundario">{{ ocupacion.disponibles_total }} disponibles de {{ ocupacion.capacidad_total }}</span>
   </div>
-  <div class="indicador">
-    <div class="rotulo">Disponibles</div>
-    <div class="valor">{{ ocupacion.disponibles_total }}</div>
-  </div>
-  <div class="indicador">
-    <div class="rotulo">Capacidad</div>
-    <div class="valor">{{ ocupacion.capacidad_total }}</div>
-  </div>
-  {% if ocupacion.lleno %}
-  <div class="indicador alerta">
-    <div class="rotulo">Estado</div>
-    <div class="valor">LLENO</div>
-  </div>
-  {% endif %}
+  <div class="medidor" aria-hidden="true"><span style="width: {{ porcentaje }}%"></span></div>
 </div>
 {% endif %}
 
@@ -259,7 +254,7 @@
   </div>
 
   {% if patio %}
-    <div class="lista-encabezado" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
+    <div class="lista-encabezado" style="--columnas:9rem 4.5rem 6rem 1fr auto">
       <span>Placa</span>
       <span>Cajón</span>
       <span>Entrada</span>
@@ -267,11 +262,11 @@
       <span></span>
     </div>
 
-    <ul class="lista" id="patio" style="--columnas:7.5rem 4.5rem 6rem 1fr auto">
+    <ul class="lista patio" id="patio" style="--columnas:9rem 4.5rem 6rem 1fr auto">
     {% for fila in patio %}
       <li class="lista-fila" data-placa="{{ fila.placa }}">
         <span class="celda-principal">
-          {{ fila.placa }}
+          <span class="placa-chip">{{ fila.placa }}</span>
           {% if fila.es_pension %}
             {% if fila.vigencia.value == 'VENCIDA' %}
               <span class="pildora vencida">Pensión vencida</span>
@@ -291,7 +286,7 @@
         <span class="celda-datos">
           <span class="celda-dato">{{ fila.cajon }}</span>
           <span class="celda-dato">{{ fila.entrada_en|date:"d/m H:i" }}</span>
-          <span class="celda-dato">{{ fila.minutos|duracion }}</span>
+          <span class="celda-dato destacado">{{ fila.minutos|duracion }}</span>
         </span>
 
         <span class="celda-acciones">
@@ -306,11 +301,32 @@
           {% comment %} Reabrir el boleto: el caso frecuente es el cliente que perdió el
              enlace o quiere que se lo reenvíen. El pensionado lleva en su
              lugar el enlace a su pensión. {% endcomment %}
+          {% comment %} Solo icono: es la acción secundaria de la fila y, con rótulo,
+             obligaba a apilar los dos botones en el teléfono. El rótulo sigue
+             en el marcado (lector de pantalla) y en `title` (puntero).
+             {% endcomment %}
           {% if fila.es_pension %}
-            <a class="boton secundario angosto" href="{% url 'web:pension' fila.pension_id %}">Pensión</a>
+            <a class="boton secundario angosto solo-icono" href="{% url 'web:pension' fila.pension_id %}"
+               title="Ver pensión de {{ fila.placa }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="5" width="16" height="15" rx="2"/>
+                <path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4"/>
+              </svg>
+              <span class="solo-lector">Pensión</span>
+            </a>
           {% else %}
-            <a class="boton secundario angosto"
-               href="{% url 'web:boleto' uuid=fila.uuid %}">Boleto</a>
+            <a class="boton secundario angosto solo-icono"
+               href="{% url 'web:boleto' uuid=fila.uuid %}" title="Boleto QR de {{ fila.placa }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="4" width="6" height="6" rx="1"/>
+                <rect x="14" y="4" width="6" height="6" rx="1"/>
+                <rect x="4" y="14" width="6" height="6" rx="1"/>
+                <path d="M14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2"/>
+              </svg>
+              <span class="solo-lector">Boleto</span>
+            </a>
           {% endif %}
         </span>
       </li>

@@ -30,6 +30,14 @@
  * - **Escalas y no valores sueltos.** Espacio, texto y radios salen de una
  *   escala corta (`--e-*`, `--t-*`). Los márgenes escritos a mano en cada
  *   plantilla daban un espaciado distinto en cada pantalla.
+ * - **Profundidad en lugar de rayas.** La segunda pasada visual separa las
+ *   capas con sombra suave y bordes tenues, no con filetes duros: en una
+ *   pantalla llena de tarjetas, cada borde fuerte compite con el dato. Lo que
+ *   se pulsa sí conserva borde visible, porque tiene que parecer pulsable sin
+ *   pasar el dedo por encima.
+ * - **El foco es un halo, no un recuadro.** El anillo sigue siendo de 3 px y
+ *   del color de acción, pero se dibuja con sombra y no desplaza el control:
+ *   antes el campo enfocado «saltaba» un píxel al tocarlo.
  */
 
 :root {
@@ -42,11 +50,17 @@
 
   --tinta: #16181d;
   --tinta-suave: #5b616c;
-  --fondo: #f3f4f6;
+  --fondo: #f2f3f6;
   --superficie: #ffffff;
-  --superficie-alt: #f8f9fa;
-  --borde: #dcdfe4;
+  --superficie-alt: #f6f7f9;
+  --borde: #e1e4e9;
   --borde-fuerte: #b9bec7;
+
+  /* La placa se dibuja como una matrícula: fondo claro y canto marcado. Es el
+     dato que el operador compara con el parabrisas, y con este aspecto se
+     encuentra en la lista sin leer el resto de la fila. */
+  --placa-fondo: #ffffff;
+  --placa-borde: #2b2f37;
 
   --acento: #1b4f91;
   --acento-oscuro: #143a6b;
@@ -69,11 +83,15 @@
   --neutro: #5b616c;
   --neutro-oscuro: #464b54;
 
-  --radio: 12px;
-  --radio-chico: 8px;
+  --radio: 16px;
+  --radio-chico: 10px;
   --radio-pildora: 999px;
-  --sombra: 0 1px 2px rgba(16, 20, 28, 0.06);
-  --sombra-elevada: 0 4px 16px rgba(16, 20, 28, 0.12);
+  /* Dos capas por sombra: una corta que asienta la tarjeta y una larga y
+     difusa que la separa del fondo. Una sola capa o se ve sucia o no se ve. */
+  --sombra: 0 1px 2px rgba(16, 20, 28, 0.05), 0 2px 8px rgba(16, 20, 28, 0.04);
+  --sombra-elevada: 0 2px 4px rgba(16, 20, 28, 0.06), 0 12px 32px rgba(16, 20, 28, 0.12);
+  --halo-foco: 0 0 0 3px rgba(27, 79, 145, 0.35);
+  --transicion: 140ms ease;
 
   /* Escalas. Pocas y fijas: un espaciado que admite cualquier valor acaba
      siendo distinto en cada pantalla. */
@@ -132,10 +150,15 @@
     --tinta: #e9ebef;
     --tinta-suave: #9da3ae;
     --fondo: #0e1014;
-    --superficie: #191c22;
-    --superficie-alt: #20242b;
-    --borde: #2c313a;
+    --superficie: #171a20;
+    --superficie-alt: #1f232a;
+    --borde: #2a2f38;
     --borde-fuerte: #434a56;
+
+    /* De noche la matrícula no se pinta en blanco: sería lo más luminoso de
+       la pantalla. Conserva el canto claro, que es lo que la reconoce. */
+    --placa-fondo: #1f232a;
+    --placa-borde: #a9adb6;
 
     --acento: #5b9bf0;
     --acento-oscuro: #7fb3f5;
@@ -156,7 +179,8 @@
     --neutro-oscuro: #565e6c;
 
     --sombra: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --sombra-elevada: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --sombra-elevada: 0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.5);
+    --halo-foco: 0 0 0 3px rgba(91, 155, 240, 0.45);
 
     /* Pasos elegidos para la superficie oscura (#182636) y verificados
        contra ella, no el claro aclarado a ojo.
@@ -197,7 +221,24 @@ body {
   color: var(--tinta);
   background: var(--fondo);
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Sin el resaltado gris que Android pinta sobre lo que se toca: cada botón
+     ya tiene su propio estado pulsado y el doble aviso se veía sucio. */
+  -webkit-tap-highlight-color: transparent;
 }
+
+h1, h2, h3 { letter-spacing: -0.01em; }
+
+/* Los enlaces sueltos —«Volver a turnos», «Ver corte»— salían con el azul y
+   el morado de visitado del navegador, ajenos a la paleta y, en tema oscuro,
+   casi ilegibles. Toman el color de acción, visitados o no.
+
+   El estado `:hover` va dentro de `:where()`, que no suma especificidad: con
+   `a:hover` a secas le ganaba a `.boton` y el texto de un botón-enlace se
+   volvía del mismo color que su fondo al pasar el puntero. */
+a { color: var(--acento); text-underline-offset: 2px; }
+:where(a:hover) { color: var(--acento-oscuro); }
 
 /* Quien prefiera menos movimiento no debe recibir ninguno. */
 @media (prefers-reduced-motion: reduce) {
@@ -239,8 +280,10 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  /* Filete plata: el mismo trazo que subraya el logotipo. */
-  border-bottom: 1px solid var(--marca-plata);
+  /* Filete plata: el mismo trazo que subraya el logotipo. Se atenúa para que
+     acompañe a la cabecera sin cortar la pantalla en dos. */
+  border-bottom: 1px solid rgba(201, 204, 211, 0.35);
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.18);
 }
 
 .barra .marca {
@@ -255,37 +298,58 @@ body {
   margin-right: auto;
   white-space: nowrap;
 }
-.barra .marca img { width: 30px; height: 30px; border-radius: 7px; display: block; }
+.barra .marca img { width: 32px; height: 32px; border-radius: 9px; display: block; box-shadow: 0 0 0 1px rgba(201, 204, 211, 0.35); }
 
 .barra-secciones { display: flex; gap: 0.25rem; margin-right: auto; flex-wrap: wrap; }
 
+/* Secciones como píldoras: el destino activo se lee por el relleno y no por
+   un subrayado de dos píxeles, que en una pantalla de mostrador a un metro de
+   distancia no se distinguía. */
 .barra-secciones a {
-  color: var(--sobre-marca);
+  color: rgba(242, 243, 245, 0.78);
   text-decoration: none;
-  padding: 0.4rem 0.7rem;
-  border-radius: var(--radio-chico);
-  font-size: 0.95rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radio-pildora);
+  font-size: 0.93rem;
+  font-weight: 500;
   white-space: nowrap;
+  transition: background var(--transicion), color var(--transicion);
 }
 
-.barra-secciones a:hover { background: rgba(255, 255, 255, 0.10); }
-.barra-secciones a.activo { background: rgba(255, 255, 255, 0.16); font-weight: 600; box-shadow: inset 0 -2px 0 var(--marca-plata); }
+.barra-secciones a:hover { background: rgba(255, 255, 255, 0.08); color: var(--sobre-marca); }
+.barra-secciones a.activo { background: rgba(255, 255, 255, 0.14); color: var(--sobre-marca); font-weight: 600; }
 
 .barra-operador { display: flex; align-items: center; gap: 0.5rem; }
 
 .barra-operador .operador {
   display: flex;
-  flex-direction: column;
-  line-height: 1.15;
+  align-items: center;
+  gap: var(--e-2);
   color: var(--sobre-marca);
   text-decoration: none;
-  text-align: right;
-  padding: 0.25rem 0.4rem;
-  border-radius: var(--radio-chico);
+  padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+  border-radius: var(--radio-pildora);
+  transition: background var(--transicion);
 }
 
 .barra-operador .operador:hover { background: rgba(255, 255, 255, 0.10); }
+.operador-textos { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
 .operador-nombre { font-weight: 600; font-size: 0.9rem; }
+
+/* La inicial del operador: quién tiene la sesión abierta se reconoce de un
+   vistazo, sin leer el nombre, cuando dos personas comparten el equipo. */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--marca-plata);
+  color: #1f2128;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex: none;
+}
 
 /* El estado del turno viaja con el nombre del operador porque condiciona lo
    que puede hacer: sin turno abierto no se cobra. Tenerlo siempre a la vista
@@ -298,16 +362,31 @@ body {
    puede cobrar. */
 .pildora-turno {
   display: none;
+  align-items: center;
+  gap: 0.4rem;
   font-size: var(--t-xs);
   font-weight: 600;
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.75rem;
   border-radius: var(--radio-pildora);
-  border: 1px solid var(--marca-plata);
+  border: 1px solid rgba(201, 204, 211, 0.45);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--sobre-marca);
   text-decoration: none;
   white-space: nowrap;
 }
 .pildora-turno.sin-turno { border-style: dashed; opacity: 0.85; }
+
+/* Un punto verde cuando hay turno abierto: se puede cobrar. Va además de la
+   palabra «Turno», no en su lugar. El verde es fijo y claro porque la
+   cabecera es grafito en los dos temas. */
+.pildora-turno:not(.sin-turno)::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5fd38a;
+  box-shadow: 0 0 0 3px rgba(95, 211, 138, 0.25);
+}
 
 .barra-operador form { margin: 0; }
 
@@ -340,6 +419,17 @@ body {
   box-shadow: 0 -2px 10px rgba(16, 20, 28, 0.08);
 }
 
+/* Translúcida donde el navegador lo admite: la lista que pasa por debajo se
+   intuye y se entiende que hay más que desplazar. Sin soporte queda la
+   superficie opaca de arriba, que es igual de legible. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .barra-inferior {
+    background: color-mix(in srgb, var(--superficie) 86%, transparent);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    backdrop-filter: saturate(1.6) blur(14px);
+  }
+}
+
 .barra-inferior a {
   flex: 1;
   display: flex;
@@ -355,9 +445,18 @@ body {
   font-weight: 600;
 }
 
-.barra-inferior .icono { display: flex; line-height: 0; }
+.barra-inferior .icono {
+  display: flex;
+  line-height: 0;
+  padding: 4px 18px;
+  border-radius: var(--radio-pildora);
+  transition: background var(--transicion);
+}
 .barra-inferior .icono svg { width: 24px; height: 24px; }
 .barra-inferior a.activo { color: var(--acento); }
+/* El destino activo lleva una cápsula detrás del icono: el color solo, en
+   un teléfono con el brillo bajo, no bastaba para saber dónde se está. */
+.barra-inferior a.activo .icono { background: var(--acento-tenue); }
 
 /*
  * La cabecera ya no necesita un bloque propio para el tema oscuro. Antes se
@@ -369,23 +468,26 @@ body {
 
 /* ------------------------------------------------------------ Estructura */
 
-.contenido { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+.contenido { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1rem; }
 
 .tarjeta {
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
-  padding: 1.1rem;
+  padding: 1.25rem;
   margin-bottom: 1rem;
   box-shadow: var(--sombra);
 }
 
+/* Títulos de tarjeta en redonda y con peso, no en versalitas grises: eran
+   del mismo gris que las notas y la tarjeta no tenía por dónde empezar a
+   leerse. Las etiquetas pequeñas en mayúsculas quedan para `.subtitulo` y
+   los rótulos de los indicadores. */
 .tarjeta h2 {
   margin: 0 0 0.9rem;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--tinta-suave);
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--tinta);
 }
 
 /* La tarjeta del cobro en curso: es el momento del dinero y debe distinguirse
@@ -393,7 +495,7 @@ body {
 .tarjeta.destacada {
   border-color: var(--acento);
   border-width: 2px;
-  box-shadow: var(--sombra-elevada);
+  box-shadow: var(--halo-foco), var(--sombra-elevada);
 }
 
 .rejilla-doble { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -416,7 +518,11 @@ label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25
   border: 1px solid var(--borde-fuerte);
   border-radius: var(--radio-chico);
   min-height: 48px;
+  transition: border-color var(--transicion), box-shadow var(--transicion);
 }
+
+.campo:hover { border-color: var(--tinta-suave); }
+.campo::placeholder { color: var(--tinta-suave); opacity: 0.7; }
 
 /* Campos de placa e importe: grandes y monoespaciados. El monoespaciado evita
    confundir caracteres similares (0/O, 1/I) en una placa. */
@@ -429,7 +535,27 @@ label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25
   min-height: 56px;
 }
 
-.campo:focus { outline: 3px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+/* El campo de la placa se escribe como se ve en la matrícula: centrado,
+   grueso y espaciado. Lo tecleado se compara con el parabrisas de un
+   vistazo, sin buscar dónde empieza el texto. */
+.campo-grande[data-mayusculas] {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.75rem;
+  letter-spacing: 0.14em;
+  min-height: 64px;
+  border-width: 2px;
+}
+
+/* El foco cambia el borde y suma un halo; no mueve el campo. El contorno
+   transparente se queda para el modo de alto contraste de Windows, que
+   descarta las sombras y sin él dejaría el campo sin foco visible. */
+.campo:focus {
+  outline: 2px solid transparent;
+  outline-offset: 0;
+  border-color: var(--acento);
+  box-shadow: var(--halo-foco);
+}
 
 select.campo { appearance: none; background-image: none; }
 
@@ -473,10 +599,16 @@ select.campo { appearance: none; background-image: none; }
   border: 0;
   border-radius: var(--radio-chico);
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 20, 28, 0.12);
+  transition: background var(--transicion), transform var(--transicion), box-shadow var(--transicion);
+  gap: var(--e-2);
 }
 
 .boton:hover { background: var(--acento-oscuro); }
-.boton:active { transform: translateY(1px); }
+/* Hundirse al tocar: confirma la pulsación antes de que llegue la respuesta
+   del servidor, que en la caseta puede tardar un segundo con mala señal. */
+.boton:active { transform: scale(0.98); box-shadow: none; }
+.boton svg { width: 20px; height: 20px; flex: none; }
 
 .boton:disabled, .boton[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 
@@ -485,15 +617,23 @@ select.campo { appearance: none; background-image: none; }
    cambian de flujo con el rediseño. */
 .boton.fantasma,
 .boton.secundario {
-  background: transparent;
+  background: var(--superficie);
   color: var(--tinta);
   border: 1px solid var(--borde-fuerte);
+  box-shadow: none;
 }
 .boton.fantasma:hover,
 .boton.secundario:hover { background: var(--superficie-alt); }
 .boton.peligro { background: var(--error); color: #fff; }
 .boton.alto { min-height: var(--toque-grande); font-size: 1.1rem; }
 .boton.angosto { width: auto; padding: 0.55rem 0.9rem; font-size: 0.92rem; min-height: 44px; }
+
+/* Botón de solo icono, para la acción secundaria de una fila (abrir el
+   boleto, ir a la pensión). Cuadrado de 44 px: el mínimo que el pulgar
+   acierta. El rótulo sigue en el marcado para el lector de pantalla y como
+   `title`, de modo que no se pierde qué hace. */
+.boton.solo-icono { width: 44px; min-width: 44px; padding: 0; }
+.boton.solo-icono svg { width: 22px; height: 22px; }
 
 .acciones-fila { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .acciones-fila .boton { margin: 0; }
@@ -521,19 +661,29 @@ select.campo { appearance: none; background-image: none; }
 /* ------------------------------------------------------------------ Avisos */
 
 .aviso {
-  padding: 0.8rem 1rem;
+  padding: 0.85rem 1rem;
   border-radius: var(--radio-chico);
-  border-left: 5px solid;
+  border: 1px solid;
+  border-left-width: 4px;
   margin-bottom: 0.75rem;
   font-weight: 500;
 }
 
-.aviso a { color: inherit; font-weight: 700; }
+.aviso a { color: inherit; font-weight: 700; text-underline-offset: 2px; }
 
+/* El canto izquierdo lleva el color pleno y el resto del borde, el mismo
+   color atenuado: el aviso se distingue sin parecer una casilla de error
+   cuando solo informa. Sin `color-mix`, queda el borde pleno de antes. */
 .aviso.success { background: var(--exito-fondo); border-color: var(--exito); color: var(--exito); }
 .aviso.warning { background: var(--alerta-fondo); border-color: var(--alerta); color: var(--alerta); }
 .aviso.error   { background: var(--error-fondo);  border-color: var(--error);  color: var(--error); }
 .aviso.info    { background: var(--acento-tenue); border-color: var(--acento); color: var(--acento-oscuro); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .aviso.success { border-color: color-mix(in srgb, var(--exito) 28%, transparent); border-left-color: var(--exito); }
+  .aviso.warning { border-color: color-mix(in srgb, var(--alerta) 28%, transparent); border-left-color: var(--alerta); }
+  .aviso.error   { border-color: color-mix(in srgb, var(--error) 28%, transparent); border-left-color: var(--error); }
+  .aviso.info    { border-color: color-mix(in srgb, var(--acento) 28%, transparent); border-left-color: var(--acento); }
+}
 
 /* -------------------------------------------------------------- Importes */
 
@@ -543,8 +693,9 @@ select.campo { appearance: none; background-image: none; }
 .cifra,
 .importe-destacado {
   font-size: var(--t-cifra);
-  font-weight: 700;
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   line-height: 1.05;
   margin: 0.5rem 0;
   color: var(--tinta);
@@ -565,12 +716,18 @@ table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--borde); }
 
 th {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--tinta-suave);
   background: var(--superficie-alt);
   white-space: nowrap;
+}
+
+tbody tr { transition: background var(--transicion); }
+@media (hover: hover) {
+  table:not(.cuenta) tbody tr:hover td { background: var(--superficie-alt); }
 }
 
 /* Cifras alineadas a la derecha y con anchura tabular: así las columnas de
@@ -583,8 +740,9 @@ tr.sobrante td { background: var(--alerta-fondo); }
 
 .etiqueta {
   display: inline-block;
-  padding: 0.1rem 0.45rem;
-  border-radius: 4px;
+  padding: 0.12rem 0.5rem;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -629,6 +787,11 @@ tr.sobrante td { background: var(--alerta-fondo); }
   align-items: center;
   padding: 0.7rem 0.2rem;
   border-bottom: 1px solid var(--borde);
+}
+
+@media (hover: hover) {
+  .lista-fila { transition: background var(--transicion); }
+  .lista-fila:hover { background: var(--superficie-alt); }
 }
 
 .lista-encabezado {
@@ -722,6 +885,10 @@ tr.sobrante td { background: var(--alerta-fondo); }
    respecto del encabezado. */
 .lista-fila.faltante { background: var(--error-fondo); }
 .lista-fila.sobrante { background: var(--alerta-fondo); }
+/* Además del fondo, un canto del color del resultado: con el brillo bajo el
+   tinte rosado casi no se ve, el canto sí. */
+.lista-fila.faltante { box-shadow: inset 3px 0 0 var(--error); }
+.lista-fila.sobrante { box-shadow: inset 3px 0 0 var(--alerta); }
 .lista-encabezado.con-valor, .lista.con-valor .lista-fila { padding-inline: 0.5rem; }
 
 /* Cuando el valor destacado es un resultado y no un importe —el histórico de
@@ -776,7 +943,7 @@ tr.sobrante td { background: var(--alerta-fondo); }
   background: var(--superficie);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
-  padding: 0.8rem;
+  padding: 0.85rem 1rem;
   box-shadow: var(--sombra);
 }
 
@@ -790,9 +957,23 @@ tr.sobrante td { background: var(--alerta-fondo); }
   color: var(--tinta-suave);
 }
 
-.indicador .valor { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.indicador .valor { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
-.vacio { color: var(--tinta-suave); padding: 1.2rem 0; text-align: center; }
+/* Cuatro indicadores en un teléfono quedaban en tres más uno huérfano: con
+   cuatro exactos se ordenan en dos por dos. Donde `:has` no existe se queda
+   la rejilla automática de arriba. */
+@media (max-width: 680px) {
+  .indicadores:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, 1fr); }
+}
+
+.vacio {
+  color: var(--tinta-suave);
+  padding: 1.5rem 1rem;
+  text-align: center;
+  background: var(--superficie-alt);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+}
 
 
 /* ---------------------------------------------------------- Utilidades
@@ -916,7 +1097,10 @@ th.th-llano { text-transform: none; font-size: 0.92rem; letter-spacing: 0; }
   cursor: pointer;
   text-decoration: none;
   line-height: 1.2;
+  transition: background var(--transicion), border-color var(--transicion), color var(--transicion);
 }
+.segmentado label:hover,
+.segmentado a:hover { border-color: var(--tinta-suave); color: var(--tinta); }
 .segmentado input:checked + label,
 .segmentado a.elegido,
 .segmentado a[aria-current="true"] {
@@ -931,6 +1115,41 @@ th.th-llano { text-transform: none; font-size: 0.92rem; letter-spacing: 0; }
    a un segundo renglón. */
 nav.segmentado { display: flex; flex-wrap: wrap; }
 nav.segmentado a { flex: 1 1 4.5rem; }
+
+/* Filtros como fichas en un solo renglón que se desliza de lado. Con cinco
+   estados, el segmentado partía en dos renglones y dejaba «Bajas» solo y a
+   lo ancho, como si fuera la opción principal. Solo para filtros: los días a
+   pagar siguen a la vista todos a la vez, porque ahí ocultar una opción sí
+   cambia lo que se cobra. */
+nav.segmentado.fichas {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+nav.segmentado.fichas::-webkit-scrollbar { display: none; }
+/* La última ficha se desvanece contra el borde: dice que hay más a la
+   derecha sin una barra de desplazamiento que en el teléfono no se ve. */
+@media (max-width: 680px) {
+  nav.segmentado.fichas {
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+    mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+}
+nav.segmentado.fichas a {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 1rem;
+  border-radius: var(--radio-pildora);
+  white-space: nowrap;
+}
+nav.segmentado.fichas a.elegido,
+nav.segmentado.fichas a[aria-current="true"] {
+  background: var(--tinta);
+  border: 1px solid var(--tinta);
+  color: var(--superficie);
+}
 
 /* Dos acciones del mismo peso, lado a lado: Entrada y Cobrar salida. */
 .acciones-dobles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e-2); margin-top: var(--e-3); }
@@ -980,7 +1199,18 @@ nav.segmentado a { flex: 1 1 4.5rem; }
 .tarjeta.de-pension { border-left: 5px solid var(--pension); }
 
 /* Resultado del cobro: el cambio a entregar ocupa la tarjeta. */
-.tarjeta.resultado { border: 2px solid var(--exito); }
+.tarjeta.resultado {
+  border: 2px solid var(--exito);
+  background: linear-gradient(180deg, var(--exito-fondo), var(--superficie) 65%);
+  animation: aparecer 220ms ease-out;
+}
+
+/* Entrada breve de la tarjeta de resultado: el ojo va a ella sin buscarla.
+   Quien pidió menos movimiento no la recibe (regla al inicio de la hoja). */
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 .tarjeta.resultado .boton { margin-top: var(--e-4); }
 
 /* Filtro de lista. */
@@ -999,7 +1229,7 @@ nav.segmentado a { flex: 1 1 4.5rem; }
 
 /* Encabezado de pantalla con acción a la derecha. */
 .encabezado-pantalla { display: flex; align-items: center; justify-content: space-between; gap: var(--e-3); flex-wrap: wrap; margin-bottom: var(--e-4); }
-.encabezado-pantalla h1 { margin: 0; font-size: var(--t-l); }
+.encabezado-pantalla h1 { margin: 0; font-size: 1.5rem; font-weight: 750; letter-spacing: -0.02em; }
 .encabezado-pantalla .boton { width: auto; margin: 0; }
 
 /* Menú «Más»: una página y no un desplegable, para que funcione sin
@@ -1009,7 +1239,7 @@ nav.segmentado a { flex: 1 1 4.5rem; }
 .menu a,
 .menu button {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 40px 1fr auto;
   gap: 2px var(--e-3);
   align-items: center;
   width: 100%;
@@ -1023,8 +1253,24 @@ nav.segmentado a { flex: 1 1 4.5rem; }
   text-align: left;
   cursor: pointer;
 }
-.menu .icono { grid-row: 1 / span 2; color: var(--tinta-suave); line-height: 0; }
-.menu .icono svg { width: 24px; height: 24px; }
+/* El icono en un cuadro tenue: la columna de iconos alinea el menú y da al
+   pulgar un blanco reconocible antes de leer el rótulo. */
+.menu .icono {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radio-chico);
+  background: var(--acento-tenue);
+  color: var(--acento);
+  line-height: 0;
+}
+.menu .icono svg { width: 22px; height: 22px; }
+@media (hover: hover) {
+  .menu a:hover, .menu button:hover { background: var(--superficie-alt); }
+}
+.menu a, .menu button { border-radius: var(--radio-chico); transition: background var(--transicion); }
 .menu strong { font-size: 1rem; }
 .menu small { grid-column: 2; color: var(--tinta-suave); font-size: 0.82rem; }
 .menu .flecha { grid-row: 1 / span 2; grid-column: 3; color: var(--tinta-suave); }
@@ -1032,8 +1278,89 @@ nav.segmentado a { flex: 1 1 4.5rem; }
 /* Caja: captura a la izquierda y patio a la derecha en pantalla ancha. */
 .caja-rejilla { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: var(--e-4); align-items: start; }
 .caja-rejilla > * { min-width: 0; }
+/* La separación entre columnas la pone la rejilla; el margen de la última
+   tarjeta de cada columna se sumaba a ella y en el teléfono dejaba un hueco
+   doble entre la captura y la ocupación. */
+.caja-rejilla > * > :last-child { margin-bottom: 0; }
 @media (max-width: 860px) {
   .caja-rejilla { grid-template-columns: 1fr; }
+}
+
+/*
+ * Matrícula: la placa con canto y fondo de placa. En el patio y en la lista
+ * de pensiones es lo que el operador busca con la vista; con este aspecto se
+ * distingue de la hora, el cajón y la permanencia sin leerlos.
+ */
+.placa-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  padding: 0.15rem 0.5rem;
+  background: var(--placa-fondo);
+  color: var(--tinta);
+  border: 1.5px solid var(--placa-borde);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 2px var(--placa-fondo), inset 0 0 0 3px var(--borde);
+  white-space: nowrap;
+}
+
+/* En el patio, placa y píldora de pensión se acomodan en un renglón que
+   puede partirse, en lugar de empujar la píldora bajo la placa a medias. */
+.patio .celda-principal { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.5rem; }
+
+/* La permanencia es lo que el cliente pregunta: va en tinta y con peso,
+   no del gris de los datos de referencia. */
+.celda-dato.destacado { color: var(--tinta); font-weight: 600; }
+
+/*
+ * Ocupación del patio en una tarjeta con medidor.
+ *
+ * Eran tres indicadores sueltos —dentro, disponibles, capacidad— que había
+ * que restar de cabeza para saber si cabe otro coche. La barra lo dice sin
+ * aritmética, y las cifras siguen escritas al lado: la barra es un apoyo,
+ * no la fuente del dato. Pasa a ámbar cerca del lleno y a rojo lleno, y en
+ * los dos casos lo acompaña una palabra.
+ */
+.ocupacion {
+  display: grid;
+  gap: var(--e-2);
+  padding: 0.9rem 1.1rem;
+}
+.ocupacion-cifras {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-2) var(--e-3);
+  flex-wrap: wrap;
+}
+.ocupacion-cifras .principal { font-size: 1.5rem; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ocupacion-cifras .principal small { font-size: 0.9rem; font-weight: 500; color: var(--tinta-suave); letter-spacing: 0; }
+.ocupacion-cifras .secundario { font-size: 0.9rem; color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.medidor {
+  height: 8px;
+  border-radius: var(--radio-pildora);
+  background: var(--superficie-alt);
+  box-shadow: inset 0 0 0 1px var(--borde);
+  overflow: hidden;
+}
+.medidor > span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: var(--acento);
+  transition: width 300ms ease;
+}
+.ocupacion.casi-lleno .medidor > span { background: var(--alerta); }
+.ocupacion.lleno { border-color: var(--error); }
+.ocupacion.lleno .medidor > span { background: var(--error); }
+.ocupacion .pildora { margin-left: var(--e-1); }
+.pildora.lleno { background: var(--error-fondo); color: var(--error); }
+
+@media print {
+  .ocupacion { display: none; }
 }
 
 /* Indicadores compactos en una fila. */
@@ -1053,11 +1380,23 @@ nav.segmentado a { flex: 1 1 4.5rem; }
 
 /* La pantalla de acceso es la portada: va sobre el grafito de la marca, con
    el logotipo encima de la tarjeta. */
-body.acceso { background: var(--marca); }
+body.acceso {
+  background: var(--marca);
+  /* Un foco de luz plata sobre el grafito, como el brillo del logotipo. Es
+     un degradado y no una imagen: no hay nada que descargar. */
+  background-image:
+    radial-gradient(120% 60% at 50% -10%, rgba(201, 204, 211, 0.18), transparent 60%),
+    radial-gradient(80% 50% at 50% 110%, rgba(27, 79, 145, 0.22), transparent 70%);
+  background-attachment: fixed;
+}
 body.acceso .contenido { max-width: none; padding: 0; }
 .caja-acceso { width: 100%; max-width: 380px; display: grid; gap: var(--e-4); justify-items: center; }
-.caja-acceso .tarjeta { width: 100%; }
-.caja-acceso .logo-acceso { width: 96px; height: 96px; border-radius: 22px; display: block; }
+.caja-acceso .tarjeta { width: 100%; padding: 1.5rem; border: 0; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); }
+.caja-acceso .tarjeta h2 { font-size: 1.25rem; margin-bottom: 1.1rem; }
+.caja-acceso .logo-acceso {
+  width: 96px; height: 96px; border-radius: 24px; display: block;
+  box-shadow: 0 0 0 1px rgba(201, 204, 211, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
+}
 .caja-acceso .nombre-acceso { color: var(--sobre-marca); font-weight: 700; letter-spacing: 0.08em; margin: 0; }
 
 /* --------------------------------------------- Ajustes de pantalla angosta */
@@ -1070,7 +1409,7 @@ body.acceso .contenido { max-width: none; padding: 0; }
   /* Arriba solo quedan la marca y el estado del turno; «Salir» y el cambio de
      contraseña se mudan a «Más». */
   .barra-operador { display: none; }
-  .pildora-turno { display: inline-block; }
+  .pildora-turno { display: inline-flex; }
 
   /* Hueco para que la barra inferior no tape el último control de la página. */
   .contenido {
@@ -1078,8 +1417,15 @@ body.acceso .contenido { max-width: none; padding: 0; }
     padding-bottom: calc(var(--alto-barra-inferior) + env(safe-area-inset-bottom) + 1rem);
   }
 
-  .tarjeta { padding: 0.9rem; }
+  .tarjeta { padding: 1rem; }
   .importe-destacado { font-size: 2.6rem; }
+  .encabezado-pantalla h1 { font-size: 1.35rem; }
+
+  /* Patio en el teléfono: las dos acciones en un renglón y no apiladas.
+     Apiladas, cada vehículo ocupaba el doble de alto y con seis coches ya
+     había que desplazar para ver el último. */
+  .lista.patio .celda-acciones,
+  .lista.en-linea .celda-acciones { flex-direction: row; align-items: center; }
 }
 
 /* --------------------------------------------------------------- Impresión */
@@ -1089,6 +1435,7 @@ body.acceso .contenido { max-width: none; padding: 0; }
 @media print {
   .barra, .barra-inferior, .boton, .boton-salir, .no-imprimir { display: none !important; }
   body { background: #fff; color: #000; font-size: 12pt; }
+  .placa-chip { border: 0; box-shadow: none; padding: 0; }
   .tarjeta { border: 0; padding: 0; margin-bottom: 0.6rem; box-shadow: none; }
   .contenido { max-width: none; padding: 0; }
 }
@@ -1117,7 +1464,10 @@ body.acceso .contenido { max-width: none; padding: 0; }
   line-height: 0;
 }
 
-.qr-marco svg { width: 100%; max-width: 280px; height: auto; display: block; }
+/* 300 px y no 280: con el logotipo el símbolo usa corrección alta y tiene más
+   módulos por lado (57 con la zona de silencio, antes 45). A 300 px cada
+   módulo mide más de 5 px, holgado para la cámara de cualquier teléfono. */
+.qr-marco svg { width: 100%; max-width: 300px; height: auto; display: block; }
 
 .qr-instruccion { color: var(--tinta-suave); font-size: 0.95rem; margin: 0 0 1rem; }
 

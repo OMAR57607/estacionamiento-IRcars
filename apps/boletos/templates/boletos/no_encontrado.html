@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1f2128" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15171c" media="(prefers-color-scheme: dark)">
 {% comment %} El icono de la pestaña. Sin estas etiquetas el navegador pide
    `/favicon.ico` a la raíz del sitio y recibe un 404 —se vio en los registros
    del servidor con un teléfono real—. El de 192 px es el mismo archivo que ya
@@ -15,18 +17,38 @@
 <link rel="apple-touch-icon" href="{% static 'estacionamiento/icono-180.png' %}">
 <title>Boleto no disponible · {{ nombre_comercial }}</title>
 <style>
-  :root { --fondo:#f1f5f9; --tarjeta:#fff; --texto:#0f172a; --tenue:#64748b; --borde:#e2e8f0; }
+  /* Mismos tokens y misma franja de marca que el boleto (ver `boleto.html`):
+     quien llega por un enlace caducado reconoce el negocio y no cree que el
+     enlace lo llevó a otro sitio. */
+  :root {
+    color-scheme: light dark;
+    --marca:#1f2128; --sobre-marca:#f2f3f5; --fondo:#f2f3f6; --tarjeta:#fff;
+    --texto:#16181d; --tenue:#5b616c; --borde:#e1e4e9; --alerta:#8a5a00; --alerta-fondo:#fdf4e3;
+  }
   @media (prefers-color-scheme: dark) {
-    :root { --fondo:#0f172a; --tarjeta:#1e293b; --texto:#f8fafc; --tenue:#94a3b8; --borde:#334155; }
+    :root {
+      --marca:#15171c; --sobre-marca:#e8eaee; --fondo:#0e1014; --tarjeta:#171a20;
+      --texto:#e9ebef; --tenue:#9da3ae; --borde:#2a2f38; --alerta:#e3ad4a; --alerta-fondo:#2c2110;
+    }
   }
   * { box-sizing: border-box; }
-  body { margin:0; padding:16px; background:var(--fondo); color:var(--texto);
-         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height:1.5; }
-  .caja { max-width:420px; margin:48px auto; background:var(--tarjeta);
-          border:1px solid var(--borde); border-radius:14px; padding:24px; text-align:center; }
-  .marca-logo { width:64px; height:64px; border-radius:14px; display:block;
-                margin:0 auto 14px; }
-  h1 { font-size:1.15rem; margin:0 0 12px; }
+  body { margin:0; padding:0 16px 24px; background:var(--fondo); color:var(--texto);
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height:1.5;
+         -webkit-font-smoothing: antialiased; position:relative; }
+  body::before {
+    content:""; position:absolute; left:0; right:0; top:0; height:200px; z-index:-1;
+    background: var(--marca);
+    background-image: radial-gradient(120% 90% at 50% -20%, rgba(201,204,211,0.22), transparent 65%);
+  }
+  .caja { max-width:420px; margin:0 auto; padding-top:28px; text-align:center; }
+  .marca-logo { width:64px; height:64px; border-radius:16px; display:block; margin:0 auto 28px;
+                box-shadow: 0 0 0 1px rgba(201,204,211,0.3), 0 8px 24px rgba(0,0,0,0.35); }
+  .tarjeta { background:var(--tarjeta); border:1px solid var(--borde); border-radius:16px;
+             padding:28px 24px; box-shadow: 0 2px 4px rgba(16,20,28,0.06), 0 16px 40px rgba(16,20,28,0.14); }
+  .icono { width:48px; height:48px; border-radius:50%; display:grid; place-items:center;
+           margin:0 auto 14px; color:var(--alerta); background:var(--alerta-fondo); }
+  .icono svg { width:24px; height:24px; }
+  h1 { font-size:1.2rem; letter-spacing:-0.01em; margin:0 0 10px; }
   p { color:var(--tenue); font-size:0.9rem; margin:0; }
 </style>
 </head>
@@ -34,6 +56,13 @@
 <main class="caja">
   <img class="marca-logo" src="{% static 'estacionamiento/icono-192.png' %}"
        alt="" width="64" height="64">
+  <div class="tarjeta">
+  <div class="icono" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/>
+    </svg>
+  </div>
   <h1>Este boleto no está disponible</h1>
   {% comment %} Un solo mensaje para «no existe» y «venció»: distinguirlos confirmaría
      a quien sondea direcciones cuáles llegaron a existir. {% endcomment %}
@@ -42,6 +71,7 @@
     Si su vehículo sigue en el estacionamiento, preséntese en la caseta con
     su boleto impreso.
   </p>
+  </div>
 </main>
 </body>
 </html>

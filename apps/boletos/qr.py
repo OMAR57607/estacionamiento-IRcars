@@ -14,6 +14,7 @@ puede incrustarse en la ventana de la caja o en el comprobante sin tocar disco.
 from __future__ import annotations
 
 import io
+from html import escape
 
 from django.conf import settings
 
@@ -21,6 +22,28 @@ from django.conf import settings
 # punto adecuado para un boleto impreso en papel térmico, que se arruga, se
 # dobla y se decolora. Un nivel mayor agrandaría el símbolo sin necesidad.
 CORRECCION = "m"
+
+# Con el logotipo al centro, el nivel sube a alto (recupera hasta un 30 %). El
+# logotipo tapa módulos a propósito: el lector los da por dañados y los
+# reconstruye con la redundancia. Con el nivel medio, el logotipo se comería
+# casi todo el margen y bastaría una arruga para que el código dejara de
+# leerse. El precio es un símbolo más denso (versión 8 en lugar de 5 para una
+# dirección típica), que en pantalla sigue leyéndose sin problema.
+CORRECCION_CON_LOGO = "h"
+
+# Ancho del recuadro del logotipo respecto del símbolo: el 18 % del ancho,
+# poco más del 3 % del área. No se eligió a ojo. Se midió con dos lectores
+# (ZXing, el de la mayoría de los teléfonos Android, y OpenCV) sobre 19
+# condiciones —giros, desenfoque, tamaño reducido, perspectiva— y con
+# direcciones de 66 a 96 caracteres. Al 18 % el código se lee en los mismos
+# casos que el anterior sin logotipo; al 22 % ya fallaban dos giros más. La
+# diferencia la hace el recuadro oscuro del logotipo, no los módulos que tapa:
+# con el logotipo sin cargar, el 22 % se leía igual que el 18 %.
+PROPORCION_LOGO = 0.18
+
+# Zona de silencio, en módulos. Es la que segno usa por omisión; se fija aquí
+# porque las coordenadas del logotipo dependen de ella.
+BORDE_SVG = 4
 
 
 class QRNoDisponible(RuntimeError):
@@ -50,7 +73,7 @@ def url_boleto(uuid_folio) -> str:
     return f"{base}/t/{uuid_folio}/"
 
 
-def _simbolo(contenido: str):
+def _simbolo(contenido: str, correccion: str = CORRECCION):
     try:
         import segno
     except ImportError as exc:  # pragma: no cover - depende del entorno
@@ -59,18 +82,72 @@ def _simbolo(contenido: str):
             "Instálela con: pip install segno"
         ) from exc
 
-    return segno.make(contenido, error=CORRECCION)
+    return segno.make(contenido, error=correccion)
 
 
-def svg_qr(contenido: str, escala: int = 5) -> str:
+def modulos_del_logo(modulos_por_lado: int) -> int:
+    """
+    Lado del recuadro del logotipo, en módulos enteros.
+
+    Se ajusta a la retícula para que el recuadro tape módulos completos: uno
+    cortado a la mitad deja un borde gris que el lector puede tomar por oscuro
+    o por claro según el ángulo. Y se fuerza la misma paridad que el símbolo
+    —siempre impar— para que quede centrado exacto, con el mismo número de
+    módulos a cada lado.
+    """
+    lado = round(modulos_por_lado * PROPORCION_LOGO)
+    if (modulos_por_lado - lado) % 2:
+        lado -= 1
+    return max(lado, 1)
+
+
+def svg_qr(contenido: str, escala: int = 5, logo_url: str | None = None) -> str:
     """
     QR como SVG en línea, para incrustar directamente en una plantilla HTML.
 
     En línea y no como archivo estático: evita una segunda petición al servidor
     y, sobre todo, mantiene el boleto en un único documento autocontenido que
     se imprime y se guarda sin depender de recursos externos.
+
+    Con `logo_url`, el símbolo se genera con corrección alta y lleva el
+    logotipo al centro, dentro del propio SVG: escala y se imprime junto con
+    el código, sin depender de cómo la hoja de estilos coloque una imagen
+    encima. Si el logotipo no llega a cargar, queda un recuadro blanco y el
+    código se sigue leyendo: los módulos que tapa son los mismos.
     """
-    return _simbolo(contenido).svg_inline(scale=escala)
+    if not logo_url:
+        return _simbolo(contenido).svg_inline(scale=escala)
+
+    simbolo = _simbolo(contenido, correccion=CORRECCION_CON_LOGO)
+    modulos = simbolo.symbol_size(border=0)[0]
+    lado_logo = modulos_del_logo(modulos)
+
+    # Coordenadas en píxeles del propio SVG: segno dibuja cada módulo de
+    # `escala` píxeles y deja `BORDE_SVG` módulos de zona de silencio.
+    lado_total = (modulos + 2 * BORDE_SVG) * escala
+    inicio = (BORDE_SVG + (modulos - lado_logo) // 2) * escala
+    ancho = lado_logo * escala
+    # El logotipo entra medio módulo hacia dentro del recuadro blanco: el
+    # blanco a su alrededor lo separa de los módulos vecinos, que de otro modo
+    # se leerían pegados a su canto oscuro.
+    respiro = escala / 2
+
+    marcado = simbolo.svg_inline(scale=escala, border=BORDE_SVG)
+    # segno fija ancho y alto pero no `viewBox`: sin él, la hoja de estilos
+    # que limita el ancho del código lo recortaba en lugar de reducirlo. Con
+    # el nivel alto el símbolo pasa de 270 a 342 px a escala 6 y ya no cabía.
+    marcado = marcado.replace(
+        "<svg ", f'<svg viewBox="0 0 {lado_total} {lado_total}" ', 1
+    )
+    figura = (
+        f'<rect x="{inicio}" y="{inicio}" width="{ancho}" height="{ancho}" '
+        f'rx="{escala}" fill="#fff"/>'
+        f'<image href="{escape(logo_url, quote=True)}" '
+        f'x="{inicio + respiro}" y="{inicio + respiro}" '
+        f'width="{ancho - 2 * respiro}" height="{ancho - 2 * respiro}" '
+        f'preserveAspectRatio="xMidYMid meet" aria-hidden="true"/>'
+    )
+    return marcado.replace("</svg>", f"{figura}</svg>", 1)
 
 
 def png_qr(contenido: str, escala: int = 7, borde: int = 2) -> bytes:
