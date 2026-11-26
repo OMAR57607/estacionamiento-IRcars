@@ -66,6 +66,16 @@ caja consulta si la placa tiene pensión vigente; nadie puede marcar a mano una
 estancia como «de pensión» para no cobrarla. El pensionado vigente no recibe
 boleto y sale sin cobro.
 
+**Aviso de cliente frecuente en la recepción.** Al registrar la entrada, si la
+placa acumula `IRCARS_FRECUENTE_VISITAS` visitas previas (3 por omisión) en los
+últimos `IRCARS_FRECUENTE_DIAS` días (30), la pantalla del boleto lo avisa con
+el número de visitas, la fecha de la última y —si hay plan vigente— el precio
+de la pensión para ofrecerla. Cuenta boletos cerrados por su hora de entrada;
+los cancelados y el boleto recién abierto no cuentan, y quien ya tiene pensión
+activa no recibe el aviso. No muestra el gasto del cliente, porque esa pantalla
+se pone delante de él, y si la consulta falla la entrada sigue sin aviso
+(`services_metricas.cliente_frecuente`).
+
 **La salida cubierta no entra al corte.** Vale $0, igual que una cortesía, y por
 eso se cierra **sin turno**: adscribirla lo contaría como cortesía y ocultaría
 las cortesías reales entre las salidas de quien ya pagó su día. Corte,

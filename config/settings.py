@@ -276,6 +276,11 @@ IRCARS_ATAJOS_DE_PAGO = [
 # el operador ofrezca renovar mientras el cliente está delante.
 IRCARS_PENSION_AVISO_HORAS = env.int("IRCARS_PENSION_AVISO_HORAS", default=2)
 
+# Aviso de cliente frecuente al registrar la entrada: visitas previas (boletos
+# cerrados) dentro de los últimos N días. Las visitas deben ser al menos 2.
+IRCARS_FRECUENTE_DIAS = env.int("IRCARS_FRECUENTE_DIAS", default=30)
+IRCARS_FRECUENTE_VISITAS = env.int("IRCARS_FRECUENTE_VISITAS", default=3)
+
 # Aviso de privacidad que se enlaza al dar de alta una pensión, donde se piden
 # nombre y teléfono del cliente (LFPDPPP). Vacío: no se muestra el enlace.
 IRCARS_AVISO_PRIVACIDAD_URL = env("IRCARS_AVISO_PRIVACIDAD_URL", default="")

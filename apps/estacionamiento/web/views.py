@@ -23,6 +23,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.staticfiles.storage import staticfiles_storage
+from django.db import DatabaseError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.views import PasswordChangeView
@@ -382,6 +383,10 @@ def _procesar_entrada(request, contexto):
             f"La pensión de {folio.placa} {cuando}: esta estancia se cobra por "
             "hora, salvo que renueve. Renovar ahora la cubre desde la entrada.",
         )
+    else:
+        # Con pensión vencida no se avisa además de frecuencia: ya es cliente
+        # de pensión y lo accionable es renovarla, que es el aviso de arriba.
+        _avisar_si_es_frecuente(request, folio)
     messages.success(
         request,
         f"Entrada registrada: {folio.placa} a las "
@@ -395,6 +400,45 @@ def _procesar_entrada(request, contexto):
     # Sigue siendo una redirección tras POST, de modo que recargar no registra
     # una segunda entrada de la misma placa.
     return redirect("web:boleto", uuid=folio.uuid)
+
+
+def _avisar_si_es_frecuente(request, folio) -> None:
+    """
+    Avisa en la recepción que la placa es de un cliente frecuente.
+
+    El aviso sale en la misma pantalla del boleto, que es donde está el
+    operador con el cliente delante: es el momento de reconocerlo y, si hay
+    plan de pensión, de ofrecérsela.
+
+    Nunca impide la entrada. El folio ya está emitido cuando se consulta; si
+    la consulta falla, se registra y se sigue sin aviso. Un error 500 aquí
+    haría que el operador repitiera la captura de un vehículo que ya entró.
+    """
+    try:
+        frecuente = services_metricas.cliente_frecuente(
+            folio.placa, ahora=folio.entrada_en
+        )
+        plan = services_pensiones.plan_vigente_o_nada() if frecuente else None
+    except (DatabaseError, ErrorDominio):
+        # Sin la placa en la bitácora: es un dato personal y no aporta al
+        # diagnóstico, que está en la traza.
+        logger.warning("No se pudo consultar si el cliente es frecuente.", exc_info=True)
+        return
+    if frecuente is None:
+        return
+
+    ultima = timezone.localtime(frecuente.ultima_visita)
+    texto = (
+        f"Cliente frecuente: {frecuente.placa} lleva {frecuente.visitas} visitas "
+        f"en los últimos {frecuente.dias} días (la última el {ultima:%d/%m}). "
+    )
+    if plan is not None:
+        texto += f"Puede ofrecerle la pensión diaria de ${plan.precio_diario:,.2f}."
+    else:
+        texto += "Salúdelo como a un cliente conocido."
+    # `frecuente` como etiqueta extra: el aviso se distingue de un informativo
+    # cualquiera sin inventar un nivel de mensaje nuevo.
+    messages.info(request, texto, extra_tags="frecuente")
 
 
 @login_required

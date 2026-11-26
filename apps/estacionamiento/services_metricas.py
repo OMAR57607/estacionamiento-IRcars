@@ -19,8 +19,11 @@ Dos reglas gobiernan todo lo que hay aquí:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
+
+from django.conf import settings
 
 from django.db.models import Avg, Count, DecimalField, F, Max, Q, Sum
 from django.db.models.functions import (
@@ -32,6 +35,7 @@ from django.db.models.functions import (
 from django.utils import timezone
 
 from .domain.exceptions import ErrorConfiguracion
+from .services import normalizar_placa
 from .domain.metricas import (
     DIAS_SEMANA,
     Pico,
@@ -63,6 +67,16 @@ TOP_CLIENTES = 20
 # mínimo que significa algo: una sola visita no distingue al vecino que vuelve
 # a diario del que pasaba por ahí una vez en su vida.
 MINIMO_VISITAS = 2
+
+# Aviso en la recepción: cuántas visitas previas y en qué ventana hacen de una
+# placa un cliente frecuente al registrar su entrada. Es una pregunta distinta
+# de la del reporte —ahí el periodo lo elige quien lo consulta; aquí la caja
+# pregunta «¿lo conozco?» sin periodo alguno—, y por eso la ventana es fija y
+# se configura (`IRCARS_FRECUENTE_DIAS`, `IRCARS_FRECUENTE_VISITAS`). Tres
+# visitas en treinta días es, en promedio, una por semana o más: el cliente al
+# que ya vale la pena reconocer y ofrecerle la pensión.
+DIAS_AVISO_FRECUENTE = 30
+VISITAS_AVISO_FRECUENTE = 3
 
 # Tipo monetario explícito para `Coalesce`: sin él, mezclar un campo decimal
 # con el literal cero deja que el motor decida el tipo del resultado, y
@@ -337,6 +351,86 @@ def clientes_frecuentes(
         "placas_atendidas": cobrados.values("placa").distinct().count(),
         "truncado": len(filas_todas) > top,
     }
+
+
+@dataclass(frozen=True)
+class ClienteFrecuente:
+    """
+    Lo que la recepción necesita saber de una placa que vuelve.
+
+    Solo lo que el operador puede decir en voz alta frente al cliente: cuántas
+    veces vino y cuándo fue la última. El gasto acumulado se queda en
+    Métricas, que es pantalla administrativa; el aviso de la entrada aparece
+    en la pantalla del boleto, que se pone delante del cliente.
+    """
+
+    placa: str
+    visitas: int
+    dias: int
+    ultima_visita: datetime
+
+
+def _parametros_aviso_frecuente() -> tuple[int, int]:
+    dias = int(getattr(settings, "IRCARS_FRECUENTE_DIAS", DIAS_AVISO_FRECUENTE))
+    visitas = int(getattr(settings, "IRCARS_FRECUENTE_VISITAS", VISITAS_AVISO_FRECUENTE))
+    if dias < 1:
+        raise ErrorConfiguracion("IRCARS_FRECUENTE_DIAS debe ser al menos 1.")
+    if visitas < MINIMO_VISITAS:
+        # Misma regla que el reporte: con una sola visita no hay nada que
+        # distinga al que vuelve del que pasaba por ahí.
+        raise ErrorConfiguracion(
+            f"IRCARS_FRECUENTE_VISITAS debe ser al menos {MINIMO_VISITAS}."
+        )
+    return dias, visitas
+
+
+def cliente_frecuente(placa: str, *, ahora: datetime | None = None) -> ClienteFrecuente | None:
+    """
+    ¿Es esta placa un cliente frecuente? Se consulta al registrar la entrada.
+
+    Cuenta las **estancias terminadas** —boletos cerrados, cobrados o de
+    cortesía— cuya entrada cae en la ventana configurada. Por qué así:
+
+    * **Cerrados, no cancelados.** Un boleto cancelado es un error de captura,
+      no una visita.
+    * **Por entrada, no por salida.** La visita ocurre cuando el vehículo
+      llega; el reporte cuenta por salida porque allí lo que importa es a qué
+      día pertenece el ingreso.
+    * **El boleto que se acaba de abrir no cuenta**: está abierto. El umbral
+      habla, pues, de visitas *previas*.
+
+    Quien tiene pensión activa no recibe el aviso —igual que no aparece en la
+    lista de clientes frecuentes—: ya es cliente de pensión, y si se le
+    venció, la caja ya avisa eso, que es lo accionable.
+
+    La placa se busca normalizada, de modo que la consulta no distingue
+    mayúsculas, espacios ni la forma en que se tecleó. Es una sola consulta
+    agregada sobre la columna indexada `placa`.
+    """
+    # La misma normalización que usa la entrada: la placa que se busca es la
+    # que se guardó.
+    placa = normalizar_placa(placa)
+    dias, minimo = _parametros_aviso_frecuente()
+    ahora = ahora or timezone.now()
+
+    if Pension.objects.filter(placa=placa, estado=EstadoPension.ACTIVA).exists():
+        return None
+
+    resumen = Folio.objects.filter(
+        placa=placa,
+        estado=EstadoFolio.CERRADO,
+        entrada_en__gte=ahora - timedelta(days=dias),
+        entrada_en__lt=ahora,
+    ).aggregate(visitas=Count("id"), ultima=Max("entrada_en"))
+
+    if resumen["visitas"] < minimo:
+        return None
+    return ClienteFrecuente(
+        placa=placa,
+        visitas=resumen["visitas"],
+        dias=dias,
+        ultima_visita=resumen["ultima"],
+    )
 
 
 # --- Composición de la operación --------------------------------------------

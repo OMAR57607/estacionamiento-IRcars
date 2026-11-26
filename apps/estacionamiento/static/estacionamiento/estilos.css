@@ -685,6 +685,14 @@ select.campo { appearance: none; background-image: none; }
   .aviso.info    { border-color: color-mix(in srgb, var(--acento) 28%, transparent); border-left-color: var(--acento); }
 }
 
+/* Cliente frecuente en la recepción: es un aviso informativo, pero el
+   operador debe notarlo de un vistazo mientras atiende. La estrella lo
+   distingue sin un color nuevo. El texto alternativo vacío (`/ ""`) hace que
+   el lector de pantalla la omita —el mensaje ya empieza por «Cliente
+   frecuente»—; el navegador que no entiende esa sintaxis descarta la segunda
+   declaración y se queda con la primera. */
+.aviso.frecuente::before { content: "★ "; content: "★ " / ""; }
+
 /* -------------------------------------------------------------- Importes */
 
 /* `.cifra` es el nombre nuevo; `.importe-destacado` sigue siendo válido para
