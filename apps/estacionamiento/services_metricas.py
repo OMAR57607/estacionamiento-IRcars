@@ -388,6 +388,22 @@ def cliente_frecuente(placa: str, *, ahora: datetime | None = None) -> ClienteFr
     """
     ¿Es esta placa un cliente frecuente? Se consulta al registrar la entrada.
 
+    Es `placas_frecuentes` con una sola placa: la regla vive en un solo
+    lugar, de modo que el aviso de la recepción y la marca del patio no
+    pueden discrepar sobre quién es frecuente.
+    """
+    # La misma normalización que usa la entrada: la placa que se busca es la
+    # que se guardó.
+    placa = normalizar_placa(placa)
+    return placas_frecuentes([placa], ahora=ahora).get(placa)
+
+
+def placas_frecuentes(
+    placas, *, ahora: datetime | None = None
+) -> dict[str, ClienteFrecuente]:
+    """
+    De un conjunto de placas ya normalizadas, las que son de clientes frecuentes.
+
     Cuenta las **estancias terminadas** —boletos cerrados, cobrados o de
     cortesía— cuya entrada cae en la ventana configurada. Por qué así:
 
@@ -396,41 +412,48 @@ def cliente_frecuente(placa: str, *, ahora: datetime | None = None) -> ClienteFr
     * **Por entrada, no por salida.** La visita ocurre cuando el vehículo
       llega; el reporte cuenta por salida porque allí lo que importa es a qué
       día pertenece el ingreso.
-    * **El boleto que se acaba de abrir no cuenta**: está abierto. El umbral
-      habla, pues, de visitas *previas*.
+    * **El boleto abierto no cuenta**: está abierto. El umbral habla, pues, de
+      visitas *previas*.
 
-    Quien tiene pensión activa no recibe el aviso —igual que no aparece en la
-    lista de clientes frecuentes—: ya es cliente de pensión, y si se le
-    venció, la caja ya avisa eso, que es lo accionable.
+    Quien tiene pensión activa queda fuera —igual que de la lista de clientes
+    frecuentes—: ya es cliente de pensión, y si se le venció, la caja ya avisa
+    eso, que es lo accionable.
 
-    La placa se busca normalizada, de modo que la consulta no distingue
-    mayúsculas, espacios ni la forma en que se tecleó. Es una sola consulta
-    agregada sobre la columna indexada `placa`.
+    Es **una sola consulta agrupada** por placa, sobre la columna indexada
+    `placa`, sea una placa (la recepción) o todo el patio. Una consulta por
+    fila haría que el tiempo de dibujar la caja creciera con la ocupación,
+    justo en la hora pico.
     """
-    # La misma normalización que usa la entrada: la placa que se busca es la
-    # que se guardó.
-    placa = normalizar_placa(placa)
+    placas = {p for p in placas if p}
+    if not placas:
+        return {}
     dias, minimo = _parametros_aviso_frecuente()
     ahora = ahora or timezone.now()
 
-    if Pension.objects.filter(placa=placa, estado=EstadoPension.ACTIVA).exists():
-        return None
-
-    resumen = Folio.objects.filter(
-        placa=placa,
-        estado=EstadoFolio.CERRADO,
-        entrada_en__gte=ahora - timedelta(days=dias),
-        entrada_en__lt=ahora,
-    ).aggregate(visitas=Count("id"), ultima=Max("entrada_en"))
-
-    if resumen["visitas"] < minimo:
-        return None
-    return ClienteFrecuente(
-        placa=placa,
-        visitas=resumen["visitas"],
-        dias=dias,
-        ultima_visita=resumen["ultima"],
+    con_pension = Pension.objects.filter(
+        placa__in=placas, estado=EstadoPension.ACTIVA
+    ).values("placa")
+    agrupado = (
+        Folio.objects.filter(
+            placa__in=placas,
+            estado=EstadoFolio.CERRADO,
+            entrada_en__gte=ahora - timedelta(days=dias),
+            entrada_en__lt=ahora,
+        )
+        .exclude(placa__in=con_pension)
+        .values("placa")
+        .annotate(visitas=Count("id"), ultima=Max("entrada_en"))
+        .filter(visitas__gte=minimo)
     )
+    return {
+        fila["placa"]: ClienteFrecuente(
+            placa=fila["placa"],
+            visitas=fila["visitas"],
+            dias=dias,
+            ultima_visita=fila["ultima"],
+        )
+        for fila in agrupado
+    }
 
 
 # --- Composición de la operación --------------------------------------------

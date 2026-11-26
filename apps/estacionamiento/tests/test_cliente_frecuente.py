@@ -188,3 +188,60 @@ class TestAvisoEnLaRecepcion:
         assert respuesta.status_code == 200
         assert "Entrada registrada" in respuesta.content.decode()
         assert Folio.objects.filter(placa="ABC123", estado=EstadoFolio.ABIERTO).exists()
+
+
+class TestMarcaEnElPatio:
+    def _patio(self, sesion):
+        return sesion.get(reverse("web:caja"))
+
+    def _fila(self, contenido, placa):
+        return contenido.split(f'data-placa="{placa}"')[1].split("</li>")[0]
+
+    def test_el_frecuente_dentro_lleva_la_marca(self, sesion):
+        for dias in (20, 10, 2):
+            _visita("ABC123", dias)
+        services.registrar_entrada(placa="ABC123")
+        services.registrar_entrada(placa="NUEVO1")
+        contenido = self._patio(sesion).content.decode()
+        assert "pildora frecuente" in self._fila(contenido, "ABC123")
+        assert "3 visitas en los últimos 30 días" in self._fila(contenido, "ABC123")
+        assert "pildora frecuente" not in self._fila(contenido, "NUEVO1")
+
+    def test_quien_tiene_pension_activa_no_lleva_la_marca(self, sesion):
+        # Pensión dada de alta y sin cobrar: la estancia se cobra por hora,
+        # pero el cliente ya es de pensión y la marca no aporta nada.
+        for dias in (20, 10, 2):
+            _visita("ABC123", dias)
+        services_pensiones.registrar_pension(
+            placa="ABC123", tipo_vehiculo=TipoVehiculo.AUTOMOVIL, nombre_cliente="Cliente"
+        )
+        services.registrar_entrada(placa="ABC123")
+        fila = self._fila(self._patio(sesion).content.decode(), "ABC123")
+        assert "pildora frecuente" not in fila
+
+    def test_todo_el_patio_se_resuelve_en_una_sola_consulta(self, sesion):
+        # Una consulta por fila haría crecer el tiempo de la caja con la
+        # ocupación. Se cuentan las consultas de la marca, no las de la página.
+        for placa in ("AAA111", "BBB222", "CCC333"):
+            for dias in (20, 10, 2):
+                _visita(placa, dias)
+            services.registrar_entrada(placa=placa)
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as consultas:
+            frecuentes = services_metricas.placas_frecuentes({"AAA111", "BBB222", "CCC333"})
+        assert set(frecuentes) == {"AAA111", "BBB222", "CCC333"}
+        assert len(consultas) == 1
+
+    def test_si_la_consulta_falla_el_patio_se_dibuja_sin_marca(self, sesion):
+        for dias in (20, 10, 2):
+            _visita("ABC123", dias)
+        services.registrar_entrada(placa="ABC123")
+        with mock.patch.object(
+            services_metricas, "placas_frecuentes", side_effect=DatabaseError("caída")
+        ):
+            respuesta = self._patio(sesion)
+        assert respuesta.status_code == 200
+        assert 'data-placa="ABC123"' in respuesta.content.decode()
+        assert "pildora frecuente" not in respuesta.content.decode()

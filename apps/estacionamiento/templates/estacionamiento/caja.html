@@ -275,6 +275,15 @@
             {% else %}
               <span class="pildora pension">Pensión</span>
             {% endif %}
+          {% elif fila.frecuente %}
+            {% comment %} Misma regla que el aviso de la recepción. El detalle va en
+               `title` y en el texto para lector de pantalla: en la fila solo cabe
+               la marca, y el número de visitas no se muestra en grande porque el
+               patio también se ve desde la ventanilla. {% endcomment %}
+            <span class="pildora frecuente"
+                  title="{{ fila.frecuente.visitas }} visitas en los últimos {{ fila.frecuente.dias }} días">
+              <span aria-hidden="true">★ </span>Frecuente<span class="solo-lector">: {{ fila.frecuente.visitas }} visitas en los últimos {{ fila.frecuente.dias }} días</span>
+            </span>
           {% endif %}
         </span>
 

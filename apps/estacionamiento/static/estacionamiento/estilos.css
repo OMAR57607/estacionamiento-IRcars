@@ -1182,6 +1182,9 @@ nav.segmentado.fichas a[aria-current="true"] {
 .pildora.vencida,
 .pildora.sin-pago   { background: var(--error-fondo);   color: var(--error); }
 .pildora.baja       { background: var(--superficie-alt); color: var(--tinta-suave); border: 1px solid var(--borde); }
+/* Cliente frecuente: el mismo azul tenue del aviso de la recepción, para que
+   se lea como la misma cosa en las dos pantallas. */
+.pildora.frecuente  { background: var(--acento-tenue);   color: var(--acento-oscuro); }
 
 /* Atajos de pago: el 90 % de los pagos es un billete. */
 .atajos { display: flex; flex-wrap: wrap; gap: var(--e-2); margin: var(--e-2) 0; }

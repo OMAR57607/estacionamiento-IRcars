@@ -74,7 +74,9 @@ de la pensión para ofrecerla. Cuenta boletos cerrados por su hora de entrada;
 los cancelados y el boleto recién abierto no cuentan, y quien ya tiene pensión
 activa no recibe el aviso. No muestra el gasto del cliente, porque esa pantalla
 se pone delante de él, y si la consulta falla la entrada sigue sin aviso
-(`services_metricas.cliente_frecuente`).
+(`services_metricas.cliente_frecuente`). La lista **Vehículos dentro** marca
+con «★ Frecuente» a los mismos clientes, con la misma regla y en una sola
+consulta para todo el patio (`services_metricas.placas_frecuentes`).
 
 **La salida cubierta no entra al corte.** Vale $0, igual que una cortesía, y por
 eso se cierra **sin turno**: adscribirla lo contaría como cortesía y ocultaría

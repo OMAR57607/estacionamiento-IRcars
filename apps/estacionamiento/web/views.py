@@ -286,7 +286,34 @@ def _pintar_caja(request, contexto, status: int = 200):
     """Completa lo que toda versión de la caja muestra y la dibuja."""
     contexto.setdefault("patio", services.folios_en_patio())
     contexto.setdefault("ocupacion", services.consultar_ocupacion())
+    _marcar_frecuentes(contexto["patio"])
     return render(request, "estacionamiento/caja.html", contexto, status=status)
+
+
+def _marcar_frecuentes(patio: list[dict]) -> None:
+    """
+    Marca en el patio los vehículos de clientes frecuentes.
+
+    La misma regla que el aviso de la recepción, en una sola consulta para
+    todo el patio. Los pensionados no se consultan: su fila ya dice
+    «Pensión», que es más que «Frecuente».
+
+    Es un adorno de la lista, no un dato de cobro: si la consulta falla, el
+    patio se dibuja sin la marca en lugar de dejar la caja sin pantalla.
+    """
+    for fila in patio:
+        fila.setdefault("frecuente", None)
+    placas = {fila["placa"] for fila in patio if not fila.get("es_pension")}
+    if not placas:
+        return
+    try:
+        frecuentes = services_metricas.placas_frecuentes(placas)
+    except (DatabaseError, ErrorDominio):
+        logger.warning("No se pudieron marcar los clientes frecuentes del patio.", exc_info=True)
+        return
+    for fila in patio:
+        if not fila.get("es_pension"):
+            fila["frecuente"] = frecuentes.get(fila["placa"])
 
 
 def _atajos_para(importe: Decimal) -> list[int]:
