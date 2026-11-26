@@ -91,6 +91,14 @@ CERO = Decimal("0.00")
 ES_CORTESIA = Q(importe=CERO, pension__isnull=True)
 ES_PENSION = Q(pension__isnull=False)
 
+# Las motos quedan fuera de «cliente frecuente». Por lo regular no traen
+# placa, y el operador captura en su lugar un texto de relleno («MOTO»,
+# «SINPLACA»…) que se repite de una moto a otra: contar visitas por placa las
+# juntaría a todas en un solo «cliente» que no existe. Se decide por la tarifa
+# con que se emitió el boleto, que es el dato del tipo de vehículo que el
+# folio conserva.
+ES_MOTO = Q(tarifa__tipo_vehiculo=TipoVehiculo.MOTOCICLETA)
+
 
 def _cobrados(desde: datetime, hasta: datetime):
     """
@@ -285,13 +293,17 @@ def clientes_frecuentes(
         )
 
     cobrados = _cobrados(desde, hasta)
+    # Base de la lista y de las placas atendidas: sin motos (ver `ES_MOTO`).
+    # El ingreso del periodo, en cambio, sí las incluye: es el denominador de
+    # la participación y debe coincidir con lo que cobró la caja.
+    cobrados_con_placa = cobrados.exclude(ES_MOTO)
 
     # Quien ya tiene pensión activa no es candidato a ofrecérsela: la métrica
     # existe para decidir a quién proponerla. Sus estancias sí cuentan en el
     # ingreso del periodo, que es el denominador de la participación.
     con_pension = Pension.objects.filter(estado=EstadoPension.ACTIVA).values("placa")
     agrupado = (
-        cobrados.exclude(placa__in=con_pension)
+        cobrados_con_placa.exclude(placa__in=con_pension)
         .values("placa")
         .annotate(
             visitas=Count("id"),
@@ -347,8 +359,9 @@ def clientes_frecuentes(
         "parte_del_ingreso": porcentaje(gasto_grupo, gasto_periodo),
         # Placas distintas atendidas en el periodo, frecuentes o no. Es el
         # denominador que convierte «40 clientes frecuentes» en una tasa de
-        # retención interpretable.
-        "placas_atendidas": cobrados.values("placa").distinct().count(),
+        # retención interpretable. Sin motos, por la misma razón que la
+        # lista: su «placa» de relleno no distingue a un cliente de otro.
+        "placas_atendidas": cobrados_con_placa.values("placa").distinct().count(),
         "truncado": len(filas_todas) > top,
     }
 
@@ -419,6 +432,9 @@ def placas_frecuentes(
     frecuentes—: ya es cliente de pensión, y si se le venció, la caja ya avisa
     eso, que es lo accionable.
 
+    Las estancias en moto no cuentan como visitas (ver `ES_MOTO`): sin placa
+    real, varias motos distintas sumarían visitas a un mismo «cliente».
+
     Es **una sola consulta agrupada** por placa, sobre la columna indexada
     `placa`, sea una placa (la recepción) o todo el patio. Una consulta por
     fila haría que el tiempo de dibujar la caja creciera con la ocupación,
@@ -440,6 +456,7 @@ def placas_frecuentes(
             entrada_en__gte=ahora - timedelta(days=dias),
             entrada_en__lt=ahora,
         )
+        .exclude(ES_MOTO)
         .exclude(placa__in=con_pension)
         .values("placa")
         .annotate(visitas=Count("id"), ultima=Max("entrada_en"))

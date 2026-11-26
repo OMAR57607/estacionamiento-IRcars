@@ -72,7 +72,10 @@ placa acumula `IRCARS_FRECUENTE_VISITAS` visitas previas (3 por omisión) en los
 el número de visitas, la fecha de la última y —si hay plan vigente— el precio
 de la pensión para ofrecerla. Cuenta boletos cerrados por su hora de entrada;
 los cancelados y el boleto recién abierto no cuentan, y quien ya tiene pensión
-activa no recibe el aviso. No muestra el gasto del cliente, porque esa pantalla
+activa no recibe el aviso. Las **motos quedan fuera** del aviso, de la marca del
+patio y de la lista de Métricas: por lo regular no traen placa, y el texto de
+relleno que se captura en su lugar juntaría motos distintas en un solo
+«cliente». Se distinguen por la tarifa con que se emitió el boleto. No muestra el gasto del cliente, porque esa pantalla
 se pone delante de él, y si la consulta falla la entrada sigue sin aviso
 (`services_metricas.cliente_frecuente`). La lista **Vehículos dentro** marca
 con «★ Frecuente» a los mismos clientes, con la misma regla y en una sola
@@ -229,7 +232,7 @@ el mismo contenido como archivo descargable (`/reportes/metricas/pdf/`).
 |---|---|---|
 | **Horas pico** | A qué hora hace falta alguien en la caseta | Entradas por hora del día, en zona local, acumuladas en el periodo. Los empates se informan: dos horas iguales son dos turnos a cubrir |
 | **Ingreso por hora de cobro** | Nada de personal — va aparte por eso | Recaudación por hora de salida. Desplazada respecto a las entradas tanto como dura la estancia media |
-| **Clientes frecuentes** | A quién conviene ofrecer una pensión | Placas con N visitas o más dentro del periodo, con visitas, gasto, ticket, estancia media y parte del ingreso. El umbral y el tamaño de la lista son parámetros de la pantalla |
+| **Clientes frecuentes** | A quién conviene ofrecer una pensión | Placas (sin motos) con N visitas o más dentro del periodo, con visitas, gasto, ticket, estancia media y parte del ingreso. El umbral y el tamaño de la lista son parámetros de la pantalla |
 | **Día de la semana / día a día** | Horarios y previsión | Entradas e ingreso agregados en la base |
 | **Composición** | Si el ingreso depende del precio o de la rotación | Cobros frente a cortesías, tipo de vehículo, operador y distribución de permanencia |
 | **Control de caja** | Si hay fuga de efectivo | Diferencia **vigente** del periodo —ya con las correcciones— junto a la declarada al cerrar |

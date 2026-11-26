@@ -296,14 +296,18 @@ def _marcar_frecuentes(patio: list[dict]) -> None:
 
     La misma regla que el aviso de la recepción, en una sola consulta para
     todo el patio. Los pensionados no se consultan: su fila ya dice
-    «Pensión», que es más que «Frecuente».
+    «Pensión», que es más que «Frecuente». Las motos tampoco: por lo regular
+    no traen placa, y la capturada en su lugar no identifica a un cliente.
 
     Es un adorno de la lista, no un dato de cobro: si la consulta falla, el
     patio se dibuja sin la marca en lugar de dejar la caja sin pantalla.
     """
     for fila in patio:
         fila.setdefault("frecuente", None)
-    placas = {fila["placa"] for fila in patio if not fila.get("es_pension")}
+    candidatas = [
+        fila for fila in patio if not fila.get("es_pension") and not fila.get("es_moto")
+    ]
+    placas = {fila["placa"] for fila in candidatas}
     if not placas:
         return
     try:
@@ -311,9 +315,8 @@ def _marcar_frecuentes(patio: list[dict]) -> None:
     except (DatabaseError, ErrorDominio):
         logger.warning("No se pudieron marcar los clientes frecuentes del patio.", exc_info=True)
         return
-    for fila in patio:
-        if not fila.get("es_pension"):
-            fila["frecuente"] = frecuentes.get(fila["placa"])
+    for fila in candidatas:
+        fila["frecuente"] = frecuentes.get(fila["placa"])
 
 
 def _atajos_para(importe: Decimal) -> list[int]:
@@ -440,7 +443,12 @@ def _avisar_si_es_frecuente(request, folio) -> None:
     Nunca impide la entrada. El folio ya está emitido cuando se consulta; si
     la consulta falla, se registra y se sigue sin aviso. Un error 500 aquí
     haría que el operador repitiera la captura de un vehículo que ya entró.
+
+    No se avisa en la entrada de una moto: por lo regular no trae placa, y la
+    capturada en su lugar podría coincidir con la de otro cliente.
     """
+    if folio.tarifa.tipo_vehiculo == TipoVehiculo.MOTOCICLETA:
+        return
     try:
         frecuente = services_metricas.cliente_frecuente(
             folio.placa, ahora=folio.entrada_en

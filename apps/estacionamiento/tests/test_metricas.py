@@ -338,6 +338,27 @@ class TestClientesFrecuentes:
         assert clientes["placas_frecuentes"] == 1
         assert clientes["placas_atendidas"] == 2
 
+    def test_las_motos_no_entran_a_la_lista(self, tarifas, cajero):
+        """
+        Las motos por lo regular no traen placa: su texto de relleno juntaría
+        motos distintas en un solo cliente. Salen de la lista y de las placas
+        atendidas, pero su cobro sigue en el ingreso del periodo.
+        """
+        auto, moto = tarifas
+        for dia in (-3, -2, -1):
+            _cobro("MOTO", entrada=_local(dia, 9), minutos=60, importe="15",
+                   tarifa=moto, operador=cajero)
+        for dia in (-2, -1):
+            _cobro("VUELVE1", entrada=_local(dia, 10), minutos=60, importe="30",
+                   tarifa=auto, operador=cajero)
+
+        clientes = services_metricas.clientes_frecuentes(*_rango())
+
+        assert [f["placa"] for f in clientes["filas"]] == ["VUELVE1"]
+        assert clientes["placas_atendidas"] == 1
+        # 60 de 105 cobrados en el periodo, motos incluidas.
+        assert clientes["parte_del_ingreso"] == 57.1
+
     def test_los_totales_del_grupo_no_salen_en_cero(self, tarifas, cajero):
         """
         El fallo que esta prueba impide: `Sum` sobre una columna que ya es un
