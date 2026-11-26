@@ -297,7 +297,7 @@ def folios_en_patio(momento: datetime | None = None) -> list[dict]:
     aviso = timedelta(hours=getattr(settings, "IRCARS_PENSION_AVISO_HORAS", 2))
     filas = []
     for folio in (
-        Folio.objects.select_related("cajon", "pension")
+        Folio.objects.select_related("cajon", "pension", "tarifa")
         .filter(estado=EstadoFolio.ABIERTO)
         .order_by("entrada_en")
     ):
@@ -314,6 +314,9 @@ def folios_en_patio(momento: datetime | None = None) -> list[dict]:
                 "entrada_en": folio.entrada_en,
                 "minutos": max(0, _minutos_transcurridos(folio.entrada_en, momento)),
                 "es_pension": bool(folio.pension_id),
+                # Las motos no reciben la marca de cliente frecuente: por lo
+                # regular no traen placa y la capturada es de relleno.
+                "es_moto": folio.tarifa.tipo_vehiculo == TipoVehiculo.MOTOCICLETA,
                 "pension_id": folio.pension_id,
                 "vigencia": vigencia,
             }
